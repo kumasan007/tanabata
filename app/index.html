@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>現場ツール</title>
+    <link rel="stylesheet" href="./assets/css/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">tanabata</p>
+          <h1>現場ツール</h1>
+        </div>
+        <nav class="tabs" aria-label="ツール切り替え">
+          <button class="tab is-active" type="button" data-tab="clipboard">コピペ</button>
+          <button class="tab" type="button" data-tab="beam">梁底計算</button>
+        </nav>
+      </header>
+
+      <main>
+        <section class="tool-view is-active" id="clipboard" aria-labelledby="clipboard-title">
+          <div class="section-head">
+            <div>
+              <h2 id="clipboard-title">コピペ</h2>
+              <p class="muted">登録した文字をクリックでコピー</p>
+            </div>
+            <span class="pill" id="snippet-count">0件</span>
+          </div>
+
+          <form class="input-panel" id="snippet-form">
+            <label class="field field-wide" for="snippet-text">
+              <span>文字</span>
+              <textarea id="snippet-text" rows="2" placeholder="文字を入力"></textarea>
+            </label>
+            <div class="form-actions">
+              <button class="button-primary" type="submit">追加</button>
+            </div>
+          </form>
+
+          <div class="card-list" id="snippet-list" aria-live="polite"></div>
+        </section>
+
+        <section class="tool-view" id="beam" aria-labelledby="beam-title">
+          <div class="section-head">
+            <div>
+              <h2 id="beam-title">スリーブ梁底計算</h2>
+              <p class="muted">単位はmm</p>
+            </div>
+          </div>
+
+          <div class="beam-layout">
+            <form class="input-panel beam-form" id="beam-form">
+              <label class="field" for="floor-height-fl">
+                <span>階高（FL）</span>
+                <span class="input-row">
+                  <input id="floor-height-fl" type="text" inputmode="numeric" value="3650" autocomplete="off">
+                  <button class="field-clear" type="button" data-clear-field="floor-height-fl" aria-label="階高を0にする">×</button>
+                </span>
+              </label>
+              <label class="field" for="sleeve-center-fl">
+                <span>梁スリーブ芯FL</span>
+                <span class="input-row">
+                  <input id="sleeve-center-fl" type="text" inputmode="numeric" value="2880" autocomplete="off">
+                  <button class="field-clear" type="button" data-clear-field="sleeve-center-fl" aria-label="梁スリーブ芯FLを0にする">×</button>
+                </span>
+              </label>
+              <label class="field" for="beam-depth">
+                <span>梁成</span>
+                <span class="input-row">
+                  <input id="beam-depth" type="text" inputmode="numeric" value="700" autocomplete="off">
+                  <button class="field-clear" type="button" data-clear-field="beam-depth" aria-label="梁成を0にする">×</button>
+                </span>
+              </label>
+              <label class="field" for="bottom-fukashi">
+                <span>下端フカシ</span>
+                <span class="input-row">
+                  <input id="bottom-fukashi" type="text" inputmode="numeric" value="0" autocomplete="off">
+                  <button class="field-clear" type="button" data-clear-field="bottom-fukashi" aria-label="下端フカシを0にする">×</button>
+                </span>
+              </label>
+              <label class="field" for="slab-top-level">
+                <span>スラブ天端レベル</span>
+                <span class="input-row">
+                  <input id="slab-top-level" type="text" inputmode="numeric" value="-270" autocomplete="off">
+                  <button class="field-clear" type="button" data-clear-field="slab-top-level" aria-label="スラブ天端レベルを0にする">×</button>
+                </span>
+              </label>
+              <div class="beam-form-actions">
+                <button class="button-primary" type="button" id="beam-save">保存</button>
+                <button class="button-ghost" type="button" id="beam-reset">リセット</button>
+              </div>
+            </form>
+
+            <aside class="result-panel" aria-live="polite">
+              <span class="result-label">結果</span>
+              <button class="result-copy" type="button" id="beam-copy" disabled>
+                <span class="result-value" id="beam-result">入力待ち</span>
+                <span class="result-copy-hint">クリックでコピー</span>
+              </button>
+              <dl class="result-details">
+                <div>
+                  <dt>梁底FL</dt>
+                  <dd id="beam-bottom-fl">-</dd>
+                </div>
+                <div>
+                  <dt>スリーブ芯FL</dt>
+                  <dd id="beam-center-fl">-</dd>
+                </div>
+                <div>
+                  <dt>計算式</dt>
+                  <dd>スリーブFL - (階高 - 梁成 - 下端フカシ + 天端レベル)</dd>
+                </div>
+              </dl>
+            </aside>
+          </div>
+
+          <div class="history-section">
+            <div class="history-head">
+              <h3>保存履歴</h3>
+              <span class="pill" id="beam-save-count">0件</span>
+            </div>
+            <div class="card-list" id="beam-save-list" aria-live="polite"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="edit-dialog" id="edit-dialog">
+      <form method="dialog" class="dialog-panel" id="edit-form">
+        <div class="section-head">
+          <h2>編集</h2>
+          <button class="icon-button" type="button" id="edit-close" aria-label="閉じる">×</button>
+        </div>
+        <label class="field field-wide" for="edit-text">
+          <span>文字</span>
+          <textarea id="edit-text" rows="6"></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button class="button-ghost" type="button" id="edit-cancel">キャンセル</button>
+          <button class="button-primary" type="submit">保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="./assets/js/app.js"></script>
+  </body>
+</html>
