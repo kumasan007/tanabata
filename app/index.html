@@ -16,6 +16,7 @@
         <nav class="tabs" aria-label="ツール切り替え">
           <button class="tab is-active" type="button" data-tab="clipboard">コピペ</button>
           <button class="tab" type="button" data-tab="beam">梁底計算</button>
+          <button class="tab" type="button" data-tab="floor">床L寸</button>
         </nav>
       </header>
 
@@ -123,6 +124,101 @@
             </div>
             <div class="card-list" id="beam-save-list" aria-live="polite"></div>
           </div>
+        </section>
+
+        <section class="tool-view" id="floor" aria-labelledby="floor-title">
+          <div class="section-head">
+            <div>
+              <h2 id="floor-title">床スリーブL寸計算</h2>
+              <p class="muted">スラブ厚と必要立ち上がりからL寸を計算</p>
+            </div>
+          </div>
+
+          <div class="beam-layout">
+            <form class="input-panel beam-form" id="floor-form">
+              <label class="field" for="floor-rise-height">
+                <span>必要立ち上がりmm</span>
+                <span class="input-row">
+                  <input id="floor-rise-height" type="text" inputmode="numeric" value="100" autocomplete="off">
+                  <button class="field-clear" type="button" data-clear-field="floor-rise-height" aria-label="必要立ち上がりを0にする">×</button>
+                </span>
+              </label>
+              <label class="field" for="floor-slab-thickness">
+                <span>スラブ厚mm</span>
+                <span class="input-row">
+                  <input id="floor-slab-thickness" type="text" inputmode="numeric" value="150" autocomplete="off">
+                  <button class="field-clear" type="button" data-clear-field="floor-slab-thickness" aria-label="スラブ厚を0にする">×</button>
+                </span>
+              </label>
+            </form>
+
+            <aside class="result-panel" aria-live="polite">
+              <span class="result-label">結果</span>
+              <button class="result-copy" type="button" id="floor-copy" disabled>
+                <span class="result-value" id="floor-result">入力待ち</span>
+                <span class="result-copy-hint">クリックでコピー</span>
+              </button>
+              <dl class="result-details">
+                <div>
+                  <dt>スラブ厚</dt>
+                  <dd id="floor-detail-slab">-</dd>
+                </div>
+                <div>
+                  <dt>立ち上がり</dt>
+                  <dd id="floor-detail-rise">-</dd>
+                </div>
+                <div>
+                  <dt>計算式</dt>
+                  <dd>スラブ厚 + 必要立ち上がり</dd>
+                </div>
+              </dl>
+            </aside>
+          </div>
+
+          <section class="pattern-section" aria-labelledby="floor-pattern-list-title">
+            <div class="history-head">
+              <div>
+                <h3 id="floor-pattern-list-title">登録済みスラブ厚カード</h3>
+                <p class="muted">カードをクリックするとスラブ厚へ反映</p>
+              </div>
+              <span class="pill" id="floor-pattern-count">0件</span>
+            </div>
+            <div class="slab-card-grid" id="floor-pattern-list" aria-live="polite"></div>
+          </section>
+
+          <section class="pattern-section" aria-labelledby="floor-pattern-title">
+            <div class="section-head">
+              <div>
+                <h3 id="floor-pattern-title">柄を選んで登録</h3>
+                <p class="muted">施工図でよく見るハッチング例から選択</p>
+              </div>
+            </div>
+
+            <div class="pattern-builder">
+              <div class="pattern-picker" id="floor-pattern-options" aria-label="柄を選択"></div>
+              <form class="input-panel pattern-form" id="floor-pattern-form">
+                <div class="selected-pattern">
+                  <span class="pattern-swatch pattern-large" id="floor-selected-pattern" data-pattern="diag-45"></span>
+                  <span id="floor-selected-pattern-name">右上がり斜線</span>
+                </div>
+                <label class="field" for="floor-pattern-label">
+                  <span>表示名</span>
+                  <input id="floor-pattern-label" type="text" value="S1" autocomplete="off">
+                </label>
+                <label class="field" for="floor-pattern-thickness">
+                  <span>スラブ厚mm</span>
+                  <span class="input-row">
+                    <input id="floor-pattern-thickness" type="text" inputmode="numeric" value="150" autocomplete="off">
+                    <button class="field-clear" type="button" data-clear-field="floor-pattern-thickness" aria-label="登録するスラブ厚を0にする">×</button>
+                  </span>
+                </label>
+                <div class="beam-form-actions">
+                  <button class="button-primary" type="submit">登録</button>
+                  <button class="button-ghost" type="button" id="floor-pattern-reset">入力クリア</button>
+                </div>
+              </form>
+            </div>
+          </section>
         </section>
       </main>
     </div>

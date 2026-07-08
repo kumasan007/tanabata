@@ -4,7 +4,9 @@
   var STORAGE = {
     snippets: "tanabata.copy.snippets.v1",
     beam: "tanabata.beam.inputs.v1",
-    beamSaves: "tanabata.beam.saves.v1"
+    beamSaves: "tanabata.beam.saves.v1",
+    floor: "tanabata.floor.inputs.v1",
+    floorPatterns: "tanabata.floor.patterns.v1"
   };
   var BEAM_DEFAULTS = {
     floorHeightFl: "3650",
@@ -13,9 +15,40 @@
     bottomFukashi: "0",
     slabTopLevel: "-270"
   };
+  var FLOOR_DEFAULTS = {
+    riseHeight: "100",
+    slabThickness: "150"
+  };
+  var PATTERN_OPTIONS = [
+    { id: "diag-45", name: "右上がり斜線" },
+    { id: "diag-45-dense", name: "右上がり斜線 密" },
+    { id: "diag-45-wide", name: "右上がり斜線 粗" },
+    { id: "diag-135", name: "左上がり斜線" },
+    { id: "diag-double", name: "二重斜線" },
+    { id: "diag-triple", name: "三重斜線" },
+    { id: "h-line", name: "横線" },
+    { id: "h-line-dense", name: "横線 密" },
+    { id: "v-line", name: "縦線" },
+    { id: "v-line-dense", name: "縦線 密" },
+    { id: "grid", name: "格子" },
+    { id: "grid-dense", name: "格子 密" },
+    { id: "diag-grid", name: "斜め格子" },
+    { id: "dot-small", name: "小ドット" },
+    { id: "dot-large", name: "大ドット" },
+    { id: "dot-stagger", name: "千鳥ドット" },
+    { id: "dash-h", name: "横破線" },
+    { id: "dash-v", name: "縦破線" },
+    { id: "dash-diag", name: "斜め破線" },
+    { id: "dot-diag", name: "斜線+ドット" },
+    { id: "dot-grid", name: "格子+ドット" },
+    { id: "square", name: "正方形" },
+    { id: "brick", name: "馬目地" }
+  ];
 
   var snippets = readJson(STORAGE.snippets, []);
   var beamSaves = readJson(STORAGE.beamSaves, []);
+  var floorPatterns = readJson(STORAGE.floorPatterns, []);
+  var selectedFloorPatternId = PATTERN_OPTIONS[0].id;
   var editingId = null;
   var dragState = null;
   var toastTimer = null;
@@ -49,6 +82,23 @@
   var beamCopy = document.getElementById("beam-copy");
   var beamBottomFl = document.getElementById("beam-bottom-fl");
   var beamCenterFl = document.getElementById("beam-center-fl");
+  var floorFields = {
+    riseHeight: document.getElementById("floor-rise-height"),
+    slabThickness: document.getElementById("floor-slab-thickness")
+  };
+  var floorResult = document.getElementById("floor-result");
+  var floorCopy = document.getElementById("floor-copy");
+  var floorDetailSlab = document.getElementById("floor-detail-slab");
+  var floorDetailRise = document.getElementById("floor-detail-rise");
+  var floorPatternOptions = document.getElementById("floor-pattern-options");
+  var floorPatternForm = document.getElementById("floor-pattern-form");
+  var floorPatternLabel = document.getElementById("floor-pattern-label");
+  var floorPatternThickness = document.getElementById("floor-pattern-thickness");
+  var floorPatternReset = document.getElementById("floor-pattern-reset");
+  var floorSelectedPattern = document.getElementById("floor-selected-pattern");
+  var floorSelectedPatternName = document.getElementById("floor-selected-pattern-name");
+  var floorPatternList = document.getElementById("floor-pattern-list");
+  var floorPatternCount = document.getElementById("floor-pattern-count");
 
   tabs.forEach(function (tab) {
     tab.addEventListener("click", function () {
@@ -190,6 +240,26 @@
     });
   });
 
+  Object.keys(floorFields).forEach(function (key) {
+    floorFields[key].addEventListener("input", function () {
+      normalizeBeamField(floorFields[key], false);
+      saveFloorInputs();
+      renderFloor();
+    });
+    floorFields[key].addEventListener("blur", function () {
+      normalizeBeamField(floorFields[key], true);
+      saveFloorInputs();
+      renderFloor();
+    });
+  });
+
+  floorPatternThickness.addEventListener("input", function () {
+    normalizeBeamField(floorPatternThickness, false);
+  });
+  floorPatternThickness.addEventListener("blur", function () {
+    normalizeBeamField(floorPatternThickness, true);
+  });
+
   clearButtons.forEach(function (button) {
     button.addEventListener("click", function () {
       var field = document.getElementById(button.dataset.clearField);
@@ -197,8 +267,15 @@
         return;
       }
       field.value = "0";
-      saveBeamInputs();
-      renderBeam();
+      if (isFloorField(field)) {
+        saveFloorInputs();
+        renderFloor();
+      } else if (field === floorPatternThickness) {
+        normalizeBeamField(floorPatternThickness, true);
+      } else {
+        saveBeamInputs();
+        renderBeam();
+      }
       field.focus();
     });
   });
@@ -211,6 +288,45 @@
 
   beamSaveButton.addEventListener("click", saveBeamRecord);
   beamResetButton.addEventListener("click", resetBeamFields);
+
+  floorCopy.addEventListener("click", function () {
+    if (!floorCopy.disabled) {
+      copyText(floorResult.textContent, "コピーしました");
+    }
+  });
+
+  floorPatternOptions.addEventListener("click", function (event) {
+    var option = event.target.closest("[data-pattern-option]");
+    if (!option) {
+      return;
+    }
+    selectFloorPattern(option.dataset.patternOption);
+  });
+
+  floorPatternForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    saveFloorPattern();
+  });
+
+  floorPatternReset.addEventListener("click", function () {
+    floorPatternLabel.value = "";
+    floorPatternThickness.value = "0";
+    floorPatternLabel.focus();
+  });
+
+  floorPatternList.addEventListener("click", function (event) {
+    var action = event.target.closest("[data-action]");
+    var card = event.target.closest("[data-id]");
+    if (!card) {
+      return;
+    }
+    if (action && action.dataset.action === "delete-floor-pattern") {
+      event.stopPropagation();
+      deleteFloorPattern(card.dataset.id);
+      return;
+    }
+    applyFloorPattern(card.dataset.id);
+  });
 
   beamSaveList.addEventListener("click", function (event) {
     var action = event.target.closest("[data-action]");
@@ -229,9 +345,14 @@
   });
 
   loadBeamInputs();
+  loadFloorInputs();
+  renderFloorPatternOptions();
+  selectFloorPattern(selectedFloorPatternId);
   renderSnippets();
   renderBeam();
   renderBeamSaves();
+  renderFloor();
+  renderFloorPatterns();
 
   function setActiveTab(name) {
     tabs.forEach(function (tab) {
@@ -415,6 +536,187 @@
       values[key] = numericValueForStorage(beamFields[key].value);
     });
     writeJson(STORAGE.beam, values);
+  }
+
+  function loadFloorInputs() {
+    var saved = readJson(STORAGE.floor, {});
+    Object.keys(floorFields).forEach(function (key) {
+      if (saved[key] !== undefined) {
+        floorFields[key].value = normalizeNumericText(saved[key]) || "0";
+        return;
+      }
+      if (FLOOR_DEFAULTS[key] !== undefined) {
+        floorFields[key].value = FLOOR_DEFAULTS[key];
+      }
+    });
+  }
+
+  function saveFloorInputs() {
+    var values = {};
+    Object.keys(floorFields).forEach(function (key) {
+      values[key] = numericValueForStorage(floorFields[key].value);
+    });
+    writeJson(STORAGE.floor, values);
+  }
+
+  function renderFloor() {
+    var values = {
+      riseHeight: toNumber(floorFields.riseHeight.value),
+      slabThickness: toNumber(floorFields.slabThickness.value)
+    };
+    var length = values.riseHeight + values.slabThickness;
+
+    floorResult.textContent = "L=" + formatMm(length);
+    floorDetailSlab.textContent = formatMm(values.slabThickness);
+    floorDetailRise.textContent = formatMm(values.riseHeight);
+    floorCopy.disabled = false;
+  }
+
+  function renderFloorPatternOptions() {
+    floorPatternOptions.innerHTML = "";
+    PATTERN_OPTIONS.forEach(function (pattern) {
+      var button = document.createElement("button");
+      button.className = "pattern-option";
+      button.type = "button";
+      button.dataset.patternOption = pattern.id;
+
+      var swatch = document.createElement("span");
+      swatch.className = "pattern-swatch";
+      swatch.dataset.pattern = pattern.id;
+
+      var name = document.createElement("span");
+      name.className = "pattern-name";
+      name.textContent = pattern.name;
+
+      button.appendChild(swatch);
+      button.appendChild(name);
+      floorPatternOptions.appendChild(button);
+    });
+  }
+
+  function selectFloorPattern(id) {
+    var pattern = getPatternOption(id) || PATTERN_OPTIONS[0];
+    selectedFloorPatternId = pattern.id;
+    floorSelectedPattern.dataset.pattern = pattern.id;
+    floorSelectedPatternName.textContent = pattern.name;
+    if (!floorPatternLabel.value.trim()) {
+      floorPatternLabel.value = pattern.name;
+    }
+    Array.prototype.forEach.call(floorPatternOptions.querySelectorAll("[data-pattern-option]"), function (option) {
+      option.classList.toggle("is-selected", option.dataset.patternOption === pattern.id);
+    });
+  }
+
+  function saveFloorPattern() {
+    var label = floorPatternLabel.value.trim();
+    normalizeBeamField(floorPatternThickness, true);
+    var thickness = numericValueForStorage(floorPatternThickness.value);
+    var pattern = getPatternOption(selectedFloorPatternId) || PATTERN_OPTIONS[0];
+
+    if (!label) {
+      label = pattern.name;
+      floorPatternLabel.value = label;
+    }
+    if (toNumber(thickness) <= 0) {
+      showToast("スラブ厚を入力してください");
+      floorPatternThickness.focus();
+      return;
+    }
+
+    floorPatterns.unshift({
+      id: createId(),
+      patternId: pattern.id,
+      patternName: pattern.name,
+      label: label,
+      thickness: thickness,
+      createdAt: Date.now()
+    });
+    writeJson(STORAGE.floorPatterns, floorPatterns);
+    renderFloorPatterns();
+    showToast("登録しました");
+  }
+
+  function renderFloorPatterns() {
+    floorPatternCount.textContent = floorPatterns.length + "件";
+    floorPatternList.innerHTML = "";
+
+    if (floorPatterns.length === 0) {
+      var empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = "まだ登録なし。下の柄を選んでスラブ厚を登録してください";
+      floorPatternList.appendChild(empty);
+      return;
+    }
+
+    floorPatterns.forEach(function (record) {
+      var pattern = getPatternOption(record.patternId) || {
+        id: "diag-45",
+        name: record.patternName || "柄"
+      };
+      var card = document.createElement("article");
+      card.className = "slab-card";
+      card.dataset.id = record.id;
+
+      var swatch = document.createElement("span");
+      swatch.className = "pattern-swatch";
+      swatch.dataset.pattern = pattern.id;
+
+      var body = document.createElement("div");
+      body.className = "card-body";
+
+      var label = document.createElement("p");
+      label.className = "slab-card-name";
+      label.textContent = record.label || pattern.name;
+
+      var thickness = document.createElement("p");
+      thickness.className = "slab-card-thickness";
+      thickness.textContent = formatMm(toNumber(record.thickness));
+
+      var patternName = document.createElement("p");
+      patternName.className = "slab-card-pattern";
+      patternName.textContent = pattern.name;
+
+      var actions = document.createElement("div");
+      actions.className = "slab-card-actions";
+
+      var remove = document.createElement("button");
+      remove.className = "icon-button is-danger";
+      remove.type = "button";
+      remove.dataset.action = "delete-floor-pattern";
+      remove.setAttribute("aria-label", "削除");
+      remove.textContent = "×";
+
+      body.appendChild(label);
+      body.appendChild(thickness);
+      body.appendChild(patternName);
+      actions.appendChild(remove);
+      card.appendChild(swatch);
+      card.appendChild(body);
+      card.appendChild(actions);
+      floorPatternList.appendChild(card);
+    });
+  }
+
+  function applyFloorPattern(id) {
+    var record = floorPatterns.find(function (item) {
+      return item.id === id;
+    });
+    if (!record) {
+      return;
+    }
+    floorFields.slabThickness.value = numericValueForStorage(record.thickness);
+    saveFloorInputs();
+    renderFloor();
+    showToast("スラブ厚へ反映しました");
+  }
+
+  function deleteFloorPattern(id) {
+    floorPatterns = floorPatterns.filter(function (item) {
+      return item.id !== id;
+    });
+    writeJson(STORAGE.floorPatterns, floorPatterns);
+    renderFloorPatterns();
+    showToast("削除しました");
   }
 
   function renderBeam() {
@@ -659,6 +961,18 @@
       "フカシ" + (values.bottomFukashi || "0"),
       "天端" + (values.slabTopLevel || "0")
     ].join(" / ");
+  }
+
+  function getPatternOption(id) {
+    return PATTERN_OPTIONS.find(function (pattern) {
+      return pattern.id === id;
+    });
+  }
+
+  function isFloorField(field) {
+    return Object.keys(floorFields).some(function (key) {
+      return floorFields[key] === field;
+    });
   }
 
   function makePreview(text) {

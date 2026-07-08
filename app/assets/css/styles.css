@@ -98,7 +98,7 @@ h3 {
 
 .tabs {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--line);
@@ -326,6 +326,10 @@ input:focus {
   text-align: center;
 }
 
+.slab-card-grid .empty-state {
+  grid-column: 1 / -1;
+}
+
 .snippet-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -421,6 +425,247 @@ input:focus {
   grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
   gap: 14px;
   align-items: start;
+}
+
+.pattern-section {
+  margin-top: 16px;
+}
+
+.pattern-builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.pattern-picker,
+.slab-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 10px;
+}
+
+.pattern-option,
+.slab-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.pattern-option {
+  cursor: pointer;
+  text-align: left;
+}
+
+.pattern-option:hover,
+.slab-card:hover {
+  border-color: #b6c6cc;
+}
+
+.pattern-option.is-selected {
+  border-color: rgba(15, 118, 110, 0.56);
+  outline: 2px solid rgba(15, 118, 110, 0.18);
+}
+
+.slab-card {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  cursor: pointer;
+}
+
+.pattern-swatch {
+  display: block;
+  width: 100%;
+  height: 54px;
+  border: 1px solid #b8c5ca;
+  border-radius: 6px;
+  background-color: #f8faf9;
+}
+
+.pattern-large {
+  width: 82px;
+  height: 54px;
+  flex: 0 0 auto;
+}
+
+.pattern-name,
+.slab-card-name {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.slab-card-thickness {
+  margin: 0;
+  color: var(--accent-dark);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.slab-card-pattern {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.slab-card-actions {
+  display: flex;
+  justify-content: end;
+}
+
+.pattern-form {
+  grid-template-columns: 1fr;
+  margin-bottom: 0;
+}
+
+.selected-pattern {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.selected-pattern span:last-child {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pattern-swatch[data-pattern="diag-45"] {
+  background-image: repeating-linear-gradient(45deg, transparent 0 9px, #54656b 9px 10px);
+}
+
+.pattern-swatch[data-pattern="diag-45-dense"] {
+  background-image: repeating-linear-gradient(45deg, transparent 0 5px, #54656b 5px 6px);
+}
+
+.pattern-swatch[data-pattern="diag-45-wide"] {
+  background-image: repeating-linear-gradient(45deg, transparent 0 15px, #54656b 15px 16px);
+}
+
+.pattern-swatch[data-pattern="diag-135"] {
+  background-image: repeating-linear-gradient(135deg, transparent 0 9px, #54656b 9px 10px);
+}
+
+.pattern-swatch[data-pattern="diag-double"] {
+  background-image:
+    repeating-linear-gradient(45deg, transparent 0 8px, #54656b 8px 9px, transparent 9px 12px, #54656b 12px 13px);
+}
+
+.pattern-swatch[data-pattern="diag-triple"] {
+  background-image:
+    repeating-linear-gradient(45deg, transparent 0 7px, #54656b 7px 8px, transparent 8px 10px, #54656b 10px 11px, transparent 11px 13px, #54656b 13px 14px);
+}
+
+.pattern-swatch[data-pattern="h-line"] {
+  background-image: repeating-linear-gradient(0deg, transparent 0 9px, #54656b 9px 10px);
+}
+
+.pattern-swatch[data-pattern="h-line-dense"] {
+  background-image: repeating-linear-gradient(0deg, transparent 0 5px, #54656b 5px 6px);
+}
+
+.pattern-swatch[data-pattern="v-line"] {
+  background-image: repeating-linear-gradient(90deg, transparent 0 9px, #54656b 9px 10px);
+}
+
+.pattern-swatch[data-pattern="v-line-dense"] {
+  background-image: repeating-linear-gradient(90deg, transparent 0 5px, #54656b 5px 6px);
+}
+
+.pattern-swatch[data-pattern="grid"] {
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 11px, #54656b 11px 12px),
+    repeating-linear-gradient(90deg, transparent 0 11px, #54656b 11px 12px);
+}
+
+.pattern-swatch[data-pattern="grid-dense"] {
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 6px, #54656b 6px 7px),
+    repeating-linear-gradient(90deg, transparent 0 6px, #54656b 6px 7px);
+}
+
+.pattern-swatch[data-pattern="diag-grid"] {
+  background-image:
+    repeating-linear-gradient(45deg, transparent 0 10px, #54656b 10px 11px),
+    repeating-linear-gradient(135deg, transparent 0 10px, #54656b 10px 11px);
+}
+
+.pattern-swatch[data-pattern="dot-small"] {
+  background-image: radial-gradient(circle, #54656b 1px, transparent 1.4px);
+  background-size: 8px 8px;
+}
+
+.pattern-swatch[data-pattern="dot-large"] {
+  background-image: radial-gradient(circle, #54656b 2px, transparent 2.4px);
+  background-size: 13px 13px;
+}
+
+.pattern-swatch[data-pattern="dot-stagger"] {
+  background-image:
+    radial-gradient(circle, #54656b 1.4px, transparent 1.8px),
+    radial-gradient(circle, #54656b 1.4px, transparent 1.8px);
+  background-position: 0 0, 6px 6px;
+  background-size: 12px 12px;
+}
+
+.pattern-swatch[data-pattern="dash-h"] {
+  background-image: repeating-linear-gradient(90deg, #54656b 0 8px, transparent 8px 14px);
+  background-size: 100% 10px;
+}
+
+.pattern-swatch[data-pattern="dash-v"] {
+  background-image: repeating-linear-gradient(0deg, #54656b 0 8px, transparent 8px 14px);
+  background-size: 10px 100%;
+}
+
+.pattern-swatch[data-pattern="dash-diag"] {
+  background-image: repeating-linear-gradient(45deg, #54656b 0 7px, transparent 7px 13px);
+}
+
+.pattern-swatch[data-pattern="dot-diag"] {
+  background-image:
+    radial-gradient(circle, #54656b 1.3px, transparent 1.7px),
+    repeating-linear-gradient(45deg, transparent 0 11px, #54656b 11px 12px);
+  background-size: 10px 10px, auto;
+}
+
+.pattern-swatch[data-pattern="dot-grid"] {
+  background-image:
+    radial-gradient(circle, #54656b 1.2px, transparent 1.6px),
+    repeating-linear-gradient(0deg, transparent 0 12px, rgba(84, 101, 107, 0.58) 12px 13px),
+    repeating-linear-gradient(90deg, transparent 0 12px, rgba(84, 101, 107, 0.58) 12px 13px);
+  background-size: 12px 12px, auto, auto;
+}
+
+.pattern-swatch[data-pattern="square"] {
+  background-image:
+    linear-gradient(45deg, rgba(84, 101, 107, 0.34) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(84, 101, 107, 0.34) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(84, 101, 107, 0.34) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(84, 101, 107, 0.34) 75%);
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+  background-size: 12px 12px;
+}
+
+.pattern-swatch[data-pattern="brick"] {
+  background-image:
+    linear-gradient(#54656b 1px, transparent 1px),
+    linear-gradient(90deg, #54656b 1px, transparent 1px),
+    linear-gradient(90deg, transparent 50%, #54656b 50%, #54656b calc(50% + 1px), transparent calc(50% + 1px));
+  background-position: 0 0, 0 0, 0 10px;
+  background-size: 20px 20px, 20px 20px, 20px 20px;
 }
 
 .beam-form {
@@ -576,12 +821,18 @@ input:focus {
   }
 
   .beam-layout,
-  .beam-form {
+  .beam-form,
+  .pattern-builder {
     grid-template-columns: 1fr;
   }
 
   .beam-form-actions {
     grid-template-columns: 1fr;
+  }
+
+  .pattern-picker,
+  .slab-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
   }
 
   .snippet-card {
