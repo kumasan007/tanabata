@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Download, LogIn, LogOut, Search } from "lucide-react";
+import { Download, LogIn, LogOut, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { CompanyMaster, ExportRow } from "@/lib/types";
@@ -15,15 +15,15 @@ type RangePreset = "today" | "tomorrow" | "week";
 type StatusFilter = "work" | "no_work";
 type SortBy = "dateAsc" | "dateDesc" | "primaryAsc";
 
-const today = () => toDateString(new Date());
+const tomorrow = () => toDateString(addDays(new Date(), 1));
 
 export function AdminDashboard() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
-  const [rangePreset, setRangePreset] = useState<RangePreset>("today");
-  const [dateFrom, setDateFrom] = useState(today);
-  const [dateTo, setDateTo] = useState(today);
+  const [rangePreset, setRangePreset] = useState<RangePreset>("tomorrow");
+  const [dateFrom, setDateFrom] = useState(tomorrow);
+  const [dateTo, setDateTo] = useState(tomorrow);
   const [primaryCompany, setPrimaryCompany] = useState("");
   const [secondaryCompany, setSecondaryCompany] = useState("");
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(null);
@@ -46,14 +46,6 @@ export function AdminDashboard() {
       return compareText(a.workDate, b.workDate) || compareText(a.primaryCompany, b.primaryCompany);
     });
   }, [result.rows, sortBy, statusFilter]);
-
-  const rowsByDate = useMemo(() => {
-    return visibleRows.reduce<Record<string, ExportRow[]>>((acc, row) => {
-      acc[row.workDate] ??= [];
-      acc[row.workDate].push(row);
-      return acc;
-    }, {});
-  }, [visibleRows]);
 
   const primaryCompanyOptions = companyMaster?.primaryCompanies ?? [];
 
@@ -83,6 +75,11 @@ export function AdminDashboard() {
       .then((response) => response.json())
       .then((body) => setCompanyMaster(body))
       .catch(() => setCompanyMaster(null));
+  }, [authenticated]);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    void search();
   }, [authenticated]);
 
   async function login(event: React.FormEvent<HTMLFormElement>) {
@@ -254,10 +251,15 @@ export function AdminDashboard() {
             <h1 className="text-xl font-bold text-slate-950">作業予定管理</h1>
             <p className="mt-1 text-sm text-slate-600">管理者ログイン中</p>
           </div>
-          <button className="btn btn-secondary" type="button" onClick={logout}>
-            <LogOut size={18} aria-hidden="true" />
-            ログアウト
-          </button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link className="btn btn-secondary" href="/">
+              入力画面へ
+            </Link>
+            <button className="btn btn-secondary" type="button" onClick={logout}>
+              <LogOut size={18} aria-hidden="true" />
+              ログアウト
+            </button>
+          </div>
         </div>
       </header>
 
@@ -365,55 +367,6 @@ export function AdminDashboard() {
         </section>
 
         {message ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800">{message}</div> : null}
-
-        <section className="grid gap-3">
-          {visibleRows.length === 0 ? (
-            <div className="rounded-md border border-border bg-white px-4 py-6 text-center text-sm text-slate-500">
-              表示する予定がありません
-            </div>
-          ) : (
-            Object.entries(rowsByDate).map(([date, rows]) => (
-              <div key={date} className="rounded-md border border-border bg-white">
-                <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-                  <div className="flex items-center gap-2 font-bold text-slate-950">
-                    <CalendarDays size={18} className="text-primary" aria-hidden="true" />
-                    {date}
-                  </div>
-                  <div className="text-xs font-semibold text-slate-600">{rows.length} 行</div>
-                </div>
-                <div className="grid gap-2 p-3">
-                  {rows.map((row, index) => (
-                    <div
-                      key={`${date}-${row.primaryCompany}-${row.secondaryCompany}-${row.nextSecondaryCompany}-${index}`}
-                      className="rounded-md border border-slate-200 px-3 py-3"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-bold text-slate-950">{row.primaryCompany}</span>
-                        {row.primaryCount !== "" ? <span className="text-sm text-slate-700">一次 {row.primaryCount}人</span> : null}
-                      </div>
-                      <div className="mt-2 grid gap-1 text-sm text-slate-700">
-                        {row.secondaryCompany ? (
-                          <div>
-                            二次 {row.secondaryCompany}
-                            {row.secondaryCount !== "" ? ` ${row.secondaryCount}人` : ""}
-                          </div>
-                        ) : null}
-                        {row.workArea || row.workContent ? <div>{[row.workArea, row.workContent].filter(Boolean).join(" / ")}</div> : null}
-                        {row.nextVisitDate || row.nextSecondaryCompany || row.nextWorkArea || row.nextWorkContent ? (
-                          <div className="text-slate-600">
-                            来場予定 {[row.nextVisitDate, row.nextSecondaryCompany, row.nextWorkArea, row.nextWorkContent]
-                              .filter(Boolean)
-                              .join(" / ")}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-        </section>
 
         <section className="overflow-hidden rounded-md border border-border bg-white">
           <div className="overflow-x-auto">

@@ -320,7 +320,6 @@ export function ScheduleForm() {
 
           {form.status === "work" ? (
             <>
-              <p className="text-xs font-semibold text-slate-500">一次人数が0人の場合は、二次会社人数の合計を1人以上にしてください。</p>
               <SubcompanyFields
                 title="二次会社"
                 rows={form.currentSubcompanies}
