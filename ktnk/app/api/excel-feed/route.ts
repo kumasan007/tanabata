@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { buildScheduleCsv, exportFileName } from "@/lib/export";
+import { attachCompanyTrades, buildScheduleCsv, exportFileName } from "@/lib/export";
+import { getCompanyMaster } from "@/lib/companies";
 import { getSchedules, schedulesToExportRows } from "@/lib/schedule-service";
+import type { ScheduleStatus } from "@/lib/types";
 import { addDays, todayInTokyoString, parseLocalDate, toDateString } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -24,10 +26,12 @@ export async function GET(request: Request) {
     const schedules = await getSchedules({
       dateFrom,
       dateTo,
+      status: parseStatus(url.searchParams.get("status")),
       primaryCompany: url.searchParams.get("primaryCompany"),
       secondaryCompany: url.searchParams.get("secondaryCompany"),
     });
-    const rows = schedulesToExportRows(schedules);
+    const companyMaster = await getCompanyMaster().catch(() => null);
+    const rows = attachCompanyTrades(schedulesToExportRows(schedules), companyMaster);
     const csv = `\uFEFF${buildScheduleCsv(rows)}`;
 
     return new NextResponse(csv, {
@@ -46,4 +50,8 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   }
+}
+
+function parseStatus(value: string | null): ScheduleStatus | null {
+  return value === "work" || value === "no_work" ? value : null;
 }

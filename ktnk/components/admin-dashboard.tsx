@@ -2,7 +2,7 @@
 
 import { CalendarDays, Download, LogIn, LogOut, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { ExportRow } from "@/lib/types";
+import type { CompanyMaster, ExportRow } from "@/lib/types";
 import { addDays, toDateString } from "@/lib/utils";
 
 type AdminResult = {
@@ -10,8 +10,9 @@ type AdminResult = {
   count: number;
 };
 
-type StatusFilter = "all" | "work" | "no_work";
-type SortBy = "dateAsc" | "dateDesc" | "primaryAsc" | "status";
+type RangePreset = "today" | "tomorrow" | "week";
+type StatusFilter = "work" | "no_work";
+type SortBy = "dateAsc" | "dateDesc" | "primaryAsc";
 
 const today = () => toDateString(new Date());
 
@@ -19,11 +20,14 @@ export function AdminDashboard() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [rangePreset, setRangePreset] = useState<RangePreset>("today");
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo, setDateTo] = useState(today);
   const [primaryCompany, setPrimaryCompany] = useState("");
   const [secondaryCompany, setSecondaryCompany] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(null);
+  const [tradeFilter, setTradeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("work");
   const [sortBy, setSortBy] = useState<SortBy>("dateAsc");
   const [result, setResult] = useState<AdminResult>({ rows: [], count: 0 });
   const [message, setMessage] = useState("");
@@ -31,18 +35,18 @@ export function AdminDashboard() {
 
   const visibleRows = useMemo(() => {
     const filtered = result.rows.filter((row) => {
-      if (statusFilter === "work") return row.status === "作業あり";
-      if (statusFilter === "no_work") return row.status === "作業なし";
+      if (statusFilter === "work" && row.status !== "作業あり") return false;
+      if (statusFilter === "no_work" && row.status !== "作業なし") return false;
+      if (tradeFilter && !(row.primaryTrades ?? "").split("・").includes(tradeFilter)) return false;
       return true;
     });
 
     return [...filtered].sort((a, b) => {
       if (sortBy === "dateDesc") return compareText(b.workDate, a.workDate) || compareText(a.primaryCompany, b.primaryCompany);
       if (sortBy === "primaryAsc") return compareText(a.primaryCompany, b.primaryCompany) || compareText(a.workDate, b.workDate);
-      if (sortBy === "status") return compareText(a.status, b.status) || compareText(a.workDate, b.workDate);
       return compareText(a.workDate, b.workDate) || compareText(a.primaryCompany, b.primaryCompany);
     });
-  }, [result.rows, sortBy, statusFilter]);
+  }, [result.rows, sortBy, statusFilter, tradeFilter]);
 
   const rowsByDate = useMemo(() => {
     return visibleRows.reduce<Record<string, ExportRow[]>>((acc, row) => {
@@ -52,6 +56,19 @@ export function AdminDashboard() {
     }, {});
   }, [visibleRows]);
 
+  const primaryCompanyOptions = companyMaster?.primaryCompanies ?? [];
+
+  const secondaryCompanyOptions = useMemo(() => {
+    if (!companyMaster) return [];
+
+    const options =
+      primaryCompany && companyMaster.secondariesByPrimary[primaryCompany]
+        ? companyMaster.secondariesByPrimary[primaryCompany]
+        : Object.values(companyMaster.secondariesByPrimary).flat();
+
+    return [...new Set(options)].sort(compareText);
+  }, [companyMaster, primaryCompany]);
+
   useEffect(() => {
     fetch("/api/admin/session")
       .then((response) => response.json())
@@ -59,6 +76,15 @@ export function AdminDashboard() {
       .catch(() => setAuthenticated(false))
       .finally(() => setCheckingSession(false));
   }, []);
+
+  useEffect(() => {
+    if (!authenticated) return;
+
+    fetch("/api/companies")
+      .then((response) => response.json())
+      .then((body) => setCompanyMaster(body))
+      .catch(() => setCompanyMaster(null));
+  }, [authenticated]);
 
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -86,6 +112,7 @@ export function AdminDashboard() {
     await fetch("/api/admin/logout", { method: "POST" });
     setAuthenticated(false);
     setResult({ rows: [], count: 0 });
+    window.location.href = "/";
   }
 
   async function search() {
@@ -140,15 +167,34 @@ export function AdminDashboard() {
     const params = new URLSearchParams();
     if (dateFrom) params.set("dateFrom", dateFrom);
     if (dateTo) params.set("dateTo", dateTo);
+    params.set("status", statusFilter);
     if (primaryCompany) params.set("primaryCompany", primaryCompany);
     if (secondaryCompany) params.set("secondaryCompany", secondaryCompany);
     return params.toString();
   }
 
-  function setQuickRange(days: number) {
-    const start = new Date();
-    setDateFrom(toDateString(start));
-    setDateTo(toDateString(addDays(start, days - 1)));
+  function setQuickRange(preset: RangePreset) {
+    setRangePreset(preset);
+
+    const base = new Date();
+    if (preset === "tomorrow") {
+      const tomorrowDate = addDays(base, 1);
+      setDateFrom(toDateString(tomorrowDate));
+      setDateTo(toDateString(tomorrowDate));
+      return;
+    }
+
+    if (preset === "week") {
+      const day = base.getDay();
+      const daysFromMonday = day === 0 ? 6 : day - 1;
+      const monday = addDays(base, -daysFromMonday);
+      setDateFrom(toDateString(monday));
+      setDateTo(toDateString(addDays(monday, 6)));
+      return;
+    }
+
+    setDateFrom(toDateString(base));
+    setDateTo(toDateString(base));
   }
 
   if (checkingSession) {
@@ -208,33 +254,62 @@ export function AdminDashboard() {
       <div className="mx-auto grid max-w-6xl gap-4 px-4 py-4">
         <section className="panel -mx-4 grid gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
           <div className="flex flex-wrap gap-2">
-            <button className="btn btn-secondary h-10" type="button" onClick={() => setQuickRange(1)}>
+            <button
+              className={rangePreset === "today" ? "btn btn-primary h-10" : "btn btn-secondary h-10"}
+              type="button"
+              onClick={() => setQuickRange("today")}
+            >
               今日
             </button>
-            <button className="btn btn-secondary h-10" type="button" onClick={() => setQuickRange(2)}>
-              今日・明日
+            <button
+              className={rangePreset === "tomorrow" ? "btn btn-primary h-10" : "btn btn-secondary h-10"}
+              type="button"
+              onClick={() => setQuickRange("tomorrow")}
+            >
+              明日
             </button>
-            <button className="btn btn-secondary h-10" type="button" onClick={() => setQuickRange(7)}>
-              7日分
+            <button
+              className={rangePreset === "week" ? "btn btn-primary h-10" : "btn btn-secondary h-10"}
+              type="button"
+              onClick={() => setQuickRange("week")}
+            >
+              今週
             </button>
+            <div className="flex min-h-10 items-center text-sm font-semibold text-slate-600">
+              {dateFrom === dateTo ? dateFrom : `${dateFrom} - ${dateTo}`}
+            </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[150px_150px_1fr_1fr_auto]">
-            <label className="field">
-              <span className="label">開始日</span>
-              <input className="input" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-            </label>
-            <label className="field">
-              <span className="label">終了日</span>
-              <input className="input" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-            </label>
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
             <label className="field">
               <span className="label">一次会社</span>
-              <input className="input" value={primaryCompany} onChange={(event) => setPrimaryCompany(event.target.value)} />
+              <input
+                className="input"
+                list="admin-primary-companies"
+                value={primaryCompany}
+                onChange={(event) => setPrimaryCompany(event.target.value)}
+                placeholder="入力または選択"
+              />
+              <datalist id="admin-primary-companies">
+                {primaryCompanyOptions.map((company) => (
+                  <option key={company} value={company} />
+                ))}
+              </datalist>
             </label>
             <label className="field">
               <span className="label">二次会社</span>
-              <input className="input" value={secondaryCompany} onChange={(event) => setSecondaryCompany(event.target.value)} />
+              <input
+                className="input"
+                list="admin-secondary-companies"
+                value={secondaryCompany}
+                onChange={(event) => setSecondaryCompany(event.target.value)}
+                placeholder="入力または選択"
+              />
+              <datalist id="admin-secondary-companies">
+                {secondaryCompanyOptions.map((company) => (
+                  <option key={company} value={company} />
+                ))}
+              </datalist>
             </label>
             <button className="btn btn-primary mt-6" type="button" onClick={search} disabled={loading}>
               <Search size={18} aria-hidden="true" />
@@ -260,11 +335,21 @@ export function AdminDashboard() {
         </section>
 
         <section className="panel -mx-4 grid gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="field">
+              <span className="label">職種</span>
+              <select className="input" value={tradeFilter} onChange={(event) => setTradeFilter(event.target.value)}>
+                <option value="">すべて</option>
+                {(companyMaster?.trades ?? []).map((trade) => (
+                  <option key={trade} value={trade}>
+                    {trade}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="field">
               <span className="label">表示する予定</span>
               <select className="input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
-                <option value="all">すべて</option>
                 <option value="work">作業あり</option>
                 <option value="no_work">作業なし</option>
               </select>
@@ -275,7 +360,6 @@ export function AdminDashboard() {
                 <option value="dateAsc">日付が早い順</option>
                 <option value="dateDesc">日付が遅い順</option>
                 <option value="primaryAsc">一次会社順</option>
-                <option value="status">予定順</option>
               </select>
             </label>
           </div>
@@ -305,16 +389,10 @@ export function AdminDashboard() {
                       className="rounded-md border border-slate-200 px-3 py-3"
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={
-                            row.status === "作業あり"
-                              ? "rounded bg-sky-100 px-2 py-1 text-xs font-bold text-sky-800"
-                              : "rounded bg-slate-200 px-2 py-1 text-xs font-bold text-slate-700"
-                          }
-                        >
-                          {row.status}
-                        </span>
                         <span className="font-bold text-slate-950">{row.primaryCompany}</span>
+                        {row.primaryTrades ? (
+                          <span className="rounded bg-amber-100 px-2 py-1 text-xs font-bold text-amber-900">{row.primaryTrades}</span>
+                        ) : null}
                         {row.primaryCount !== "" ? <span className="text-sm text-slate-700">一次 {row.primaryCount}人</span> : null}
                       </div>
                       <div className="mt-2 grid gap-1 text-sm text-slate-700">
@@ -343,23 +421,13 @@ export function AdminDashboard() {
 
         <section className="overflow-hidden rounded-md border border-border bg-white">
           <div className="overflow-x-auto">
-            <table className="min-w-[1200px] w-full border-collapse text-sm">
+            <table className={statusFilter === "work" ? "min-w-[920px] w-full border-collapse text-sm" : "min-w-[1040px] w-full border-collapse text-sm"}>
               <thead className="bg-slate-800 text-white">
                 <tr>
-                  {[
-                    "作業日",
-                    "予定",
-                    "一次会社",
-                    "一次人数",
-                    "二次会社",
-                    "二次人数",
-                    "エリア",
-                    "作業内容",
-                    "来場予定日",
-                    "来場予定二次会社",
-                    "来場予定人数",
-                    "来場予定エリア",
-                  ].map((header) => (
+                  {(statusFilter === "work"
+                    ? ["作業日", "一次会社", "職種", "一次人数", "二次会社", "二次人数", "作業エリア", "作業内容"]
+                    : ["作業日", "一次会社", "職種", "来場予定日", "一次人数", "二次会社", "二次人数", "作業エリア", "作業内容"]
+                  ).map((header) => (
                     <th key={header} className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                       {header}
                     </th>
@@ -369,25 +437,37 @@ export function AdminDashboard() {
               <tbody>
                 {visibleRows.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="px-3 py-8 text-center text-slate-500">
+                    <td colSpan={statusFilter === "work" ? 8 : 9} className="px-3 py-8 text-center text-slate-500">
                       データなし
                     </td>
                   </tr>
                 ) : (
                   visibleRows.map((row, index) => (
                     <tr key={`${row.workDate}-${row.primaryCompany}-${row.secondaryCompany}-${row.nextSecondaryCompany}-${index}`} className="border-t border-border">
-                      <td className="whitespace-nowrap px-3 py-2">{row.workDate}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{row.status}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{row.primaryCompany}</td>
-                      <td className="whitespace-nowrap px-3 py-2 text-right">{row.primaryCount}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{row.secondaryCompany}</td>
-                      <td className="whitespace-nowrap px-3 py-2 text-right">{row.secondaryCount}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{row.workArea}</td>
-                      <td className="min-w-48 px-3 py-2">{row.workContent}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{row.nextVisitDate}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{row.nextSecondaryCompany}</td>
-                      <td className="whitespace-nowrap px-3 py-2 text-right">{row.nextSecondaryCount}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{row.nextWorkArea}</td>
+                      {statusFilter === "work" ? (
+                        <>
+                          <td className="whitespace-nowrap px-3 py-2">{row.workDate}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{row.primaryCompany}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{row.primaryTrades}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-right">{row.primaryCount}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{row.secondaryCompany}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-right">{row.secondaryCount}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{row.workArea}</td>
+                          <td className="min-w-48 px-3 py-2">{row.workContent}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="whitespace-nowrap px-3 py-2">{row.workDate}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{row.primaryCompany}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{row.primaryTrades}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{row.nextVisitDate}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-right">{row.nextPrimaryCount}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{row.nextSecondaryCompany}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-right">{row.nextSecondaryCount}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{row.nextWorkArea}</td>
+                          <td className="min-w-48 px-3 py-2">{row.nextWorkContent}</td>
+                        </>
+                      )}
                     </tr>
                   ))
                 )}

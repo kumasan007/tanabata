@@ -52,12 +52,13 @@ function WorksheetXml([object]$Rows, [int]$FrozenRows = 1) {
   <col min="1" max="1" width="14" customWidth="1"/>
   <col min="2" max="2" width="14" customWidth="1"/>
   <col min="3" max="3" width="22" customWidth="1"/>
-  <col min="4" max="4" width="14" customWidth="1"/>
-  <col min="5" max="5" width="22" customWidth="1"/>
-  <col min="6" max="6" width="14" customWidth="1"/>
-  <col min="7" max="8" width="20" customWidth="1"/>
-  <col min="9" max="14" width="18" customWidth="1"/>
-  <col min="15" max="18" width="18" customWidth="1"/>
+  <col min="4" max="4" width="18" customWidth="1"/>
+  <col min="5" max="5" width="14" customWidth="1"/>
+  <col min="6" max="6" width="22" customWidth="1"/>
+  <col min="7" max="7" width="14" customWidth="1"/>
+  <col min="8" max="9" width="20" customWidth="1"/>
+  <col min="10" max="15" width="18" customWidth="1"/>
+  <col min="16" max="19" width="18" customWidth="1"/>
 </cols>
 "@
 
@@ -75,7 +76,7 @@ function WorksheetXml([object]$Rows, [int]$FrozenRows = 1) {
   <sheetData>
     $($sheetData -join "`n    ")
   </sheetData>
-  <autoFilter ref="A1:R1"/>
+  <autoFilter ref="A1:S1"/>
 </worksheet>
 "@
 }
@@ -93,6 +94,7 @@ $headers = @(
     "作業日",
     "予定",
     "一次会社",
+    "職種",
     "一次会社人数",
     "二次会社",
     "二次会社人数",
@@ -110,25 +112,36 @@ $headers = @(
     "取込元ファイル"
 )
 
+function PadRow([object[]]$Values) {
+  $cells = New-Object 'System.Collections.Generic.List[object]'
+  foreach ($value in $Values) {
+    [void]$cells.Add($value)
+  }
+  while ($cells.Count -lt $headers.Count) {
+    [void]$cells.Add("")
+  }
+  return [object[]]$cells.ToArray()
+}
+
 $usageRows = New-Object 'System.Collections.Generic.List[object[]]'
-$usageRows.Add([object[]]@("作業予定マスタExcel", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""))
-$usageRows.Add([object[]]@("使い方", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""))
-$usageRows.Add([object[]]@("1", "このファイルをExcelで開き、名前を付けて保存で .xlsm として保存します。", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""))
-$usageRows.Add([object[]]@("2", "vba/ImportSchedules.bas を標準モジュールに取り込みます。", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""))
-$usageRows.Add([object[]]@("3", "Webアプリから作業予定Excelをダウンロードします。", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""))
-$usageRows.Add([object[]]@("4", "マクロ「作業予定を取り込む」を実行して、ダウンロードしたファイルを選択します。", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""))
-$usageRows.Add([object[]]@("5", "日付別シートと取込一覧に、重複を上書きしながら追加されます。", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""))
-$usageRows.Add([object[]]@("", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""))
-$usageRows.Add([object[]]@("重複判定キー", "作業日 + 予定 + 一次会社 + 二次会社 + 来場予定二次会社", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""))
+$usageRows.Add((PadRow @("作業予定マスタExcel")))
+$usageRows.Add((PadRow @("使い方")))
+$usageRows.Add((PadRow @("1", "このファイルをExcelで開き、名前を付けて保存で .xlsm として保存します。")))
+$usageRows.Add((PadRow @("2", "vba/ImportSchedules.bas を標準モジュールに取り込みます。")))
+$usageRows.Add((PadRow @("3", "Webアプリから作業予定Excelをダウンロードします。")))
+$usageRows.Add((PadRow @("4", "マクロ「作業予定を取り込む」を実行して、ダウンロードしたファイルを選択します。")))
+$usageRows.Add((PadRow @("5", "日付別シートと取込一覧に、重複を上書きしながら追加されます。")))
+$usageRows.Add((PadRow @("")))
+$usageRows.Add((PadRow @("重複判定キー", "作業日 + 予定 + 一次会社 + 二次会社 + 来場予定二次会社")))
 
 $allRows = New-Object 'System.Collections.Generic.List[object[]]'
 $allRows.Add([object[]]$headers)
 
 $templateRows = New-Object 'System.Collections.Generic.List[object[]]'
 $templateRows.Add([object[]]$headers)
-$templateRows.Add([object[]]@("2026-09-04", "作業あり", "○○設備", "3", "△△工業", "2", "10F", "配管施工", "", "", "", "", "", "", "2026-09-03 18:00", "2026-09-03 18:00", "", ""))
-$templateRows.Add([object[]]@("2026-09-04", "作業あり", "○○設備", "3", "□□工業", "4", "10F", "配管施工", "", "", "", "", "", "", "2026-09-03 18:00", "2026-09-03 18:00", "", ""))
-$templateRows.Add([object[]]@("2026-09-05", "作業なし", "○○設備", "", "", "", "", "", "2026-09-08", "3", "△△工業", "2", "11F", "配管施工", "2026-09-03 18:00", "2026-09-03 18:00", "", ""))
+$templateRows.Add([object[]]@("2026-09-04", "作業あり", "○○設備", "配管工", "3", "△△工業", "2", "10F", "配管施工", "", "", "", "", "", "", "2026-09-03 18:00", "2026-09-03 18:00", "", ""))
+$templateRows.Add([object[]]@("2026-09-04", "作業あり", "○○設備", "配管工", "3", "□□工業", "4", "10F", "配管施工", "", "", "", "", "", "", "2026-09-03 18:00", "2026-09-03 18:00", "", ""))
+$templateRows.Add([object[]]@("2026-09-05", "作業なし", "○○設備", "配管工", "", "", "", "", "", "2026-09-08", "3", "△△工業", "2", "11F", "配管施工", "2026-09-03 18:00", "2026-09-03 18:00", "", ""))
 
 $outputFullPath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $OutputPath))
 $outputDir = Split-Path -Parent $outputFullPath

@@ -1,6 +1,7 @@
 "use client";
 
-import { CalendarDays, CheckCircle2, RefreshCw, Send } from "lucide-react";
+import { CheckCircle2, LogIn, RefreshCw, Send } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { SubcompanyFields } from "@/components/subcompany-fields";
 import type { CompanyMaster, ScheduleSubmitInput, ScheduleSummary } from "@/lib/types";
@@ -45,6 +46,11 @@ export function ScheduleForm() {
   const secondaryOptions = useMemo(() => {
     if (!companyMaster || !form.primaryCompany) return [];
     return companyMaster.secondariesByPrimary[form.primaryCompany] ?? [];
+  }, [companyMaster, form.primaryCompany]);
+
+  const primaryTrades = useMemo(() => {
+    if (!companyMaster || !form.primaryCompany) return [];
+    return companyMaster.tradesByPrimary?.[form.primaryCompany] ?? [];
   }, [companyMaster, form.primaryCompany]);
 
   useEffect(() => {
@@ -146,7 +152,10 @@ export function ScheduleForm() {
           <div>
             <h1 className="text-xl font-bold tracking-normal text-slate-950">作業予定入力</h1>
           </div>
-          <CalendarDays className="text-primary" size={28} aria-hidden="true" />
+          <Link className="btn btn-secondary h-11 px-3 text-sm" href="/admin">
+            <LogIn size={17} aria-hidden="true" />
+            管理
+          </Link>
         </div>
       </header>
 
@@ -239,6 +248,16 @@ export function ScheduleForm() {
             </select>
           </label>
 
+          {primaryTrades.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {primaryTrades.map((trade) => (
+                <span key={trade} className="rounded bg-amber-100 px-2 py-1 text-xs font-bold text-amber-900">
+                  {trade}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
           {form.primaryCompany ? (
             <section className="rounded-md bg-slate-100 px-3 py-3">
               <div className="mb-2 text-xs font-bold text-slate-600">記入済み 今日から7日分</div>
@@ -306,7 +325,7 @@ export function ScheduleForm() {
                   className="input"
                   value={form.workArea}
                   onChange={(event) => patch({ workArea: event.target.value })}
-                  placeholder="10F、10,12,33階、各階"
+                  placeholder="10階、12階"
                   disabled={form.workArea === SAME_AS_PREVIOUS}
                 />
               </div>
@@ -325,7 +344,7 @@ export function ScheduleForm() {
                   className="textarea"
                   value={form.workContent}
                   onChange={(event) => patch({ workContent: event.target.value })}
-                  placeholder="配管施工"
+                  placeholder="配管つり込み作業"
                   disabled={form.workContent === SAME_AS_PREVIOUS}
                 />
               </div>
@@ -377,7 +396,7 @@ export function ScheduleForm() {
                   className="input"
                   value={form.nextWorkArea}
                   onChange={(event) => patch({ nextWorkArea: event.target.value })}
-                  placeholder="10F、10,12,33階、各階"
+                  placeholder="10階、12階"
                   disabled={form.nextWorkArea === SAME_AS_PREVIOUS}
                 />
               </div>
@@ -396,6 +415,7 @@ export function ScheduleForm() {
                   className="textarea"
                   value={form.nextWorkContent}
                   onChange={(event) => patch({ nextWorkContent: event.target.value })}
+                  placeholder="配管つり込み作業"
                   disabled={form.nextWorkContent === SAME_AS_PREVIOUS}
                 />
               </div>

@@ -84,6 +84,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
 export type ScheduleSearchParams = {
   dateFrom?: string | null;
   dateTo?: string | null;
+  status?: ScheduleStatus | null;
   primaryCompany?: string | null;
   secondaryCompany?: string | null;
 };
@@ -108,6 +109,10 @@ export async function getSchedules(params: ScheduleSearchParams) {
 
   if (params.dateTo) {
     query = query.lte("work_date", params.dateTo);
+  }
+
+  if (params.status) {
+    query = query.eq("status", params.status);
   }
 
   if (params.primaryCompany) {
@@ -193,6 +198,7 @@ export function schedulesToExportRows(schedules: ScheduleWithSubcompanies[]): Ex
           workDate: schedule.work_date,
           status: statusLabel(schedule.status),
           primaryCompany: schedule.primary_company,
+          primaryTrades: "",
           primaryCount: schedule.primary_count ?? "",
           secondaryCompany: sub?.secondary_company ?? "",
           secondaryCount: sub?.worker_count ?? "",
@@ -215,6 +221,7 @@ export function schedulesToExportRows(schedules: ScheduleWithSubcompanies[]): Ex
           workDate: schedule.work_date,
           status: statusLabel(schedule.status),
           primaryCompany: schedule.primary_company,
+          primaryTrades: "",
           primaryCount: "",
           secondaryCompany: "",
           secondaryCount: "",

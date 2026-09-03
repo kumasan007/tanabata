@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { buildScheduleCsv, buildScheduleWorkbook, exportFileName } from "@/lib/export";
+import { attachCompanyTrades, buildScheduleCsv, buildScheduleWorkbook, exportFileName } from "@/lib/export";
+import { getCompanyMaster } from "@/lib/companies";
 import { getSchedules, schedulesToExportRows } from "@/lib/schedule-service";
 import { assertAdminFromRequest } from "@/lib/supabase";
+import type { ScheduleStatus } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -20,10 +22,12 @@ export async function GET(request: Request) {
     const schedules = await getSchedules({
       dateFrom,
       dateTo,
+      status: parseStatus(url.searchParams.get("status")),
       primaryCompany: url.searchParams.get("primaryCompany"),
       secondaryCompany: url.searchParams.get("secondaryCompany"),
     });
-    const rows = schedulesToExportRows(schedules);
+    const companyMaster = await getCompanyMaster().catch(() => null);
+    const rows = attachCompanyTrades(schedulesToExportRows(schedules), companyMaster);
     const filename = exportFileName({ dateFrom, dateTo, format });
 
     if (format === "csv") {
@@ -55,4 +59,8 @@ export async function GET(request: Request) {
 
 function contentDisposition(filename: string) {
   return `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+function parseStatus(value: string | null): ScheduleStatus | null {
+  return value === "work" || value === "no_work" ? value : null;
 }

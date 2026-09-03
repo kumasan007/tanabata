@@ -4,9 +4,9 @@ Option Explicit
 Private Const HEADER_ROW As Long = 1
 Private Const FIRST_DATA_ROW As Long = 2
 Private Const FIRST_COL As Long = 1
-Private Const LAST_SOURCE_COL As Long = 16
-Private Const IMPORTED_AT_COL As Long = 17
-Private Const SOURCE_FILE_COL As Long = 18
+Private Const LAST_SOURCE_COL As Long = 17
+Private Const IMPORTED_AT_COL As Long = 18
+Private Const SOURCE_FILE_COL As Long = 19
 
 Private headers As Variant
 
@@ -71,6 +71,7 @@ Private Sub InitHeaders()
         "作業日", _
         "予定", _
         "一次会社", _
+        "職種", _
         "一次会社人数", _
         "二次会社", _
         "二次会社人数", _
@@ -155,9 +156,9 @@ Private Sub SetupHeader(ByVal ws As Worksheet)
         .HorizontalAlignment = xlCenter
     End With
 
-    ws.Columns("A:R").EntireColumn.AutoFit
+    ws.Columns("A:S").EntireColumn.AutoFit
     If Not ws.AutoFilterMode Then
-        ws.Range("A1:R1").AutoFilter
+        ws.Range("A1:S1").AutoFilter
     End If
 End Sub
 
@@ -180,7 +181,7 @@ Private Sub UpsertRow(ByVal targetWs As Worksheet, ByVal sourceWs As Worksheet, 
     targetWs.Cells(targetRow, IMPORTED_AT_COL).Value = Now
     targetWs.Cells(targetRow, SOURCE_FILE_COL).Value = Dir(sourcePath)
 
-    targetWs.Columns("A:R").EntireColumn.AutoFit
+    targetWs.Columns("A:S").EntireColumn.AutoFit
 End Sub
 
 Private Function FindRowByKey(ByVal ws As Worksheet, ByVal key As String) As Long
@@ -207,8 +208,8 @@ Private Function BuildKeyFromSheet(ByVal ws As Worksheet, ByVal rowNumber As Lon
         NormalizeKeyPart(ws.Cells(rowNumber, 1).Value) & "|" & _
         NormalizeKeyPart(ws.Cells(rowNumber, 2).Value) & "|" & _
         NormalizeKeyPart(ws.Cells(rowNumber, 3).Value) & "|" & _
-        NormalizeKeyPart(ws.Cells(rowNumber, 5).Value) & "|" & _
-        NormalizeKeyPart(ws.Cells(rowNumber, 11).Value)
+        NormalizeKeyPart(ws.Cells(rowNumber, 6).Value) & "|" & _
+        NormalizeKeyPart(ws.Cells(rowNumber, 12).Value)
 End Function
 
 Private Function NormalizeKeyPart(ByVal value As Variant) As String

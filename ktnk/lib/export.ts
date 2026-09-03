@@ -1,9 +1,12 @@
 import type { ExportRow } from "@/lib/types";
+import type { CompanyMaster } from "@/lib/types";
+import { tradesTextForPrimaryCompany } from "@/lib/companies";
 
 export const exportHeaders = [
   "作業日",
   "予定",
   "一次会社",
+  "職種",
   "一次会社人数",
   "二次会社",
   "二次会社人数",
@@ -24,6 +27,7 @@ export function rowToArray(row: ExportRow) {
     row.workDate,
     row.status,
     row.primaryCompany,
+    row.primaryTrades,
     row.primaryCount,
     row.secondaryCompany,
     row.secondaryCount,
@@ -57,6 +61,13 @@ export async function buildScheduleWorkbook(rows: ExportRow[]) {
 export function buildScheduleCsv(rows: ExportRow[]) {
   const lines = [exportHeaders, ...rows.map(rowToArray)];
   return lines.map((line) => line.map(csvCell).join(",")).join("\r\n");
+}
+
+export function attachCompanyTrades(rows: ExportRow[], companyMaster: CompanyMaster | null) {
+  return rows.map((row) => ({
+    ...row,
+    primaryTrades: tradesTextForPrimaryCompany(companyMaster, row.primaryCompany),
+  }));
 }
 
 export function exportFileName(params: { dateFrom?: string | null; dateTo?: string | null; format: "xlsx" | "csv" }) {
@@ -236,11 +247,11 @@ function worksheetXml(rows: unknown[][]) {
     <col min="4" max="4" width="14" customWidth="1"/>
     <col min="5" max="5" width="24" customWidth="1"/>
     <col min="6" max="6" width="14" customWidth="1"/>
-    <col min="7" max="8" width="22" customWidth="1"/>
-    <col min="9" max="16" width="18" customWidth="1"/>
+    <col min="7" max="9" width="22" customWidth="1"/>
+    <col min="10" max="17" width="18" customWidth="1"/>
   </cols>
   <sheetData>${rowXml}</sheetData>
-  <autoFilter ref="A1:P1"/>
+  <autoFilter ref="A1:Q1"/>
 </worksheet>`;
 }
 

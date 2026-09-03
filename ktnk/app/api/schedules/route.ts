@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import { attachCompanyTrades } from "@/lib/export";
+import { getCompanyMaster } from "@/lib/companies";
 import { assertAdminFromRequest } from "@/lib/supabase";
 import { getSchedules, saveScheduleSubmission, schedulesToExportRows } from "@/lib/schedule-service";
+import type { ScheduleStatus } from "@/lib/types";
 import { scheduleSubmitSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -43,13 +46,15 @@ export async function GET(request: Request) {
     const schedules = await getSchedules({
       dateFrom: url.searchParams.get("dateFrom"),
       dateTo: url.searchParams.get("dateTo"),
+      status: parseStatus(url.searchParams.get("status")),
       primaryCompany: url.searchParams.get("primaryCompany"),
       secondaryCompany: url.searchParams.get("secondaryCompany"),
     });
+    const companyMaster = await getCompanyMaster().catch(() => null);
 
     return NextResponse.json({
       schedules,
-      rows: schedulesToExportRows(schedules),
+      rows: attachCompanyTrades(schedulesToExportRows(schedules), companyMaster),
       count: schedules.length,
     });
   } catch (error) {
@@ -60,4 +65,8 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   }
+}
+
+function parseStatus(value: string | null): ScheduleStatus | null {
+  return value === "work" || value === "no_work" ? value : null;
 }

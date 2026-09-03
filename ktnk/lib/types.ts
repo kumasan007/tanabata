@@ -4,6 +4,8 @@ export type SubcompanyKind = "current" | "next_visit";
 export type CompanyMaster = {
   primaryCompanies: string[];
   secondariesByPrimary: Record<string, string[]>;
+  trades: string[];
+  tradesByPrimary: Record<string, string[]>;
   loadedAt: string;
 };
 
@@ -62,6 +64,7 @@ export type ExportRow = {
   workDate: string;
   status: string;
   primaryCompany: string;
+  primaryTrades: string;
   primaryCount: number | "";
   secondaryCompany: string;
   secondaryCount: number | "";
