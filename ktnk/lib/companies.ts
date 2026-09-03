@@ -27,22 +27,7 @@ export async function getCompanyMaster(force = false): Promise<CompanyMaster> {
 
     for (const candidateUrl of companyCsvUrlCandidates(url)) {
       try {
-        const response = await fetch(candidateUrl, {
-          cache: "no-store",
-          headers: {
-            accept: "text/csv, text/plain, */*",
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Box CSV request failed: ${response.status}`);
-        }
-
-        const csvText = await response.text();
-        if (looksLikeHtml(csvText, response.headers.get("content-type"))) {
-          throw new Error("Boxの表示ページが返っています。BOX_COMPANY_CSV_URLにはCSV本体を直接ダウンロードできる公開URLを設定してください。");
-        }
-
+        const csvText = await fetchCompanyCsvText(candidateUrl);
         const data = parseCompanyCsv(csvText);
         cache = {
           data,
@@ -131,6 +116,78 @@ function normalizeCsvText(csvText: string) {
     .replace(/\r\n?/g, "\n")
     .replace(/(^|,)[\t ]+"/gm, '$1"')
     .replace(/"[\t ]+(?=,|\n|$)/g, '"');
+}
+
+async function fetchCompanyCsvText(url: string) {
+  const first = await fetchText(url);
+  if (!looksLikeHtml(first.text, first.contentType)) {
+    return first.text;
+  }
+
+  const boxDownloadUrl = resolveBoxSharedDownloadUrl(url, first.text);
+  if (!boxDownloadUrl) {
+    throw new Error("Boxの表示ページが返っています。CSV本体を取得できる共有ファイルURL、またはCSV本体の直接URLを設定してください。");
+  }
+
+  const second = await fetchText(boxDownloadUrl);
+  if (looksLikeHtml(second.text, second.contentType)) {
+    throw new Error("Boxの共有ページからCSV本体の取得を試しましたが、CSVではなくHTMLが返りました。Box側でダウンロード許可を確認してください。");
+  }
+
+  return second.text;
+}
+
+async function fetchText(url: string) {
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: {
+      accept: "text/csv, text/plain, */*",
+      "user-agent": "Mozilla/5.0 ktnk-schedule-app",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Box CSV request failed: ${response.status}`);
+  }
+
+  return {
+    text: await response.text(),
+    contentType: response.headers.get("content-type"),
+  };
+}
+
+function resolveBoxSharedDownloadUrl(url: string, htmlText: string) {
+  const sharedName = extractBoxSharedName(url, htmlText);
+  const fileId = extractBoxFileId(htmlText);
+
+  if (!sharedName || !fileId) return null;
+
+  const downloadUrl = new URL("https://app.box.com/index.php");
+  downloadUrl.searchParams.set("rm", "box_download_shared_file");
+  downloadUrl.searchParams.set("shared_name", sharedName);
+  downloadUrl.searchParams.set("file_id", `f_${fileId}`);
+  return downloadUrl.toString();
+}
+
+function extractBoxSharedName(url: string, htmlText: string) {
+  try {
+    const parsedUrl = new URL(url);
+    const match = parsedUrl.hostname.endsWith("box.com") ? parsedUrl.pathname.match(/^\/s\/([^/?#]+)/) : null;
+    if (match?.[1]) return match[1];
+  } catch {
+    // Fall back to the embedded Box payload.
+  }
+
+  return htmlText.match(/"sharedName"\s*:\s*"([^"]+)"/)?.[1] ?? null;
+}
+
+function extractBoxFileId(htmlText: string) {
+  return (
+    htmlText.match(/"itemID"\s*:\s*(\d+)/)?.[1] ??
+    htmlText.match(/"preview_metadata"\s*:\s*\{[\s\S]*?"id"\s*:\s*"(\d+)"/)?.[1] ??
+    htmlText.match(/"typedID"\s*:\s*"f_(\d+)"/)?.[1] ??
+    null
+  );
 }
 
 function companyCsvUrlCandidates(rawUrl: string) {

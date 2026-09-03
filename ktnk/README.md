@@ -103,7 +103,7 @@ npm install
 
 Boxに置く会社CSVは `company-master-template.csv` を元に作成します。
 
-`BOX_COMPANY_CSV_URL` には、Boxのプレビュー画面URLではなく、CSV本体を直接ダウンロードできる公開URLを設定してください。`https://app.box.com/s/...` の画面URLはHTMLが返ることがあるため、アプリからはCSVとして読めません。
+`BOX_COMPANY_CSV_URL` には、BoxのCSV共有ファイルURL、またはCSV本体を直接ダウンロードできる公開URLを設定してください。Box共有ファイルURLを使う場合は、フォルダではなくCSVファイル単体を共有し、ダウンロードを許可してください。
 
 列:
 
