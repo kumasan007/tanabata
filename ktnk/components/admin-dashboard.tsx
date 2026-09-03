@@ -27,7 +27,6 @@ export function AdminDashboard() {
   const [primaryCompany, setPrimaryCompany] = useState("");
   const [secondaryCompany, setSecondaryCompany] = useState("");
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(null);
-  const [tradeFilter, setTradeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("work");
   const [sortBy, setSortBy] = useState<SortBy>("dateAsc");
   const [result, setResult] = useState<AdminResult>({ rows: [], count: 0 });
@@ -38,7 +37,6 @@ export function AdminDashboard() {
     const filtered = result.rows.filter((row) => {
       if (statusFilter === "work" && row.status !== "作業あり") return false;
       if (statusFilter === "no_work" && row.status !== "作業なし") return false;
-      if (tradeFilter && !(row.primaryTrades ?? "").split("・").includes(tradeFilter)) return false;
       return true;
     });
 
@@ -47,7 +45,7 @@ export function AdminDashboard() {
       if (sortBy === "primaryAsc") return compareText(a.primaryCompany, b.primaryCompany) || compareText(a.workDate, b.workDate);
       return compareText(a.workDate, b.workDate) || compareText(a.primaryCompany, b.primaryCompany);
     });
-  }, [result.rows, sortBy, statusFilter, tradeFilter]);
+  }, [result.rows, sortBy, statusFilter]);
 
   const rowsByDate = useMemo(() => {
     return visibleRows.reduce<Record<string, ExportRow[]>>((acc, row) => {
@@ -347,18 +345,7 @@ export function AdminDashboard() {
         </section>
 
         <section className="panel -mx-4 grid gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="field">
-              <span className="label">職種</span>
-              <select className="input" value={tradeFilter} onChange={(event) => setTradeFilter(event.target.value)}>
-                <option value="">すべて</option>
-                {(companyMaster?.trades ?? []).map((trade) => (
-                  <option key={trade} value={trade}>
-                    {trade}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="grid gap-3 sm:grid-cols-2">
             <label className="field">
               <span className="label">表示する予定</span>
               <select className="input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
@@ -402,9 +389,6 @@ export function AdminDashboard() {
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-bold text-slate-950">{row.primaryCompany}</span>
-                        {row.primaryTrades ? (
-                          <span className="rounded bg-amber-100 px-2 py-1 text-xs font-bold text-amber-900">{row.primaryTrades}</span>
-                        ) : null}
                         {row.primaryCount !== "" ? <span className="text-sm text-slate-700">一次 {row.primaryCount}人</span> : null}
                       </div>
                       <div className="mt-2 grid gap-1 text-sm text-slate-700">
@@ -433,12 +417,12 @@ export function AdminDashboard() {
 
         <section className="overflow-hidden rounded-md border border-border bg-white">
           <div className="overflow-x-auto">
-            <table className={statusFilter === "work" ? "min-w-[920px] w-full border-collapse text-sm" : "min-w-[1040px] w-full border-collapse text-sm"}>
+            <table className={statusFilter === "work" ? "min-w-[840px] w-full border-collapse text-sm" : "min-w-[960px] w-full border-collapse text-sm"}>
               <thead className="bg-slate-800 text-white">
                 <tr>
                   {(statusFilter === "work"
-                    ? ["作業日", "一次会社", "職種", "一次人数", "二次会社", "二次人数", "作業エリア", "作業内容"]
-                    : ["作業日", "一次会社", "職種", "来場予定日", "一次人数", "二次会社", "二次人数", "作業エリア", "作業内容"]
+                    ? ["作業日", "一次会社", "一次人数", "二次会社", "二次人数", "作業エリア", "作業内容"]
+                    : ["作業日", "一次会社", "来場予定日", "一次人数", "二次会社", "二次人数", "作業エリア", "作業内容"]
                   ).map((header) => (
                     <th key={header} className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                       {header}
@@ -449,7 +433,7 @@ export function AdminDashboard() {
               <tbody>
                 {visibleRows.length === 0 ? (
                   <tr>
-                    <td colSpan={statusFilter === "work" ? 8 : 9} className="px-3 py-8 text-center text-slate-500">
+                    <td colSpan={statusFilter === "work" ? 7 : 8} className="px-3 py-8 text-center text-slate-500">
                       データなし
                     </td>
                   </tr>
@@ -460,7 +444,6 @@ export function AdminDashboard() {
                         <>
                           <td className="whitespace-nowrap px-3 py-2">{row.workDate}</td>
                           <td className="whitespace-nowrap px-3 py-2">{row.primaryCompany}</td>
-                          <td className="whitespace-nowrap px-3 py-2">{row.primaryTrades}</td>
                           <td className="whitespace-nowrap px-3 py-2 text-right">{row.primaryCount}</td>
                           <td className="whitespace-nowrap px-3 py-2">{row.secondaryCompany}</td>
                           <td className="whitespace-nowrap px-3 py-2 text-right">{row.secondaryCount}</td>
@@ -471,7 +454,6 @@ export function AdminDashboard() {
                         <>
                           <td className="whitespace-nowrap px-3 py-2">{row.workDate}</td>
                           <td className="whitespace-nowrap px-3 py-2">{row.primaryCompany}</td>
-                          <td className="whitespace-nowrap px-3 py-2">{row.primaryTrades}</td>
                           <td className="whitespace-nowrap px-3 py-2">{row.nextVisitDate}</td>
                           <td className="whitespace-nowrap px-3 py-2 text-right">{row.nextPrimaryCount}</td>
                           <td className="whitespace-nowrap px-3 py-2">{row.nextSecondaryCompany}</td>

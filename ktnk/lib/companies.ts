@@ -60,54 +60,28 @@ export function parseCompanyCsv(csvText: string): CompanyMaster {
 
   const primaryCompanies: string[] = [];
   const secondariesByPrimary: Record<string, string[]> = {};
-  const trades: string[] = [];
-  const tradesByPrimary: Record<string, string[]> = {};
 
   for (const row of result.data) {
     const primary = row["一次会社"] ?? "";
     const secondary = row["二次会社"] ?? "";
-    const rowTrades = splitTrades(row["職種"] ?? "");
 
     if (!primary) continue;
 
     if (!Object.prototype.hasOwnProperty.call(secondariesByPrimary, primary)) {
       primaryCompanies.push(primary);
       secondariesByPrimary[primary] = [];
-      tradesByPrimary[primary] = [];
     }
 
     if (secondary && !secondariesByPrimary[primary].includes(secondary)) {
       secondariesByPrimary[primary].push(secondary);
-    }
-
-    for (const trade of rowTrades) {
-      if (!trades.includes(trade)) {
-        trades.push(trade);
-      }
-      if (!tradesByPrimary[primary].includes(trade)) {
-        tradesByPrimary[primary].push(trade);
-      }
     }
   }
 
   return {
     primaryCompanies,
     secondariesByPrimary,
-    trades,
-    tradesByPrimary,
     loadedAt: new Date().toISOString(),
   };
-}
-
-export function tradesTextForPrimaryCompany(master: CompanyMaster | null, primaryCompany: string) {
-  return master?.tradesByPrimary?.[primaryCompany]?.join("・") ?? "";
-}
-
-function splitTrades(value: string) {
-  return value
-    .split(/[、,，／/・|｜]/)
-    .map((trade) => trade.trim())
-    .filter(Boolean);
 }
 
 function normalizeCsvText(csvText: string) {

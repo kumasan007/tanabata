@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { attachCompanyTrades } from "@/lib/export";
-import { getCompanyMaster } from "@/lib/companies";
 import { assertAdminFromRequest } from "@/lib/supabase";
 import { getSchedules, saveScheduleSubmission, schedulesToExportRows } from "@/lib/schedule-service";
 import type { ScheduleStatus } from "@/lib/types";
@@ -50,11 +48,10 @@ export async function GET(request: Request) {
       primaryCompany: url.searchParams.get("primaryCompany"),
       secondaryCompany: url.searchParams.get("secondaryCompany"),
     });
-    const companyMaster = await getCompanyMaster().catch(() => null);
 
     return NextResponse.json({
       schedules,
-      rows: attachCompanyTrades(schedulesToExportRows(schedules), companyMaster),
+      rows: schedulesToExportRows(schedules),
       count: schedules.length,
     });
   } catch (error) {

@@ -52,13 +52,12 @@ function WorksheetXml([object]$Rows, [int]$FrozenRows = 1) {
   <col min="1" max="1" width="14" customWidth="1"/>
   <col min="2" max="2" width="14" customWidth="1"/>
   <col min="3" max="3" width="22" customWidth="1"/>
-  <col min="4" max="4" width="18" customWidth="1"/>
-  <col min="5" max="5" width="14" customWidth="1"/>
-  <col min="6" max="6" width="22" customWidth="1"/>
-  <col min="7" max="7" width="14" customWidth="1"/>
-  <col min="8" max="9" width="20" customWidth="1"/>
-  <col min="10" max="15" width="18" customWidth="1"/>
-  <col min="16" max="19" width="18" customWidth="1"/>
+  <col min="4" max="4" width="14" customWidth="1"/>
+  <col min="5" max="5" width="22" customWidth="1"/>
+  <col min="6" max="6" width="14" customWidth="1"/>
+  <col min="7" max="8" width="20" customWidth="1"/>
+  <col min="9" max="14" width="18" customWidth="1"/>
+  <col min="15" max="18" width="18" customWidth="1"/>
 </cols>
 "@
 
@@ -76,7 +75,7 @@ function WorksheetXml([object]$Rows, [int]$FrozenRows = 1) {
   <sheetData>
     $($sheetData -join "`n    ")
   </sheetData>
-  <autoFilter ref="A1:S1"/>
+  <autoFilter ref="A1:R1"/>
 </worksheet>
 "@
 }
@@ -94,7 +93,6 @@ $headers = @(
     "作業日",
     "予定",
     "一次会社",
-    "職種",
     "一次会社人数",
     "二次会社",
     "二次会社人数",
@@ -139,9 +137,9 @@ $allRows.Add([object[]]$headers)
 
 $templateRows = New-Object 'System.Collections.Generic.List[object[]]'
 $templateRows.Add([object[]]$headers)
-$templateRows.Add([object[]]@("2026-09-04", "作業あり", "○○設備", "配管工", "3", "△△工業", "2", "10F", "配管施工", "", "", "", "", "", "", "2026-09-03 18:00", "2026-09-03 18:00", "", ""))
-$templateRows.Add([object[]]@("2026-09-04", "作業あり", "○○設備", "配管工", "3", "□□工業", "4", "10F", "配管施工", "", "", "", "", "", "", "2026-09-03 18:00", "2026-09-03 18:00", "", ""))
-$templateRows.Add([object[]]@("2026-09-05", "作業なし", "○○設備", "配管工", "", "", "", "", "", "2026-09-08", "3", "△△工業", "2", "11F", "配管施工", "2026-09-03 18:00", "2026-09-03 18:00", "", ""))
+$templateRows.Add([object[]]@("2026-09-04", "作業あり", "○○設備", "3", "△△工業", "2", "10F", "配管施工", "", "", "", "", "", "", "2026-09-03 18:00", "2026-09-03 18:00", "", ""))
+$templateRows.Add([object[]]@("2026-09-04", "作業あり", "○○設備", "3", "□□工業", "4", "10F", "配管施工", "", "", "", "", "", "", "2026-09-03 18:00", "2026-09-03 18:00", "", ""))
+$templateRows.Add([object[]]@("2026-09-05", "作業なし", "○○設備", "", "", "", "", "", "2026-09-08", "3", "△△工業", "2", "11F", "配管施工", "2026-09-03 18:00", "2026-09-03 18:00", "", ""))
 
 $outputFullPath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $OutputPath))
 $outputDir = Split-Path -Parent $outputFullPath

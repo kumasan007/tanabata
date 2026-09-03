@@ -48,11 +48,6 @@ export function ScheduleForm() {
     return companyMaster.secondariesByPrimary[form.primaryCompany] ?? [];
   }, [companyMaster, form.primaryCompany]);
 
-  const primaryTrades = useMemo(() => {
-    if (!companyMaster || !form.primaryCompany) return [];
-    return companyMaster.tradesByPrimary?.[form.primaryCompany] ?? [];
-  }, [companyMaster, form.primaryCompany]);
-
   useEffect(() => {
     let active = true;
 
@@ -147,7 +142,18 @@ export function ScheduleForm() {
       return "二次会社人数を入力する場合は、二次会社を選択してください。";
     }
 
-    if (form.status !== "work") return "";
+    if (form.status !== "work") {
+      if (form.nextPrimaryCount === null) {
+        return "一次会社人数を入力してください。";
+      }
+
+      const nextSecondaryTotal = form.nextSubcompanies.reduce((sum, row) => sum + (row.workerCount ?? 0), 0);
+      if (form.nextPrimaryCount === 0 && nextSecondaryTotal < 1) {
+        return "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。";
+      }
+
+      return "";
+    }
 
     if (form.primaryCount === null) {
       return "一次会社人数を入力してください。";
@@ -233,7 +239,7 @@ export function ScheduleForm() {
         </section>
 
         <section className="panel -mx-4 grid gap-4 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
-          <div className={form.status === "work" ? "grid gap-2 sm:grid-cols-[1fr_120px]" : "grid gap-2"}>
+          <div className={form.status === "work" ? "grid grid-cols-[1fr_88px] gap-2" : "grid gap-2"}>
             <label className="field">
               <span className="label">
                 一次会社
@@ -278,16 +284,6 @@ export function ScheduleForm() {
               </label>
             ) : null}
           </div>
-
-          {primaryTrades.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {primaryTrades.map((trade) => (
-                <span key={trade} className="rounded bg-amber-100 px-2 py-1 text-xs font-bold text-amber-900">
-                  {trade}
-                </span>
-              ))}
-            </div>
-          ) : null}
 
           {form.primaryCompany ? (
             <section className="rounded-md bg-slate-100 px-3 py-3">

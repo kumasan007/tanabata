@@ -68,6 +68,26 @@ export const scheduleSubmitSchema = z
           message: "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。",
         });
       }
+    } else {
+      if (value.nextPrimaryCount === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["nextPrimaryCount"],
+          message: "一次会社人数を入力してください。",
+        });
+      }
+
+      const nextSecondaryTotal = value.nextSubcompanies.reduce((sum, row) => {
+        return sum + (row.secondaryCompany.trim() ? row.workerCount ?? 0 : 0);
+      }, 0);
+
+      if (value.nextPrimaryCount === 0 && nextSecondaryTotal < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["nextSubcompanies"],
+          message: "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。",
+        });
+      }
     }
 
     for (const [index, subcompany] of value.currentSubcompanies.entries()) {

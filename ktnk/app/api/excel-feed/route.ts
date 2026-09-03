@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { attachCompanyTrades, buildScheduleCsv, exportFileName } from "@/lib/export";
-import { getCompanyMaster } from "@/lib/companies";
+import { buildScheduleCsv, exportFileName } from "@/lib/export";
 import { getSchedules, schedulesToExportRows } from "@/lib/schedule-service";
 import type { ScheduleStatus } from "@/lib/types";
 import { addDays, todayInTokyoString, parseLocalDate, toDateString } from "@/lib/utils";
@@ -30,8 +29,7 @@ export async function GET(request: Request) {
       primaryCompany: url.searchParams.get("primaryCompany"),
       secondaryCompany: url.searchParams.get("secondaryCompany"),
     });
-    const companyMaster = await getCompanyMaster().catch(() => null);
-    const rows = attachCompanyTrades(schedulesToExportRows(schedules), companyMaster);
+    const rows = schedulesToExportRows(schedules);
     const csv = `\uFEFF${buildScheduleCsv(rows)}`;
 
     return new NextResponse(csv, {
