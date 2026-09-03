@@ -23,24 +23,38 @@ export async function getCompanyMaster(force = false): Promise<CompanyMaster> {
   }
 
   try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      headers: {
-        accept: "text/csv, text/plain, */*",
-      },
-    });
+    let lastError: unknown = null;
 
-    if (!response.ok) {
-      throw new Error(`Box CSV request failed: ${response.status}`);
+    for (const candidateUrl of companyCsvUrlCandidates(url)) {
+      try {
+        const response = await fetch(candidateUrl, {
+          cache: "no-store",
+          headers: {
+            accept: "text/csv, text/plain, */*",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Box CSV request failed: ${response.status}`);
+        }
+
+        const csvText = await response.text();
+        if (looksLikeHtml(csvText, response.headers.get("content-type"))) {
+          throw new Error("Boxの表示ページが返っています。BOX_COMPANY_CSV_URLにはCSV本体を直接ダウンロードできる公開URLを設定してください。");
+        }
+
+        const data = parseCompanyCsv(csvText);
+        cache = {
+          data,
+          expiresAt: now + CACHE_MS,
+        };
+        return data;
+      } catch (error) {
+        lastError = error;
+      }
     }
 
-    const csvText = await response.text();
-    const data = parseCompanyCsv(csvText);
-    cache = {
-      data,
-      expiresAt: now + CACHE_MS,
-    };
-    return data;
+    throw lastError;
   } catch (error) {
     if (cache) {
       return cache.data;
@@ -50,7 +64,7 @@ export async function getCompanyMaster(force = false): Promise<CompanyMaster> {
 }
 
 export function parseCompanyCsv(csvText: string): CompanyMaster {
-  const result = Papa.parse<Record<string, string>>(csvText.replace(/^\uFEFF/, ""), {
+  const result = Papa.parse<Record<string, string>>(normalizeCsvText(csvText), {
     header: true,
     skipEmptyLines: true,
   });
@@ -109,4 +123,42 @@ function splitTrades(value: string) {
     .split(/[、,，／/・|｜]/)
     .map((trade) => trade.trim())
     .filter(Boolean);
+}
+
+function normalizeCsvText(csvText: string) {
+  return csvText
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/(^|,)[\t ]+"/gm, '$1"')
+    .replace(/"[\t ]+(?=,|\n|$)/g, '"');
+}
+
+function companyCsvUrlCandidates(rawUrl: string) {
+  const urls = [rawUrl];
+
+  try {
+    const url = new URL(rawUrl);
+    const boxShareMatch = url.hostname.endsWith("box.com") ? url.pathname.match(/^\/s\/([^/?#]+)/) : null;
+
+    if (boxShareMatch?.[1]) {
+      const shareId = boxShareMatch[1];
+      urls.push(`https://app.box.com/shared/static/${shareId}.csv`);
+      urls.push(`https://app.box.com/shared/static/${shareId}`);
+    }
+
+    if (!url.searchParams.has("raw")) {
+      const rawCandidate = new URL(rawUrl);
+      rawCandidate.searchParams.set("raw", "1");
+      urls.push(rawCandidate.toString());
+    }
+  } catch {
+    // Ignore invalid URL variants and let fetch surface the original problem.
+  }
+
+  return [...new Set(urls)];
+}
+
+function looksLikeHtml(text: string, contentType: string | null) {
+  const trimmed = text.trimStart().slice(0, 200).toLowerCase();
+  return Boolean(contentType?.toLowerCase().includes("text/html")) || trimmed.startsWith("<!doctype html") || trimmed.startsWith("<html");
 }

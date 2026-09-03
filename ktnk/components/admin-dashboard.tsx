@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarDays, Download, LogIn, LogOut, Search } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { CompanyMaster, ExportRow } from "@/lib/types";
 import { addDays, toDateString } from "@/lib/utils";
@@ -210,28 +211,39 @@ export function AdminDashboard() {
 
   if (!authenticated) {
     return (
-      <main className="mx-auto grid min-h-screen max-w-md place-items-center px-4">
-        <form onSubmit={login} className="compact-panel grid w-full gap-4 p-5">
-          <div>
+      <main className="min-h-screen bg-slate-50">
+        <header className="border-b border-border bg-white">
+          <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-4">
             <h1 className="text-xl font-bold text-slate-950">管理画面</h1>
-            <p className="mt-1 text-sm text-slate-600">作業予定確認</p>
+            <Link className="btn btn-secondary h-11 px-3 text-sm" href="/">
+              入力画面へ
+            </Link>
           </div>
-          {message ? <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{message}</div> : null}
-          <label className="field">
-            <span className="label">パスワード</span>
-            <input
-              className="input"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-          </label>
-          <button className="btn btn-primary" type="submit">
-            <LogIn size={18} aria-hidden="true" />
-            ログイン
-          </button>
-        </form>
+        </header>
+
+        <div className="mx-auto grid max-w-md px-4 py-8">
+          <form onSubmit={login} className="compact-panel grid w-full gap-4 p-5">
+            <div>
+              <h2 className="text-xl font-bold text-slate-950">ログイン</h2>
+              <p className="mt-1 text-sm text-slate-600">作業予定確認</p>
+            </div>
+            {message ? <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{message}</div> : null}
+            <label className="field">
+              <span className="label">パスワード</span>
+              <input
+                className="input"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
+            </label>
+            <button className="btn btn-primary" type="submit">
+              <LogIn size={18} aria-hidden="true" />
+              ログイン
+            </button>
+          </form>
+        </div>
       </main>
     );
   }
