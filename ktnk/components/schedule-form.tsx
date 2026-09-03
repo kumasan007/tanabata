@@ -166,34 +166,12 @@ export function ScheduleForm() {
           </div>
         ) : null}
 
-        {submitState.status === "success" ? (
-          <section className="compact-panel grid gap-3 border-green-200 bg-green-50 p-4">
-            <div className="flex items-center gap-2 text-green-800">
-              <CheckCircle2 size={22} aria-hidden="true" />
-              <h2 className="font-bold">送信しました</h2>
-            </div>
-            <p className="text-sm text-green-800">{submitState.dates.length}日分を登録しました。</p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <button type="button" className="btn btn-primary" onClick={continueAnotherDate}>
-                <RefreshCw size={18} aria-hidden="true" />
-                同じ内容で別日を入力
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={resetForm}>
-                新しく入力
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {submitState.status === "error" ? (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800">
-            {submitState.message}
-          </div>
-        ) : null}
-
         <section className="panel -mx-4 grid gap-4 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
           <label className="field">
-            <span className="label">日付</span>
+            <span className="label">
+              日付
+              <span className="required-mark">必須</span>
+            </span>
             <input
               className="input"
               type="date"
@@ -226,7 +204,10 @@ export function ScheduleForm() {
 
         <section className="panel -mx-4 grid gap-4 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
           <label className="field">
-            <span className="label">一次会社</span>
+            <span className="label">
+              一次会社
+              <span className="required-mark">必須</span>
+            </span>
             <select
               className="input"
               value={form.primaryCompany}
@@ -294,7 +275,11 @@ export function ScheduleForm() {
           {form.status === "work" ? (
             <>
               <label className="field">
-                <span className="label">一次会社人数</span>
+                <span className="label">
+                  一次会社人数
+                  <span className="required-mark">必須</span>
+                </span>
+                <span className="text-xs font-semibold text-slate-500">一次人数、または二次会社人数を入力</span>
                 <input
                   className="input"
                   inputMode="numeric"
@@ -425,14 +410,39 @@ export function ScheduleForm() {
 
         <div className="fixed inset-x-0 bottom-0 border-t border-border bg-white/95 px-4 py-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
           <div className="mx-auto max-w-2xl">
-            <button
-              type="submit"
-              className="btn btn-primary h-14 w-full text-base"
-              disabled={submitState.status === "submitting" || Boolean(companyError)}
-            >
-              <Send size={20} aria-hidden="true" />
-              {submitState.status === "submitting" ? "送信中" : "送信"}
-            </button>
+            {submitState.status === "success" ? (
+              <div className="grid gap-3 rounded-md border border-green-200 bg-green-50 p-3">
+                <div className="flex items-center gap-2 font-bold text-green-800">
+                  <CheckCircle2 size={22} aria-hidden="true" />
+                  送信しました
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button type="button" className="btn btn-primary h-12" onClick={continueAnotherDate}>
+                    <RefreshCw size={18} aria-hidden="true" />
+                    同じ内容で別日を入力
+                  </button>
+                  <button type="button" className="btn btn-secondary h-12" onClick={resetForm}>
+                    新しく入力
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {submitState.status === "error" ? (
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+                    {submitState.message}
+                  </div>
+                ) : null}
+                <button
+                  type="submit"
+                  className="btn btn-primary h-14 w-full text-base"
+                  disabled={submitState.status === "submitting" || Boolean(companyError)}
+                >
+                  <Send size={20} aria-hidden="true" />
+                  {submitState.status === "submitting" ? "送信中" : "送信"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </form>

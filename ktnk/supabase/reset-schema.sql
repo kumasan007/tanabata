@@ -1,6 +1,14 @@
+-- ktnk 作業予定入力システム 初期化SQL
+-- Supabase SQL Editorで実行すると、既存データを削除して必要なテーブルを作り直します。
+
+drop trigger if exists schedule_groups_set_updated_at on public.schedule_groups;
+drop table if exists public.schedule_subcompanies;
+drop table if exists public.schedule_groups;
+drop function if exists public.set_updated_at();
+
 create extension if not exists pgcrypto;
 
-create table if not exists public.schedule_groups (
+create table public.schedule_groups (
   id uuid primary key default gen_random_uuid(),
   work_date date not null,
   status text not null check (status in ('work', 'no_work')),
@@ -17,7 +25,7 @@ create table if not exists public.schedule_groups (
   constraint schedule_groups_work_date_primary_company_key unique (work_date, primary_company)
 );
 
-create table if not exists public.schedule_subcompanies (
+create table public.schedule_subcompanies (
   id uuid primary key default gen_random_uuid(),
   schedule_group_id uuid not null references public.schedule_groups(id) on delete cascade,
   kind text not null check (kind in ('current', 'next_visit')),
@@ -26,19 +34,19 @@ create table if not exists public.schedule_subcompanies (
   sort_order integer not null default 0
 );
 
-create index if not exists schedule_groups_work_date_idx
+create index schedule_groups_work_date_idx
   on public.schedule_groups (work_date);
 
-create index if not exists schedule_groups_primary_company_idx
+create index schedule_groups_primary_company_idx
   on public.schedule_groups (primary_company);
 
-create index if not exists schedule_groups_status_idx
+create index schedule_groups_status_idx
   on public.schedule_groups (status);
 
-create index if not exists schedule_subcompanies_group_id_idx
+create index schedule_subcompanies_group_id_idx
   on public.schedule_subcompanies (schedule_group_id);
 
-create index if not exists schedule_subcompanies_secondary_company_idx
+create index schedule_subcompanies_secondary_company_idx
   on public.schedule_subcompanies (secondary_company);
 
 alter table public.schedule_groups enable row level security;
@@ -49,7 +57,6 @@ grant usage on schema public to anon, authenticated, service_role;
 grant select, insert, update, delete on public.schedule_groups to anon, authenticated, service_role;
 grant select, insert, update, delete on public.schedule_subcompanies to anon, authenticated, service_role;
 
-drop policy if exists schedule_groups_app_all on public.schedule_groups;
 create policy schedule_groups_app_all
 on public.schedule_groups
 for all
@@ -57,7 +64,6 @@ to anon, authenticated, service_role
 using (true)
 with check (true);
 
-drop policy if exists schedule_subcompanies_app_all on public.schedule_subcompanies;
 create policy schedule_subcompanies_app_all
 on public.schedule_subcompanies
 for all
@@ -65,10 +71,10 @@ to anon, authenticated, service_role
 using (true)
 with check (true);
 
--- This app uses Next.js API routes as the entry point.
--- The database policy is intentionally simple because the worker form is public.
+-- このアプリはNext.js API routesを入口として使います。
+-- 職人側フォームは公開なので、DBポリシーもシンプルに許可します。
 
-create or replace function public.set_updated_at()
+create function public.set_updated_at()
 returns trigger
 language plpgsql
 as $$
@@ -78,7 +84,6 @@ begin
 end;
 $$;
 
-drop trigger if exists schedule_groups_set_updated_at on public.schedule_groups;
 create trigger schedule_groups_set_updated_at
 before update on public.schedule_groups
 for each row

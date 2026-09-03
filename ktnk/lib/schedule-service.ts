@@ -28,7 +28,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
       .eq("primary_company", input.primaryCompany)
       .maybeSingle();
 
-    if (findError) throw findError;
+    if (findError) throwSupabaseError(findError, "既存予定の確認に失敗しました。");
 
     if (existing?.id) {
       const { error: deleteError } = await supabase
@@ -36,7 +36,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
         .delete()
         .eq("schedule_group_id", existing.id);
 
-      if (deleteError) throw deleteError;
+      if (deleteError) throwSupabaseError(deleteError, "二次会社予定の削除に失敗しました。");
     }
 
     const payload = {
@@ -59,7 +59,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
       .select("id")
       .single();
 
-    if (upsertError) throw upsertError;
+    if (upsertError) throwSupabaseError(upsertError, "予定の保存に失敗しました。");
 
     const subcompanyRows = buildSubcompanyRows(
       group.id,
@@ -69,7 +69,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
 
     if (subcompanyRows.length > 0) {
       const { error: insertError } = await supabase.from("schedule_subcompanies").insert(subcompanyRows);
-      if (insertError) throw insertError;
+      if (insertError) throwSupabaseError(insertError, "二次会社予定の保存に失敗しました。");
     }
 
     savedIds.push(group.id);
@@ -120,7 +120,7 @@ export async function getSchedules(params: ScheduleSearchParams) {
   }
 
   const { data, error } = await query;
-  if (error) throw error;
+  if (error) throwSupabaseError(error, "予定の取得に失敗しました。");
 
   let schedules = (data ?? []).map((row) => normalizeScheduleRow(row));
 
@@ -154,7 +154,7 @@ export async function getScheduleSummariesByPrimaryCompany(primaryCompany: strin
     .order("work_date", { ascending: true })
     .limit(7);
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error, "記入済み予定の取得に失敗しました。");
 
   return (data ?? []).map((row) => {
     const schedule = normalizeScheduleRow(row);
@@ -274,4 +274,21 @@ function statusLabel(status: ScheduleStatus) {
 
 function escapeLike(value: string) {
   return value.replace(/[%_]/g, (match) => `\\${match}`);
+}
+
+function throwSupabaseError(error: unknown, fallback: string): never {
+  if (typeof error === "object" && error !== null) {
+    const fields = error as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown };
+    const parts = [
+      fallback,
+      typeof fields.message === "string" ? fields.message : "",
+      typeof fields.details === "string" ? fields.details : "",
+      typeof fields.hint === "string" ? fields.hint : "",
+      typeof fields.code === "string" ? `code: ${fields.code}` : "",
+    ].filter(Boolean);
+
+    throw new Error(parts.join(" "));
+  }
+
+  throw new Error(fallback);
 }

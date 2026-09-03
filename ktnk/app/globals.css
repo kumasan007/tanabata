@@ -45,6 +45,10 @@ textarea {
     @apply text-sm font-semibold text-slate-800;
   }
 
+  .required-mark {
+    @apply ml-1 align-middle text-xs font-bold text-red-600;
+  }
+
   .input {
     @apply h-12 w-full rounded-md border border-input bg-white px-3 text-base outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20;
   }

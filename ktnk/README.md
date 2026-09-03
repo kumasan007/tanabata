@@ -39,12 +39,9 @@ EXCEL_FEED_TOKEN=
 
 `supabase/schema.sql` をSupabase SQL Editorで実行します。
 
-すでに初回スキーマを実行済みの場合は、追加で以下を実行します。
+`new row violates row-level security policy` が出る場合は、既存データを残したまま `supabase/fix-rls-policies.sql` をSupabase SQL Editorで実行します。
 
-```sql
-alter table public.schedule_groups
-add column if not exists next_work_area text;
-```
+登録時にDB列・制約のズレで失敗する場合は、既存データを削除してよければ `supabase/reset-schema.sql` をSupabase SQL Editorで実行します。`schedule_groups` と `schedule_subcompanies` を作り直します。
 
 管理画面は `ADMIN_PASSWORD` の共有パスワードでログインします。
 ログイン状態は48時間保持します。
