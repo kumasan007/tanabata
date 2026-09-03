@@ -8,7 +8,7 @@ import type {
   ScheduleWithSubcompanies,
   SubcompanyInput,
 } from "@/lib/types";
-import { expandDateRange, formatDateTime } from "@/lib/utils";
+import { addDays, expandDateRange, formatDateTime, parseLocalDate, todayInTokyoString, toDateString } from "@/lib/utils";
 import type { ScheduleSubmitParsed } from "@/lib/validation";
 
 export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
@@ -131,6 +131,9 @@ export async function getSchedules(params: ScheduleSearchParams) {
 
 export async function getScheduleSummariesByPrimaryCompany(primaryCompany: string): Promise<ScheduleSummary[]> {
   const supabase = createServiceClient();
+  const dateFrom = todayInTokyoString();
+  const startDate = parseLocalDate(dateFrom);
+  const dateTo = startDate ? toDateString(addDays(startDate, 6)) : dateFrom;
 
   const { data, error } = await supabase
     .from("schedule_groups")
@@ -141,8 +144,10 @@ export async function getScheduleSummariesByPrimaryCompany(primaryCompany: strin
     `,
     )
     .eq("primary_company", primaryCompany)
-    .order("work_date", { ascending: false })
-    .limit(8);
+    .gte("work_date", dateFrom)
+    .lte("work_date", dateTo)
+    .order("work_date", { ascending: true })
+    .limit(7);
 
   if (error) throw error;
 

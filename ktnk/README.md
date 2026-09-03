@@ -8,7 +8,7 @@
 - Vercel無料枠へのデプロイを想定する
 - DBはSupabase PostgreSQLを使う
 - 職人側フォームはログイン不要で完全公開にする
-- 管理画面はSupabase Authでログイン必須にする
+- 管理画面は共有パスワードでログイン必須にする
 - 現場は1つとして扱い、現場IDや現場選択は持たない
 - 会社マスタはBox公開CSVを正とし、アプリ側ではキャッシュして利用する
 - 同じ作業日・同じ一次会社の再送信は上書きする
@@ -27,10 +27,12 @@ npm run dev
 ローカルでは `.env.local` を作成して、以下を設定します。
 
 ```text
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 BOX_COMPANY_CSV_URL=
+ADMIN_PASSWORD=
+ADMIN_SESSION_SECRET=
+EXCEL_FEED_TOKEN=
 ```
 
 ## Supabase
@@ -44,7 +46,29 @@ alter table public.schedule_groups
 add column if not exists next_work_area text;
 ```
 
-管理画面に入るユーザーは、Supabase Authでメールアドレスとパスワードを作成します。
+管理画面は `ADMIN_PASSWORD` の共有パスワードでログインします。
+ログイン状態は48時間保持します。
+
+### 環境変数の意味
+
+`ADMIN_PASSWORD` は管理画面に入るための共有パスワードです。
+
+`ADMIN_SESSION_SECRET` はログインCookieの改ざんを防ぐための秘密文字列です。管理者が入力するものではありません。長めのランダム文字列を入れてください。
+
+例:
+
+```text
+ADMIN_SESSION_SECRET=change-this-to-a-long-random-string
+```
+
+`EXCEL_FEED_TOKEN` はExcelの「Webから」でCSV同期するときのURL用パスワードです。Excel側のURLに付けます。
+
+例:
+
+```text
+EXCEL_FEED_TOKEN=change-this-too
+https://your-vercel-domain.example/api/excel-feed?token=change-this-too
+```
 
 ## Vercel
 
@@ -53,10 +77,12 @@ VercelではRoot Directoryを `ktnk` にします。
 環境変数:
 
 ```text
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 BOX_COMPANY_CSV_URL
+ADMIN_PASSWORD
+ADMIN_SESSION_SECRET
+EXCEL_FEED_TOKEN
 ```
 
 Build Command:
@@ -72,6 +98,22 @@ npm install
 ```
 
 職人側フォームは `/`、管理画面は `/admin` です。
+
+## ExcelのWeb同期
+
+Excelの「データ」タブから「Webから」を使う場合は、Supabase REST APIを直接読むのではなく、アプリ側のCSVフィードを使います。
+
+```text
+https://your-vercel-domain.example/api/excel-feed?token=EXCEL_FEED_TOKEN
+```
+
+日付範囲を指定する場合:
+
+```text
+https://your-vercel-domain.example/api/excel-feed?token=EXCEL_FEED_TOKEN&dateFrom=2026-09-04&dateTo=2026-09-10
+```
+
+未指定の場合は、日本時間の今日から14日分を返します。
 
 ## Excel運用
 

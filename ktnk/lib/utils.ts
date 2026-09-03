@@ -22,6 +22,28 @@ export function tomorrowString() {
   return toDateString(addDays(new Date(), 1));
 }
 
+export function todayInTokyoString() {
+  return toDateStringInTimeZone(new Date(), "Asia/Tokyo");
+}
+
+export function toDateStringInTimeZone(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  if (!year || !month || !day) {
+    return toDateString(date);
+  }
+
+  return `${year}-${month}-${day}`;
+}
+
 export function isWeekend(date: Date) {
   const day = date.getDay();
   return day === 0 || day === 6;

@@ -1,77 +1,100 @@
 "use client";
 
-import type { Session } from "@supabase/supabase-js";
-import { Download, LogIn, LogOut, Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CalendarDays, Download, LogIn, LogOut, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import type { ExportRow } from "@/lib/types";
-import { createBrowserSupabaseClient } from "@/lib/supabase";
-import { toDateString } from "@/lib/utils";
+import { addDays, toDateString } from "@/lib/utils";
 
 type AdminResult = {
   rows: ExportRow[];
   count: number;
 };
 
+type StatusFilter = "all" | "work" | "no_work";
+type SortBy = "dateAsc" | "dateDesc" | "primaryAsc" | "status";
+
 const today = () => toDateString(new Date());
 
 export function AdminDashboard() {
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [session, setSession] = useState<Session | null>(null);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo, setDateTo] = useState(today);
   const [primaryCompany, setPrimaryCompany] = useState("");
   const [secondaryCompany, setSecondaryCompany] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sortBy, setSortBy] = useState<SortBy>("dateAsc");
   const [result, setResult] = useState<AdminResult>({ rows: [], count: 0 });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const [supabase] = useState(() => createBrowserSupabaseClient());
+  const visibleRows = useMemo(() => {
+    const filtered = result.rows.filter((row) => {
+      if (statusFilter === "work") return row.status === "作業あり";
+      if (statusFilter === "no_work") return row.status === "作業なし";
+      return true;
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (sortBy === "dateDesc") return compareText(b.workDate, a.workDate) || compareText(a.primaryCompany, b.primaryCompany);
+      if (sortBy === "primaryAsc") return compareText(a.primaryCompany, b.primaryCompany) || compareText(a.workDate, b.workDate);
+      if (sortBy === "status") return compareText(a.status, b.status) || compareText(a.workDate, b.workDate);
+      return compareText(a.workDate, b.workDate) || compareText(a.primaryCompany, b.primaryCompany);
+    });
+  }, [result.rows, sortBy, statusFilter]);
+
+  const rowsByDate = useMemo(() => {
+    return visibleRows.reduce<Record<string, ExportRow[]>>((acc, row) => {
+      acc[row.workDate] ??= [];
+      acc[row.workDate].push(row);
+      return acc;
+    }, {});
+  }, [visibleRows]);
 
   useEffect(() => {
-    if (!supabase) return;
-
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-    });
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, [supabase]);
+    fetch("/api/admin/session")
+      .then((response) => response.json())
+      .then((body) => setAuthenticated(Boolean(body.authenticated)))
+      .catch(() => setAuthenticated(false))
+      .finally(() => setCheckingSession(false));
+  }, []);
 
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!supabase) return;
     setMessage("");
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setMessage(error.message);
+    const response = await fetch("/api/admin/login", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ password }),
+    });
+    const body = await response.json();
+
+    if (!response.ok) {
+      setMessage(body.error ?? "ログインに失敗しました。");
+      return;
     }
+
+    setPassword("");
+    setAuthenticated(true);
   }
 
   async function logout() {
-    if (!supabase) return;
-    await supabase.auth.signOut();
+    await fetch("/api/admin/logout", { method: "POST" });
+    setAuthenticated(false);
     setResult({ rows: [], count: 0 });
   }
 
   async function search() {
-    if (!session) return;
+    if (!authenticated) return;
     setLoading(true);
     setMessage("");
 
     try {
-      const response = await fetch(`/api/schedules?${queryString()}`, {
-        headers: {
-          authorization: `Bearer ${session.access_token}`,
-        },
-      });
+      const response = await fetch(`/api/schedules?${queryString()}`);
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "取得に失敗しました。");
       setResult({ rows: body.rows ?? [], count: body.count ?? 0 });
@@ -83,16 +106,12 @@ export function AdminDashboard() {
   }
 
   async function download(format: "xlsx" | "csv") {
-    if (!session) return;
+    if (!authenticated) return;
     setLoading(true);
     setMessage("");
 
     try {
-      const response = await fetch(`/api/export?format=${format}&${queryString()}`, {
-        headers: {
-          authorization: `Bearer ${session.access_token}`,
-        },
-      });
+      const response = await fetch(`/api/export?format=${format}&${queryString()}`);
 
       if (!response.ok) {
         const body = await response.json();
@@ -126,20 +145,24 @@ export function AdminDashboard() {
     return params.toString();
   }
 
-  if (!supabase) {
+  function setQuickRange(days: number) {
+    const start = new Date();
+    setDateFrom(toDateString(start));
+    setDateTo(toDateString(addDays(start, days - 1)));
+  }
+
+  if (checkingSession) {
     return (
       <main className="mx-auto grid min-h-screen max-w-xl place-items-center px-4">
         <div className="compact-panel grid gap-3 p-5">
           <h1 className="text-lg font-bold">管理画面</h1>
-          <p className="text-sm text-slate-700">
-            `NEXT_PUBLIC_SUPABASE_URL` と `NEXT_PUBLIC_SUPABASE_ANON_KEY` を設定してください。
-          </p>
+          <p className="text-sm text-slate-700">確認中</p>
         </div>
       </main>
     );
   }
 
-  if (!session) {
+  if (!authenticated) {
     return (
       <main className="mx-auto grid min-h-screen max-w-md place-items-center px-4">
         <form onSubmit={login} className="compact-panel grid w-full gap-4 p-5">
@@ -148,10 +171,6 @@ export function AdminDashboard() {
             <p className="mt-1 text-sm text-slate-600">作業予定確認</p>
           </div>
           {message ? <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{message}</div> : null}
-          <label className="field">
-            <span className="label">メールアドレス</span>
-            <input className="input" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-          </label>
           <label className="field">
             <span className="label">パスワード</span>
             <input
@@ -177,7 +196,7 @@ export function AdminDashboard() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
           <div>
             <h1 className="text-xl font-bold text-slate-950">作業予定管理</h1>
-            <p className="mt-1 text-sm text-slate-600">{session.user.email}</p>
+            <p className="mt-1 text-sm text-slate-600">管理者ログイン中</p>
           </div>
           <button className="btn btn-secondary" type="button" onClick={logout}>
             <LogOut size={18} aria-hidden="true" />
@@ -188,6 +207,18 @@ export function AdminDashboard() {
 
       <div className="mx-auto grid max-w-6xl gap-4 px-4 py-4">
         <section className="panel -mx-4 grid gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
+          <div className="flex flex-wrap gap-2">
+            <button className="btn btn-secondary h-10" type="button" onClick={() => setQuickRange(1)}>
+              今日
+            </button>
+            <button className="btn btn-secondary h-10" type="button" onClick={() => setQuickRange(2)}>
+              今日・明日
+            </button>
+            <button className="btn btn-secondary h-10" type="button" onClick={() => setQuickRange(7)}>
+              7日分
+            </button>
+          </div>
+
           <div className="grid gap-3 md:grid-cols-[150px_150px_1fr_1fr_auto]">
             <label className="field">
               <span className="label">開始日</span>
@@ -213,7 +244,7 @@ export function AdminDashboard() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
             <div className="text-sm font-semibold text-slate-700">
-              予定 {result.count} 件 / 出力行 {result.rows.length} 行
+              予定 {result.count} 件 / 表示 {visibleRows.length} 行 / 出力 {result.rows.length} 行
             </div>
             <div className="flex flex-wrap gap-2">
               <button className="btn btn-secondary" type="button" onClick={() => download("csv")} disabled={loading}>
@@ -228,7 +259,87 @@ export function AdminDashboard() {
           </div>
         </section>
 
+        <section className="panel -mx-4 grid gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="field">
+              <span className="label">表示する予定</span>
+              <select className="input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
+                <option value="all">すべて</option>
+                <option value="work">作業あり</option>
+                <option value="no_work">作業なし</option>
+              </select>
+            </label>
+            <label className="field">
+              <span className="label">並び替え</span>
+              <select className="input" value={sortBy} onChange={(event) => setSortBy(event.target.value as SortBy)}>
+                <option value="dateAsc">日付が早い順</option>
+                <option value="dateDesc">日付が遅い順</option>
+                <option value="primaryAsc">一次会社順</option>
+                <option value="status">予定順</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
         {message ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800">{message}</div> : null}
+
+        <section className="grid gap-3">
+          {visibleRows.length === 0 ? (
+            <div className="rounded-md border border-border bg-white px-4 py-6 text-center text-sm text-slate-500">
+              表示する予定がありません
+            </div>
+          ) : (
+            Object.entries(rowsByDate).map(([date, rows]) => (
+              <div key={date} className="rounded-md border border-border bg-white">
+                <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                  <div className="flex items-center gap-2 font-bold text-slate-950">
+                    <CalendarDays size={18} className="text-primary" aria-hidden="true" />
+                    {date}
+                  </div>
+                  <div className="text-xs font-semibold text-slate-600">{rows.length} 行</div>
+                </div>
+                <div className="grid gap-2 p-3">
+                  {rows.map((row, index) => (
+                    <div
+                      key={`${date}-${row.primaryCompany}-${row.secondaryCompany}-${row.nextSecondaryCompany}-${index}`}
+                      className="rounded-md border border-slate-200 px-3 py-3"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={
+                            row.status === "作業あり"
+                              ? "rounded bg-sky-100 px-2 py-1 text-xs font-bold text-sky-800"
+                              : "rounded bg-slate-200 px-2 py-1 text-xs font-bold text-slate-700"
+                          }
+                        >
+                          {row.status}
+                        </span>
+                        <span className="font-bold text-slate-950">{row.primaryCompany}</span>
+                        {row.primaryCount !== "" ? <span className="text-sm text-slate-700">一次 {row.primaryCount}人</span> : null}
+                      </div>
+                      <div className="mt-2 grid gap-1 text-sm text-slate-700">
+                        {row.secondaryCompany ? (
+                          <div>
+                            二次 {row.secondaryCompany}
+                            {row.secondaryCount !== "" ? ` ${row.secondaryCount}人` : ""}
+                          </div>
+                        ) : null}
+                        {row.workArea || row.workContent ? <div>{[row.workArea, row.workContent].filter(Boolean).join(" / ")}</div> : null}
+                        {row.nextVisitDate || row.nextSecondaryCompany || row.nextWorkArea || row.nextWorkContent ? (
+                          <div className="text-slate-600">
+                            来場予定 {[row.nextVisitDate, row.nextSecondaryCompany, row.nextWorkArea, row.nextWorkContent]
+                              .filter(Boolean)
+                              .join(" / ")}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </section>
 
         <section className="overflow-hidden rounded-md border border-border bg-white">
           <div className="overflow-x-auto">
@@ -256,14 +367,14 @@ export function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {result.rows.length === 0 ? (
+                {visibleRows.length === 0 ? (
                   <tr>
                     <td colSpan={12} className="px-3 py-8 text-center text-slate-500">
                       データなし
                     </td>
                   </tr>
                 ) : (
-                  result.rows.map((row, index) => (
+                  visibleRows.map((row, index) => (
                     <tr key={`${row.workDate}-${row.primaryCompany}-${row.secondaryCompany}-${row.nextSecondaryCompany}-${index}`} className="border-t border-border">
                       <td className="whitespace-nowrap px-3 py-2">{row.workDate}</td>
                       <td className="whitespace-nowrap px-3 py-2">{row.status}</td>
@@ -287,6 +398,10 @@ export function AdminDashboard() {
       </div>
     </main>
   );
+}
+
+function compareText(left: string, right: string) {
+  return left.localeCompare(right, "ja");
 }
 
 function decodeFilename(disposition: string) {

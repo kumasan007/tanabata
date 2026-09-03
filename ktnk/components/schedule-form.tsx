@@ -241,11 +241,11 @@ export function ScheduleForm() {
 
           {form.primaryCompany ? (
             <section className="rounded-md bg-slate-100 px-3 py-3">
-              <div className="mb-2 text-xs font-bold text-slate-600">記入済み</div>
+              <div className="mb-2 text-xs font-bold text-slate-600">記入済み 今日から7日分</div>
               {summaryLoading ? (
                 <p className="text-xs text-slate-500">確認中</p>
               ) : summaries.length === 0 ? (
-                <p className="text-xs text-slate-500">まだ記入なし</p>
+                <p className="text-xs text-slate-500">今日以降は記入なし</p>
               ) : (
                 <div className="grid gap-2">
                   {summaries.map((summary) => {
