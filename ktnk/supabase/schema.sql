@@ -10,6 +10,7 @@ create table if not exists public.schedule_groups (
   work_content text,
   next_visit_date date,
   next_primary_count integer check (next_primary_count is null or next_primary_count >= 0),
+  next_work_area text,
   next_work_content text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

@@ -9,11 +9,12 @@ export const exportHeaders = [
   "二次会社人数",
   "作業エリア",
   "作業内容",
-  "次回来場予定日",
-  "次回一次会社人数",
-  "次回二次会社",
-  "次回二次会社人数",
-  "次回作業内容",
+  "来場予定日",
+  "来場予定一次会社人数",
+  "来場予定二次会社",
+  "来場予定二次会社人数",
+  "来場予定作業エリア",
+  "来場予定作業内容",
   "登録日時",
   "更新日時",
 ] as const;
@@ -32,6 +33,7 @@ export function rowToArray(row: ExportRow) {
     row.nextPrimaryCount,
     row.nextSecondaryCompany,
     row.nextSecondaryCount,
+    row.nextWorkArea,
     row.nextWorkContent,
     row.createdAt,
     row.updatedAt,
@@ -235,10 +237,10 @@ function worksheetXml(rows: unknown[][]) {
     <col min="5" max="5" width="24" customWidth="1"/>
     <col min="6" max="6" width="14" customWidth="1"/>
     <col min="7" max="8" width="22" customWidth="1"/>
-    <col min="9" max="15" width="18" customWidth="1"/>
+    <col min="9" max="16" width="18" customWidth="1"/>
   </cols>
   <sheetData>${rowXml}</sheetData>
-  <autoFilter ref="A1:O1"/>
+  <autoFilter ref="A1:P1"/>
 </worksheet>`;
 }
 

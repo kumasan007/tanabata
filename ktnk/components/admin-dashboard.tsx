@@ -244,9 +244,10 @@ export function AdminDashboard() {
                     "二次人数",
                     "エリア",
                     "作業内容",
-                    "次回来場",
-                    "次回二次会社",
-                    "次回人数",
+                    "来場予定日",
+                    "来場予定二次会社",
+                    "来場予定人数",
+                    "来場予定エリア",
                   ].map((header) => (
                     <th key={header} className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                       {header}
@@ -257,7 +258,7 @@ export function AdminDashboard() {
               <tbody>
                 {result.rows.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="px-3 py-8 text-center text-slate-500">
+                    <td colSpan={12} className="px-3 py-8 text-center text-slate-500">
                       データなし
                     </td>
                   </tr>
@@ -275,6 +276,7 @@ export function AdminDashboard() {
                       <td className="whitespace-nowrap px-3 py-2">{row.nextVisitDate}</td>
                       <td className="whitespace-nowrap px-3 py-2">{row.nextSecondaryCompany}</td>
                       <td className="whitespace-nowrap px-3 py-2 text-right">{row.nextSecondaryCount}</td>
+                      <td className="whitespace-nowrap px-3 py-2">{row.nextWorkArea}</td>
                     </tr>
                   ))
                 )}

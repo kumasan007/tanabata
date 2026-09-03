@@ -4,9 +4,9 @@ Option Explicit
 Private Const HEADER_ROW As Long = 1
 Private Const FIRST_DATA_ROW As Long = 2
 Private Const FIRST_COL As Long = 1
-Private Const LAST_SOURCE_COL As Long = 15
-Private Const IMPORTED_AT_COL As Long = 16
-Private Const SOURCE_FILE_COL As Long = 17
+Private Const LAST_SOURCE_COL As Long = 16
+Private Const IMPORTED_AT_COL As Long = 17
+Private Const SOURCE_FILE_COL As Long = 18
 
 Private headers As Variant
 
@@ -76,11 +76,12 @@ Private Sub InitHeaders()
         "二次会社人数", _
         "作業エリア", _
         "作業内容", _
-        "次回来場予定日", _
-        "次回一次会社人数", _
-        "次回二次会社", _
-        "次回二次会社人数", _
-        "次回作業内容", _
+        "来場予定日", _
+        "来場予定一次会社人数", _
+        "来場予定二次会社", _
+        "来場予定二次会社人数", _
+        "来場予定作業エリア", _
+        "来場予定作業内容", _
         "登録日時", _
         "更新日時", _
         "取込日時", _
@@ -154,9 +155,9 @@ Private Sub SetupHeader(ByVal ws As Worksheet)
         .HorizontalAlignment = xlCenter
     End With
 
-    ws.Columns("A:Q").EntireColumn.AutoFit
+    ws.Columns("A:R").EntireColumn.AutoFit
     If Not ws.AutoFilterMode Then
-        ws.Range("A1:Q1").AutoFilter
+        ws.Range("A1:R1").AutoFilter
     End If
 End Sub
 
@@ -179,7 +180,7 @@ Private Sub UpsertRow(ByVal targetWs As Worksheet, ByVal sourceWs As Worksheet, 
     targetWs.Cells(targetRow, IMPORTED_AT_COL).Value = Now
     targetWs.Cells(targetRow, SOURCE_FILE_COL).Value = Dir(sourcePath)
 
-    targetWs.Columns("A:Q").EntireColumn.AutoFit
+    targetWs.Columns("A:R").EntireColumn.AutoFit
 End Sub
 
 Private Function FindRowByKey(ByVal ws As Worksheet, ByVal key As String) As Long

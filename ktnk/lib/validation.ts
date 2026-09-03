@@ -34,6 +34,7 @@ export const scheduleSubmitSchema = z
     nextVisitDate: nullableDate,
     nextPrimaryCount: countSchema,
     nextSubcompanies: z.array(subcompanySchema).default([]),
+    nextWorkArea: z.string().default(""),
     nextWorkContent: z.string().default(""),
   })
   .superRefine((value, ctx) => {

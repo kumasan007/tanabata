@@ -3,7 +3,7 @@
 import { CalendarDays, CheckCircle2, RefreshCw, Send } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { SubcompanyFields } from "@/components/subcompany-fields";
-import type { CompanyMaster, ScheduleSubmitInput } from "@/lib/types";
+import type { CompanyMaster, ScheduleSubmitInput, ScheduleSummary } from "@/lib/types";
 import { addDays, parseLocalDate, toDateString, tomorrowString } from "@/lib/utils";
 
 const SAME_AS_PREVIOUS = "前回と同じ";
@@ -29,6 +29,7 @@ const emptyForm = (): ScheduleSubmitInput => {
     nextVisitDate: null,
     nextPrimaryCount: null,
     nextSubcompanies: [],
+    nextWorkArea: "",
     nextWorkContent: "",
   };
 };
@@ -37,6 +38,8 @@ export function ScheduleForm() {
   const [form, setForm] = useState<ScheduleSubmitInput>(() => emptyForm());
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(null);
   const [companyError, setCompanyError] = useState("");
+  const [summaries, setSummaries] = useState<ScheduleSummary[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [submitState, setSubmitState] = useState<SubmitState>({ status: "idle" });
 
   const secondaryOptions = useMemo(() => {
@@ -61,6 +64,34 @@ export function ScheduleForm() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!form.primaryCompany) {
+      setSummaries([]);
+      setSummaryLoading(false);
+      return;
+    }
+
+    setSummaryLoading(true);
+    fetch(`/api/schedules/summary?primaryCompany=${encodeURIComponent(form.primaryCompany)}`)
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error ?? "記入済み情報を取得できませんでした。");
+        if (active) setSummaries(body.summaries ?? []);
+      })
+      .catch(() => {
+        if (active) setSummaries([]);
+      })
+      .finally(() => {
+        if (active) setSummaryLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [form.primaryCompany]);
 
   function patch(patchValue: Partial<ScheduleSubmitInput>) {
     setForm((current) => ({ ...current, ...patchValue }));
@@ -114,7 +145,6 @@ export function ScheduleForm() {
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-4">
           <div>
             <h1 className="text-xl font-bold tracking-normal text-slate-950">作業予定入力</h1>
-            <p className="mt-1 text-sm text-slate-600">締切 20:00</p>
           </div>
           <CalendarDays className="text-primary" size={28} aria-hidden="true" />
         </div>
@@ -209,6 +239,39 @@ export function ScheduleForm() {
             </select>
           </label>
 
+          {form.primaryCompany ? (
+            <section className="rounded-md bg-slate-100 px-3 py-3">
+              <div className="mb-2 text-xs font-bold text-slate-600">記入済み</div>
+              {summaryLoading ? (
+                <p className="text-xs text-slate-500">確認中</p>
+              ) : summaries.length === 0 ? (
+                <p className="text-xs text-slate-500">まだ記入なし</p>
+              ) : (
+                <div className="grid gap-2">
+                  {summaries.map((summary) => {
+                    const area = summary.status === "作業あり" ? summary.workArea : summary.nextWorkArea;
+                    const content = summary.status === "作業あり" ? summary.workContent : summary.nextWorkContent;
+                    return (
+                      <div key={summary.id} className="rounded bg-white px-2 py-2 text-xs text-slate-700">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-slate-900">
+                          <span>{summary.workDate}</span>
+                          <span>{summary.status}</span>
+                          {summary.nextVisitDate ? <span>来場予定 {summary.nextVisitDate}</span> : null}
+                        </div>
+                        {summary.companyText ? <div className="mt-1">{summary.companyText}</div> : null}
+                        {area || content ? (
+                          <div className="mt-1 text-slate-600">
+                            {[area, content].filter(Boolean).join(" / ")}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          ) : null}
+
           {form.status === "work" ? (
             <>
               <label className="field">
@@ -271,7 +334,7 @@ export function ScheduleForm() {
             <>
               <div className="grid grid-cols-2 gap-3">
                 <label className="field">
-                  <span className="label">次回来場予定日</span>
+                  <span className="label">来場予定日</span>
                   <input
                     className="input"
                     type="date"
@@ -280,7 +343,7 @@ export function ScheduleForm() {
                   />
                 </label>
                 <label className="field">
-                  <span className="label">次回一次人数</span>
+                  <span className="label">一次会社人数</span>
                   <input
                     className="input"
                     inputMode="numeric"
@@ -294,13 +357,32 @@ export function ScheduleForm() {
                 </label>
               </div>
               <SubcompanyFields
-                title="次回二次会社"
+                title="二次会社"
                 rows={form.nextSubcompanies}
                 options={secondaryOptions}
                 onChange={(rows) => patch({ nextSubcompanies: rows })}
               />
               <div className="field">
-                <span className="label">次回作業内容</span>
+                <span className="label">作業エリア</span>
+                <label className="flex min-h-11 items-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-semibold text-slate-800">
+                  <input
+                    className="h-5 w-5 accent-sky-700"
+                    type="checkbox"
+                    checked={form.nextWorkArea === SAME_AS_PREVIOUS}
+                    onChange={(event) => patch({ nextWorkArea: event.target.checked ? SAME_AS_PREVIOUS : "" })}
+                  />
+                  前回と同じ
+                </label>
+                <input
+                  className="input"
+                  value={form.nextWorkArea}
+                  onChange={(event) => patch({ nextWorkArea: event.target.value })}
+                  placeholder="10F、10,12,33階、各階"
+                  disabled={form.nextWorkArea === SAME_AS_PREVIOUS}
+                />
+              </div>
+              <div className="field">
+                <span className="label">作業内容</span>
                 <label className="flex min-h-11 items-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-semibold text-slate-800">
                   <input
                     className="h-5 w-5 accent-sky-700"

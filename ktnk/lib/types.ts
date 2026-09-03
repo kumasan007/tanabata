@@ -25,6 +25,7 @@ export type ScheduleSubmitInput = {
   nextVisitDate: string | null;
   nextPrimaryCount: number | null;
   nextSubcompanies: SubcompanyInput[];
+  nextWorkArea: string;
   nextWorkContent: string;
 };
 
@@ -38,6 +39,7 @@ export type ScheduleGroupRow = {
   work_content: string | null;
   next_visit_date: string | null;
   next_primary_count: number | null;
+  next_work_area: string | null;
   next_work_content: string | null;
   created_at: string;
   updated_at: string;
@@ -69,7 +71,20 @@ export type ExportRow = {
   nextPrimaryCount: number | "";
   nextSecondaryCompany: string;
   nextSecondaryCount: number | "";
+  nextWorkArea: string;
   nextWorkContent: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ScheduleSummary = {
+  id: string;
+  workDate: string;
+  status: string;
+  workArea: string;
+  workContent: string;
+  nextVisitDate: string;
+  nextWorkArea: string;
+  nextWorkContent: string;
+  companyText: string;
 };

@@ -37,6 +37,13 @@ BOX_COMPANY_CSV_URL=
 
 `supabase/schema.sql` をSupabase SQL Editorで実行します。
 
+すでに初回スキーマを実行済みの場合は、追加で以下を実行します。
+
+```sql
+alter table public.schedule_groups
+add column if not exists next_work_area text;
+```
+
 管理画面に入るユーザーは、Supabase Authでメールアドレスとパスワードを作成します。
 
 ## Vercel

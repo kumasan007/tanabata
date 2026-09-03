@@ -3,6 +3,7 @@ import type {
   ExportRow,
   ScheduleGroupRow,
   ScheduleStatus,
+  ScheduleSummary,
   ScheduleSubcompanyRow,
   ScheduleWithSubcompanies,
   SubcompanyInput,
@@ -48,6 +49,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
       work_content: input.status === "work" ? emptyToNull(input.workContent) : null,
       next_visit_date: input.status === "no_work" ? input.nextVisitDate : null,
       next_primary_count: input.status === "no_work" ? input.nextPrimaryCount : null,
+      next_work_area: input.status === "no_work" ? emptyToNull(input.nextWorkArea) : null,
       next_work_content: input.status === "no_work" ? emptyToNull(input.nextWorkContent) : null,
     };
 
@@ -127,6 +129,47 @@ export async function getSchedules(params: ScheduleSearchParams) {
   return schedules;
 }
 
+export async function getScheduleSummariesByPrimaryCompany(primaryCompany: string): Promise<ScheduleSummary[]> {
+  const supabase = createServiceClient();
+
+  const { data, error } = await supabase
+    .from("schedule_groups")
+    .select(
+      `
+      *,
+      schedule_subcompanies (*)
+    `,
+    )
+    .eq("primary_company", primaryCompany)
+    .order("work_date", { ascending: false })
+    .limit(8);
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => {
+    const schedule = normalizeScheduleRow(row);
+    const subs = schedule.subcompanies
+      .filter((sub) => sub.kind === (schedule.status === "work" ? "current" : "next_visit"))
+      .map((sub) => {
+        const company = sub.secondary_company ?? "二次会社なし";
+        const count = sub.worker_count === null ? "" : `${sub.worker_count}人`;
+        return count ? `${company} ${count}` : company;
+      });
+
+    return {
+      id: schedule.id,
+      workDate: schedule.work_date,
+      status: statusLabel(schedule.status),
+      workArea: schedule.work_area ?? "",
+      workContent: schedule.work_content ?? "",
+      nextVisitDate: schedule.next_visit_date ?? "",
+      nextWorkArea: schedule.next_work_area ?? "",
+      nextWorkContent: schedule.next_work_content ?? "",
+      companyText: subs.join("、"),
+    };
+  });
+}
+
 export function schedulesToExportRows(schedules: ScheduleWithSubcompanies[]): ExportRow[] {
   const rows: ExportRow[] = [];
 
@@ -154,6 +197,7 @@ export function schedulesToExportRows(schedules: ScheduleWithSubcompanies[]): Ex
           nextPrimaryCount: "",
           nextSecondaryCompany: "",
           nextSecondaryCount: "",
+          nextWorkArea: "",
           nextWorkContent: "",
           createdAt: formatDateTime(schedule.created_at),
           updatedAt: formatDateTime(schedule.updated_at),
@@ -175,6 +219,7 @@ export function schedulesToExportRows(schedules: ScheduleWithSubcompanies[]): Ex
           nextPrimaryCount: schedule.next_primary_count ?? "",
           nextSecondaryCompany: sub?.secondary_company ?? "",
           nextSecondaryCount: sub?.worker_count ?? "",
+          nextWorkArea: schedule.next_work_area ?? "",
           nextWorkContent: schedule.next_work_content ?? "",
           createdAt: formatDateTime(schedule.created_at),
           updatedAt: formatDateTime(schedule.updated_at),
