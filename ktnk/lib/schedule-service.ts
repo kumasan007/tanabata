@@ -252,7 +252,7 @@ function buildSubcompanyRows(scheduleGroupId: string, subcompanies: SubcompanyIn
       worker_count: subcompany.workerCount,
       sort_order: index,
     }))
-    .filter((row) => row.secondary_company || row.worker_count !== null);
+    .filter((row) => row.secondary_company || (row.worker_count !== null && row.worker_count > 0));
 }
 
 function normalizeScheduleRow(

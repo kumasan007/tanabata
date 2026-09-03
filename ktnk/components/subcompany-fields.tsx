@@ -50,18 +50,22 @@ export function SubcompanyFields({ title, rows, options, onChange }: Props) {
                   </select>
                 </label>
                 <label className="field">
-                  <span className="label">人数</span>
+                  <span className="label">
+                    人数
+                    <span className="required-mark" aria-label="必須">*</span>
+                  </span>
                   <input
                     className="input px-2 text-right"
                     inputMode="numeric"
                     min={0}
                     type="number"
-                    value={row.workerCount ?? ""}
+                    value={row.workerCount ?? 0}
                     onChange={(event) =>
                       updateRow(index, {
-                        workerCount: event.target.value === "" ? null : Number(event.target.value),
+                        workerCount: event.target.value === "" ? 0 : Number(event.target.value),
                       })
                     }
+                    required
                   />
                 </label>
                 <button
@@ -82,7 +86,7 @@ export function SubcompanyFields({ title, rows, options, onChange }: Props) {
       <button
         type="button"
         className="btn btn-secondary h-14 w-full border-2 border-dashed text-base"
-        onClick={() => onChange([...rows, { secondaryCompany: "", workerCount: null }])}
+        onClick={() => onChange([...rows, { secondaryCompany: "", workerCount: 0 }])}
       >
         <Plus size={22} aria-hidden="true" />
         {title}を追加する

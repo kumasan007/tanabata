@@ -15,9 +15,11 @@ const countSchema = z
   })
   .refine((value) => value === null || (Number.isInteger(value) && value >= 0), "人数は0以上の整数で入力してください。");
 
+const requiredCountSchema = countSchema.refine((value) => value !== null, "人数を入力してください。");
+
 export const subcompanySchema = z.object({
   secondaryCompany: z.string(),
-  workerCount: countSchema,
+  workerCount: requiredCountSchema,
 });
 
 export const scheduleSubmitSchema = z
@@ -47,11 +49,43 @@ export const scheduleSubmitSchema = z
     }
 
     if (value.status === "work") {
-      if (value.primaryCount === null && value.currentSubcompanies.length === 0) {
+      if (value.primaryCount === null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["primaryCount"],
-          message: "一次会社人数、または二次会社人数を入力してください。",
+          message: "一次会社人数を入力してください。",
+        });
+      }
+
+      const secondaryTotal = value.currentSubcompanies.reduce((sum, row) => {
+        return sum + (row.secondaryCompany.trim() ? row.workerCount ?? 0 : 0);
+      }, 0);
+
+      if (value.primaryCount === 0 && secondaryTotal < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["currentSubcompanies"],
+          message: "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。",
+        });
+      }
+    }
+
+    for (const [index, subcompany] of value.currentSubcompanies.entries()) {
+      if ((subcompany.workerCount ?? 0) > 0 && subcompany.secondaryCompany.trim() === "") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["currentSubcompanies", index, "secondaryCompany"],
+          message: "二次会社人数を入力する場合は、二次会社を選択してください。",
+        });
+      }
+    }
+
+    for (const [index, subcompany] of value.nextSubcompanies.entries()) {
+      if ((subcompany.workerCount ?? 0) > 0 && subcompany.secondaryCompany.trim() === "") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["nextSubcompanies", index, "secondaryCompany"],
+          message: "二次会社人数を入力する場合は、二次会社を選択してください。",
         });
       }
     }

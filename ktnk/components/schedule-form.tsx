@@ -23,12 +23,12 @@ const emptyForm = (): ScheduleSubmitInput => {
     excludeWeekends: false,
     status: "work",
     primaryCompany: "",
-    primaryCount: null,
+    primaryCount: 0,
     currentSubcompanies: [],
     workArea: "",
     workContent: "",
     nextVisitDate: null,
-    nextPrimaryCount: null,
+    nextPrimaryCount: 0,
     nextSubcompanies: [],
     nextWorkArea: "",
     nextWorkContent: "",
@@ -105,6 +105,12 @@ export function ScheduleForm() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const validationMessage = validateBeforeSubmit();
+    if (validationMessage) {
+      setSubmitState({ status: "error", message: validationMessage });
+      return;
+    }
+
     setSubmitState({ status: "submitting" });
 
     try {
@@ -129,6 +135,30 @@ export function ScheduleForm() {
     } catch (error) {
       setSubmitState({ status: "error", message: error instanceof Error ? error.message : "送信に失敗しました。" });
     }
+  }
+
+  function validateBeforeSubmit() {
+    const activeSubcompanies = form.status === "work" ? form.currentSubcompanies : form.nextSubcompanies;
+    const hasSecondaryCountWithoutCompany = activeSubcompanies.some(
+      (row) => (row.workerCount ?? 0) > 0 && row.secondaryCompany.trim() === "",
+    );
+
+    if (hasSecondaryCountWithoutCompany) {
+      return "二次会社人数を入力する場合は、二次会社を選択してください。";
+    }
+
+    if (form.status !== "work") return "";
+
+    if (form.primaryCount === null) {
+      return "一次会社人数を入力してください。";
+    }
+
+    const secondaryTotal = form.currentSubcompanies.reduce((sum, row) => sum + (row.workerCount ?? 0), 0);
+    if (form.primaryCount === 0 && secondaryTotal < 1) {
+      return "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。";
+    }
+
+    return "";
   }
 
   function continueAnotherDate() {
@@ -170,7 +200,7 @@ export function ScheduleForm() {
           <label className="field">
             <span className="label">
               日付
-              <span className="required-mark">必須</span>
+              <span className="required-mark" aria-label="必須">*</span>
             </span>
             <input
               className="input"
@@ -203,31 +233,51 @@ export function ScheduleForm() {
         </section>
 
         <section className="panel -mx-4 grid gap-4 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
-          <label className="field">
-            <span className="label">
-              一次会社
-              <span className="required-mark">必須</span>
-            </span>
-            <select
-              className="input"
-              value={form.primaryCompany}
-              onChange={(event) =>
-                patch({
-                  primaryCompany: event.target.value,
-                  currentSubcompanies: [],
-                  nextSubcompanies: [],
-                })
-              }
-              required
-            >
-              <option value="">選択</option>
-              {companyMaster?.primaryCompanies.map((company) => (
-                <option key={company} value={company}>
-                  {company}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className={form.status === "work" ? "grid gap-2 sm:grid-cols-[1fr_120px]" : "grid gap-2"}>
+            <label className="field">
+              <span className="label">
+                一次会社
+                <span className="required-mark" aria-label="必須">*</span>
+              </span>
+              <select
+                className="input"
+                value={form.primaryCompany}
+                onChange={(event) =>
+                  patch({
+                    primaryCompany: event.target.value,
+                    currentSubcompanies: [],
+                    nextSubcompanies: [],
+                  })
+                }
+                required
+              >
+                <option value="">選択</option>
+                {companyMaster?.primaryCompanies.map((company) => (
+                  <option key={company} value={company}>
+                    {company}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {form.status === "work" ? (
+              <label className="field">
+                <span className="label">
+                  人数
+                  <span className="required-mark" aria-label="必須">*</span>
+                </span>
+                <input
+                  className="input px-2 text-right"
+                  inputMode="numeric"
+                  min={0}
+                  type="number"
+                  value={form.primaryCount ?? 0}
+                  onChange={(event) => patch({ primaryCount: event.target.value === "" ? 0 : Number(event.target.value) })}
+                  required
+                />
+              </label>
+            ) : null}
+          </div>
 
           {primaryTrades.length > 0 ? (
             <div className="flex flex-wrap gap-2">
@@ -274,21 +324,7 @@ export function ScheduleForm() {
 
           {form.status === "work" ? (
             <>
-              <label className="field">
-                <span className="label">
-                  一次会社人数
-                  <span className="required-mark">必須</span>
-                </span>
-                <span className="text-xs font-semibold text-slate-500">一次人数、または二次会社人数を入力</span>
-                <input
-                  className="input"
-                  inputMode="numeric"
-                  min={0}
-                  type="number"
-                  value={form.primaryCount ?? ""}
-                  onChange={(event) => patch({ primaryCount: event.target.value === "" ? null : Number(event.target.value) })}
-                />
-              </label>
+              <p className="text-xs font-semibold text-slate-500">一次人数が0人の場合は、二次会社人数の合計を1人以上にしてください。</p>
               <SubcompanyFields
                 title="二次会社"
                 rows={form.currentSubcompanies}
@@ -347,16 +383,20 @@ export function ScheduleForm() {
                   />
                 </label>
                 <label className="field">
-                  <span className="label">一次会社人数</span>
+                  <span className="label">
+                    一次会社人数
+                    <span className="required-mark" aria-label="必須">*</span>
+                  </span>
                   <input
                     className="input"
                     inputMode="numeric"
                     min={0}
                     type="number"
-                    value={form.nextPrimaryCount ?? ""}
+                    value={form.nextPrimaryCount ?? 0}
                     onChange={(event) =>
-                      patch({ nextPrimaryCount: event.target.value === "" ? null : Number(event.target.value) })
+                      patch({ nextPrimaryCount: event.target.value === "" ? 0 : Number(event.target.value) })
                     }
+                    required
                   />
                 </label>
               </div>
