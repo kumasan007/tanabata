@@ -41,10 +41,16 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       primaryCompany?: string;
       secondaryCompany?: string;
+      secondaryCompanies?: string[];
     };
 
     const primaryCompany = (body.primaryCompany ?? "").trim();
-    const secondaryCompany = (body.secondaryCompany ?? "").trim();
+    const requestedSecondaries = Array.isArray(body.secondaryCompanies)
+      ? body.secondaryCompanies
+      : [body.secondaryCompany ?? ""];
+    const secondaryCompanies = [
+      ...new Set(requestedSecondaries.map((company) => String(company).trim()).filter(Boolean)),
+    ];
 
     if (!primaryCompany) {
       return NextResponse.json({ error: "一次会社を入力してください。" }, { status: 400 });
@@ -59,29 +65,35 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (orderError) throw orderError;
 
-    let duplicateQuery = supabase
+    const { data: existingRows, error: findError } = await supabase
       .from("company_master")
-      .select("id")
+      .select("secondary_company")
       .eq("primary_company", primaryCompany);
-
-    duplicateQuery = secondaryCompany
-      ? duplicateQuery.eq("secondary_company", secondaryCompany)
-      : duplicateQuery.is("secondary_company", null);
-
-    const { data: existing, error: findError } = await duplicateQuery.maybeSingle();
     if (findError) throw findError;
-    if (existing) {
-      return NextResponse.json({ error: "同じ会社マスタがすでに登録されています。" }, { status: 409 });
+
+    const requestedValues: Array<string | null> = secondaryCompanies.length > 0 ? secondaryCompanies : [null];
+    const existingValues = new Set((existingRows ?? []).map((row) => row.secondary_company ?? ""));
+    const newValues = requestedValues.filter((company) => !existingValues.has(company ?? ""));
+
+    if (newValues.length === 0) {
+      return NextResponse.json({ error: "入力された会社はすべて登録済みです。" }, { status: 409 });
     }
 
-    const { error } = await supabase.from("company_master").insert({
-      primary_company: primaryCompany,
-      secondary_company: secondaryCompany || null,
-      sort_order: (lastRow?.sort_order ?? -1) + 1,
-    });
+    const startOrder = (lastRow?.sort_order ?? -1) + 1;
+    const { error } = await supabase.from("company_master").insert(
+      newValues.map((secondaryCompany, index) => ({
+        primary_company: primaryCompany,
+        secondary_company: secondaryCompany,
+        sort_order: startOrder + index,
+      })),
+    );
 
     if (error) throw error;
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true,
+      addedCount: newValues.length,
+      skippedCount: requestedValues.length - newValues.length,
+    });
   } catch (error) {
     return NextResponse.json(
       {

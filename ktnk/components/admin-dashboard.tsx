@@ -15,6 +15,10 @@ type RangePreset = "today" | "tomorrow" | "week";
 type StatusFilter = "work" | "no_work";
 type SortBy = "dateAsc" | "dateDesc" | "primaryAsc";
 type AdminTab = "schedules" | "companies";
+type CompanyGroup = {
+  primaryCompany: string;
+  rows: CompanyMasterRow[];
+};
 
 const tomorrow = () => toDateString(addDays(new Date(), 1));
 
@@ -34,7 +38,8 @@ export function AdminDashboard() {
   const [result, setResult] = useState<AdminResult>({ rows: [], count: 0 });
   const [companyRows, setCompanyRows] = useState<CompanyMasterRow[]>([]);
   const [newPrimaryCompany, setNewPrimaryCompany] = useState("");
-  const [newSecondaryCompany, setNewSecondaryCompany] = useState("");
+  const [newSecondaryCompanies, setNewSecondaryCompanies] = useState("");
+  const [selectedPrimaryCompany, setSelectedPrimaryCompany] = useState<string | null>(null);
   const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
   const [editPrimaryCompany, setEditPrimaryCompany] = useState("");
   const [editSecondaryCompany, setEditSecondaryCompany] = useState("");
@@ -68,6 +73,17 @@ export function AdminDashboard() {
 
     return [...new Set(options)].sort(compareText);
   }, [companyMaster, primaryCompany]);
+
+  const companyGroups = useMemo<CompanyGroup[]>(() => {
+    const groups = new Map<string, CompanyMasterRow[]>();
+    for (const row of companyRows) {
+      const rows = groups.get(row.primary_company) ?? [];
+      rows.push(row);
+      groups.set(row.primary_company, rows);
+    }
+    return [...groups].map(([primaryCompanyName, rows]) => ({ primaryCompany: primaryCompanyName, rows }));
+  }, [companyRows]);
+  const selectedPrimaryIndex = companyGroups.findIndex((group) => group.primaryCompany === selectedPrimaryCompany);
 
   useEffect(() => {
     fetch("/api/admin/session")
@@ -157,7 +173,14 @@ export function AdminDashboard() {
   async function addCompanyMaster() {
     if (!authenticated) return;
     const primaryCompany = newPrimaryCompany.trim();
-    const secondaryCompany = newSecondaryCompany.trim();
+    const secondaryCompanies = [
+      ...new Set(
+        newSecondaryCompanies
+          .split(/\r?\n|,|、/)
+          .map((company) => company.trim())
+          .filter(Boolean),
+      ),
+    ];
 
     if (!primaryCompany) {
       setMessage("一次会社を入力してください。");
@@ -171,13 +194,13 @@ export function AdminDashboard() {
       const response = await fetch("/api/admin/company-master", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ primaryCompany, secondaryCompany }),
+        body: JSON.stringify({ primaryCompany, secondaryCompanies }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "会社マスタの追加に失敗しました。");
 
       setNewPrimaryCompany("");
-      setNewSecondaryCompany("");
+      setNewSecondaryCompanies("");
       await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "会社マスタの追加に失敗しました。");
@@ -244,12 +267,14 @@ export function AdminDashboard() {
     }
   }
 
-  async function moveCompanyMaster(index: number, direction: -1 | 1) {
+  async function movePrimaryCompany(primaryCompanyName: string, direction: -1 | 1) {
+    const index = companyGroups.findIndex((group) => group.primaryCompany === primaryCompanyName);
     const destination = index + direction;
-    if (destination < 0 || destination >= companyRows.length) return;
+    if (index < 0 || destination < 0 || destination >= companyGroups.length) return;
 
-    const reordered = [...companyRows];
-    [reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
+    const reorderedGroups = [...companyGroups];
+    [reorderedGroups[index], reorderedGroups[destination]] = [reorderedGroups[destination], reorderedGroups[index]];
+    const reordered = reorderedGroups.flatMap((group) => group.rows);
     setCompanyRows(reordered);
     setMessage("");
     setCompanyLoading(true);
@@ -526,29 +551,44 @@ export function AdminDashboard() {
               <h2 className="text-lg font-bold text-slate-950">協力会社一覧</h2>
               <p className="mt-1 text-sm text-slate-600">入力画面に表示する会社名と順番を管理します。</p>
             </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{companyRows.length}件</span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">一次 {companyGroups.length}社 / 登録 {companyRows.length}件</span>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <div className="grid items-start gap-3 md:grid-cols-[1fr_1.5fr_auto]">
             <label className="field">
               <span className="label">一次会社</span>
               <input className="input" value={newPrimaryCompany} onChange={(event) => setNewPrimaryCompany(event.target.value)} placeholder="例: 山田設備" />
             </label>
             <label className="field">
-              <span className="label">二次会社</span>
-              <input className="input" value={newSecondaryCompany} onChange={(event) => setNewSecondaryCompany(event.target.value)} placeholder="例: 山田配管工業（空欄可）" />
+              <span className="label">二次会社（複数入力可・1行に1社）</span>
+              <textarea className="textarea min-h-28" value={newSecondaryCompanies} onChange={(event) => setNewSecondaryCompanies(event.target.value)} placeholder={"例:\n山田配管工業\n鈴木電設\n佐藤工業"} />
             </label>
             <button className="btn btn-primary mt-6" type="button" onClick={() => void addCompanyMaster()} disabled={companyLoading}>
-              追加
+              まとめて追加
             </button>
+          </div>
+
+          <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2">
+            <div className="text-sm text-slate-700">
+              {selectedPrimaryCompany ? (
+                <><span className="font-bold text-sky-900">{selectedPrimaryCompany}</span> の登録をまとめて移動します</>
+              ) : "一覧の一次会社名をクリックすると、その会社をまとめて並び替えられます。"}
+            </div>
+            <div className="flex gap-2">
+              <button className="btn btn-secondary h-9 px-3" type="button" disabled={companyLoading || selectedPrimaryIndex <= 0} onClick={() => selectedPrimaryCompany && void movePrimaryCompany(selectedPrimaryCompany, -1)}>
+                <ArrowUp size={16} aria-hidden="true" /> 上へ
+              </button>
+              <button className="btn btn-secondary h-9 px-3" type="button" disabled={companyLoading || selectedPrimaryIndex < 0 || selectedPrimaryIndex >= companyGroups.length - 1} onClick={() => selectedPrimaryCompany && void movePrimaryCompany(selectedPrimaryCompany, 1)}>
+                <ArrowDown size={16} aria-hidden="true" /> 下へ
+              </button>
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-md border border-border bg-slate-50">
             <div className="max-h-[36rem] overflow-auto">
-              <table className="min-w-[760px] w-full border-collapse text-sm">
+              <table className="min-w-[680px] w-full border-collapse text-sm">
                 <thead className="bg-slate-200 text-slate-800">
                   <tr>
-                    <th className="w-28 px-3 py-2 text-center">並び順</th>
                     <th className="px-3 py-2 text-left">一次会社</th>
                     <th className="px-3 py-2 text-left">二次会社</th>
                     <th className="w-40 px-3 py-2 text-center">操作</th>
@@ -557,27 +597,21 @@ export function AdminDashboard() {
                 <tbody>
                   {companyRows.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-3 py-8 text-center text-slate-500">
+                      <td colSpan={3} className="px-3 py-8 text-center text-slate-500">
                         協力会社がまだ登録されていません
                       </td>
                     </tr>
                   ) : (
-                    companyRows.map((row, index) => (
-                      <tr key={row.id} className="border-t border-border bg-white">
-                        <td className="px-3 py-2">
-                          <div className="flex items-center justify-center gap-1">
-                            <button className="btn btn-secondary h-8 w-8 p-0" type="button" title="上へ" aria-label={`${row.primary_company}を上へ`} disabled={companyLoading || index === 0} onClick={() => void moveCompanyMaster(index, -1)}>
-                              <ArrowUp size={15} aria-hidden="true" />
-                            </button>
-                            <button className="btn btn-secondary h-8 w-8 p-0" type="button" title="下へ" aria-label={`${row.primary_company}を下へ`} disabled={companyLoading || index === companyRows.length - 1} onClick={() => void moveCompanyMaster(index, 1)}>
-                              <ArrowDown size={15} aria-hidden="true" />
-                            </button>
-                          </div>
-                        </td>
+                    companyGroups.flatMap((group) => group.rows).map((row) => (
+                      <tr key={row.id} className={`border-t border-border ${selectedPrimaryCompany === row.primary_company ? "bg-sky-50" : "bg-white"}`}>
                         <td className="px-3 py-2">
                           {editingCompanyId === row.id ? (
                             <input className="input h-10" value={editPrimaryCompany} onChange={(event) => setEditPrimaryCompany(event.target.value)} aria-label="一次会社を編集" />
-                          ) : row.primary_company}
+                          ) : (
+                            <button className={`rounded px-2 py-1 text-left font-semibold ${selectedPrimaryCompany === row.primary_company ? "bg-sky-700 text-white" : "text-sky-800 hover:bg-sky-100"}`} type="button" onClick={() => setSelectedPrimaryCompany(row.primary_company)}>
+                              {row.primary_company}
+                            </button>
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           {editingCompanyId === row.id ? (
