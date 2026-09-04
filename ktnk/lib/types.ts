@@ -7,6 +7,13 @@ export type CompanyMaster = {
   loadedAt: string;
 };
 
+export type CompanyMasterRow = {
+  id: string;
+  primary_company: string;
+  secondary_company: string | null;
+  sort_order: number;
+};
+
 export type SubcompanyInput = {
   secondaryCompany: string;
   workerCount: number | null;

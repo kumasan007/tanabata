@@ -1,9 +1,9 @@
 "use client";
 
-import { Download, LogIn, LogOut, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, Building2, CalendarDays, Download, LogIn, LogOut, Pencil, Save, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import type { CompanyMaster, ExportRow } from "@/lib/types";
+import type { CompanyMaster, CompanyMasterRow, ExportRow } from "@/lib/types";
 import { addDays, toDateString } from "@/lib/utils";
 
 type AdminResult = {
@@ -14,6 +14,7 @@ type AdminResult = {
 type RangePreset = "today" | "tomorrow" | "week";
 type StatusFilter = "work" | "no_work";
 type SortBy = "dateAsc" | "dateDesc" | "primaryAsc";
+type AdminTab = "schedules" | "companies";
 
 const tomorrow = () => toDateString(addDays(new Date(), 1));
 
@@ -21,6 +22,7 @@ export function AdminDashboard() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [activeTab, setActiveTab] = useState<AdminTab>("schedules");
   const [rangePreset, setRangePreset] = useState<RangePreset>("tomorrow");
   const [dateFrom, setDateFrom] = useState(tomorrow);
   const [dateTo, setDateTo] = useState(tomorrow);
@@ -30,11 +32,15 @@ export function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("work");
   const [sortBy, setSortBy] = useState<SortBy>("dateAsc");
   const [result, setResult] = useState<AdminResult>({ rows: [], count: 0 });
-  const [companyRows, setCompanyRows] = useState<Array<{ primary_company: string; secondary_company: string | null }>>([]);
+  const [companyRows, setCompanyRows] = useState<CompanyMasterRow[]>([]);
   const [newPrimaryCompany, setNewPrimaryCompany] = useState("");
   const [newSecondaryCompany, setNewSecondaryCompany] = useState("");
+  const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
+  const [editPrimaryCompany, setEditPrimaryCompany] = useState("");
+  const [editSecondaryCompany, setEditSecondaryCompany] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [companyLoading, setCompanyLoading] = useState(false);
 
   const visibleRows = useMemo(() => {
     const filtered = result.rows.filter((row) => {
@@ -74,12 +80,10 @@ export function AdminDashboard() {
   useEffect(() => {
     if (!authenticated) return;
 
-    fetch("/api/companies")
-      .then((response) => response.json())
-      .then((body) => setCompanyMaster(body))
-      .catch(() => setCompanyMaster(null));
-
-    void refreshCompanyMaster();
+    void Promise.all([refreshCompanyOptions(), refreshCompanyMaster()]).catch((error) => {
+      setCompanyMaster(null);
+      setMessage(error instanceof Error ? error.message : "会社マスタの取得に失敗しました。");
+    });
   }, [authenticated]);
 
   useEffect(() => {
@@ -138,9 +142,16 @@ export function AdminDashboard() {
     const body = await response.json();
     if (!response.ok) {
       setCompanyRows([]);
-      return;
+      throw new Error(body.error ?? "会社マスタの取得に失敗しました。");
     }
     setCompanyRows(body.rows ?? []);
+  }
+
+  async function refreshCompanyOptions() {
+    const response = await fetch("/api/companies", { cache: "no-store" });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "会社一覧を取得できませんでした。");
+    setCompanyMaster(body);
   }
 
   async function addCompanyMaster() {
@@ -154,45 +165,110 @@ export function AdminDashboard() {
     }
 
     setMessage("");
+    setCompanyLoading(true);
 
-    const response = await fetch("/api/admin/company-master", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ primaryCompany, secondaryCompany }),
-    });
-    const body = await response.json();
+    try {
+      const response = await fetch("/api/admin/company-master", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ primaryCompany, secondaryCompany }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "会社マスタの追加に失敗しました。");
 
-    if (!response.ok) {
-      setMessage(body.error ?? "会社マスタの追加に失敗しました。");
-      return;
+      setNewPrimaryCompany("");
+      setNewSecondaryCompany("");
+      await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "会社マスタの追加に失敗しました。");
+    } finally {
+      setCompanyLoading(false);
     }
-
-    setNewPrimaryCompany("");
-    setNewSecondaryCompany("");
-    await refreshCompanyMaster();
-    fetch("/api/companies?force=1")
-      .then((res) => res.ok ? res.json() : null)
-      .catch(() => null);
   }
 
-  async function removeCompanyMaster(primaryCompany: string, secondaryCompany: string | null) {
+  async function removeCompanyMaster(id: string) {
     if (!authenticated) return;
-    const params = new URLSearchParams({ primaryCompany });
-    if (secondaryCompany) params.set("secondaryCompany", secondaryCompany);
+    if (!window.confirm("この協力会社を一覧から削除しますか？")) return;
+    const params = new URLSearchParams({ id });
+    setMessage("");
+    setCompanyLoading(true);
 
-    const response = await fetch(`/api/admin/company-master?${params.toString()}`, { method: "DELETE" });
-    const body = await response.json();
+    try {
+      const response = await fetch(`/api/admin/company-master?${params.toString()}`, { method: "DELETE" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "会社マスタの削除に失敗しました。");
 
-    if (!response.ok) {
-      setMessage(body.error ?? "会社マスタの削除に失敗しました。");
+      if (editingCompanyId === id) setEditingCompanyId(null);
+      await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "会社マスタの削除に失敗しました。");
+    } finally {
+      setCompanyLoading(false);
+    }
+  }
+
+  function startEditingCompany(row: CompanyMasterRow) {
+    setEditingCompanyId(row.id);
+    setEditPrimaryCompany(row.primary_company);
+    setEditSecondaryCompany(row.secondary_company ?? "");
+    setMessage("");
+  }
+
+  async function saveCompanyMaster() {
+    if (!editingCompanyId || !editPrimaryCompany.trim()) {
+      setMessage("一次会社を入力してください。");
       return;
     }
 
     setMessage("");
-    await refreshCompanyMaster();
-    fetch("/api/companies?force=1")
-      .then((res) => res.ok ? res.json() : null)
-      .catch(() => null);
+    setCompanyLoading(true);
+    try {
+      const response = await fetch("/api/admin/company-master", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: editingCompanyId,
+          primaryCompany: editPrimaryCompany,
+          secondaryCompany: editSecondaryCompany,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "会社マスタの更新に失敗しました。");
+
+      setEditingCompanyId(null);
+      await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "会社マスタの更新に失敗しました。");
+    } finally {
+      setCompanyLoading(false);
+    }
+  }
+
+  async function moveCompanyMaster(index: number, direction: -1 | 1) {
+    const destination = index + direction;
+    if (destination < 0 || destination >= companyRows.length) return;
+
+    const reordered = [...companyRows];
+    [reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
+    setCompanyRows(reordered);
+    setMessage("");
+    setCompanyLoading(true);
+
+    try {
+      const response = await fetch("/api/admin/company-master", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orderedIds: reordered.map((row) => row.id) }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "並び順の保存に失敗しました。");
+      await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
+    } catch (error) {
+      setCompanyRows(companyRows);
+      setMessage(error instanceof Error ? error.message : "並び順の保存に失敗しました。");
+    } finally {
+      setCompanyLoading(false);
+    }
   }
 
   async function download(format: "xlsx" | "csv") {
@@ -315,7 +391,7 @@ export function AdminDashboard() {
       <header className="border-b border-border bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
           <div>
-            <h1 className="text-xl font-bold text-slate-950">作業予定管理</h1>
+            <h1 className="text-xl font-bold text-slate-950">管理画面</h1>
             <p className="mt-1 text-sm text-slate-600">管理者ログイン中</p>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
@@ -331,7 +407,38 @@ export function AdminDashboard() {
       </header>
 
       <div className="mx-auto grid max-w-6xl gap-4 px-4 py-4">
-        <section className="panel -mx-4 grid gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
+        <nav className="-mx-4 flex border-b border-border bg-white px-4 sm:mx-0 sm:rounded-t-md sm:border sm:border-b-0" role="tablist" aria-label="管理画面メニュー">
+          <button
+            className={`flex min-h-12 items-center gap-2 border-b-2 px-4 text-sm font-bold ${activeTab === "schedules" ? "border-sky-700 text-sky-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "schedules"}
+            onClick={() => {
+              setActiveTab("schedules");
+              setMessage("");
+            }}
+          >
+            <CalendarDays size={18} aria-hidden="true" />
+            作業予定確認
+          </button>
+          <button
+            className={`flex min-h-12 items-center gap-2 border-b-2 px-4 text-sm font-bold ${activeTab === "companies" ? "border-sky-700 text-sky-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "companies"}
+            onClick={() => {
+              setActiveTab("companies");
+              setMessage("");
+            }}
+          >
+            <Building2 size={18} aria-hidden="true" />
+            協力会社一覧
+          </button>
+        </nav>
+
+        {message ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800">{message}</div> : null}
+
+        <section className={`${activeTab === "schedules" ? "grid" : "hidden"} panel -mx-4 gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border`}>
           <div className="flex flex-wrap gap-2">
             <button
               className={rangePreset === "today" ? "btn btn-primary h-10" : "btn btn-secondary h-10"}
@@ -413,9 +520,13 @@ export function AdminDashboard() {
           </div>
         </section>
 
-        <section className="panel -mx-4 grid gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
+        <section className={`${activeTab === "companies" ? "grid" : "hidden"} panel -mx-4 gap-4 px-4 py-4 sm:mx-0 sm:rounded-md sm:border`}>
           <div className="mb-1 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-bold text-slate-950">会社マスタ編集</h2>
+            <div>
+              <h2 className="text-lg font-bold text-slate-950">協力会社一覧</h2>
+              <p className="mt-1 text-sm text-slate-600">入力画面に表示する会社名と順番を管理します。</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{companyRows.length}件</span>
           </div>
 
           <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
@@ -427,37 +538,74 @@ export function AdminDashboard() {
               <span className="label">二次会社</span>
               <input className="input" value={newSecondaryCompany} onChange={(event) => setNewSecondaryCompany(event.target.value)} placeholder="例: 山田配管工業（空欄可）" />
             </label>
-            <button className="btn btn-primary mt-6" type="button" onClick={() => void addCompanyMaster()}>
+            <button className="btn btn-primary mt-6" type="button" onClick={() => void addCompanyMaster()} disabled={companyLoading}>
               追加
             </button>
           </div>
 
           <div className="overflow-hidden rounded-md border border-border bg-slate-50">
-            <div className="max-h-64 overflow-auto">
-              <table className="w-full border-collapse text-sm">
+            <div className="max-h-[36rem] overflow-auto">
+              <table className="min-w-[760px] w-full border-collapse text-sm">
                 <thead className="bg-slate-200 text-slate-800">
                   <tr>
+                    <th className="w-28 px-3 py-2 text-center">並び順</th>
                     <th className="px-3 py-2 text-left">一次会社</th>
                     <th className="px-3 py-2 text-left">二次会社</th>
-                    <th className="px-3 py-2 text-center">削除</th>
+                    <th className="w-40 px-3 py-2 text-center">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {companyRows.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-3 py-4 text-center text-slate-500">
-                        会社マスタがありません
+                      <td colSpan={4} className="px-3 py-8 text-center text-slate-500">
+                        協力会社がまだ登録されていません
                       </td>
                     </tr>
                   ) : (
                     companyRows.map((row, index) => (
-                      <tr key={`${row.primary_company}-${row.secondary_company ?? ""}-${index}`} className="border-t border-border bg-white">
-                        <td className="px-3 py-2">{row.primary_company}</td>
-                        <td className="px-3 py-2">{row.secondary_company ?? "-"}</td>
+                      <tr key={row.id} className="border-t border-border bg-white">
+                        <td className="px-3 py-2">
+                          <div className="flex items-center justify-center gap-1">
+                            <button className="btn btn-secondary h-8 w-8 p-0" type="button" title="上へ" aria-label={`${row.primary_company}を上へ`} disabled={companyLoading || index === 0} onClick={() => void moveCompanyMaster(index, -1)}>
+                              <ArrowUp size={15} aria-hidden="true" />
+                            </button>
+                            <button className="btn btn-secondary h-8 w-8 p-0" type="button" title="下へ" aria-label={`${row.primary_company}を下へ`} disabled={companyLoading || index === companyRows.length - 1} onClick={() => void moveCompanyMaster(index, 1)}>
+                              <ArrowDown size={15} aria-hidden="true" />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          {editingCompanyId === row.id ? (
+                            <input className="input h-10" value={editPrimaryCompany} onChange={(event) => setEditPrimaryCompany(event.target.value)} aria-label="一次会社を編集" />
+                          ) : row.primary_company}
+                        </td>
+                        <td className="px-3 py-2">
+                          {editingCompanyId === row.id ? (
+                            <input className="input h-10" value={editSecondaryCompany} onChange={(event) => setEditSecondaryCompany(event.target.value)} aria-label="二次会社を編集" placeholder="空欄可" />
+                          ) : row.secondary_company ?? "-"}
+                        </td>
                         <td className="px-3 py-2 text-center">
-                          <button className="btn btn-secondary h-8 px-3 text-xs" type="button" onClick={() => void removeCompanyMaster(row.primary_company, row.secondary_company)}>
-                            削除
-                          </button>
+                          <div className="flex justify-center gap-1">
+                            {editingCompanyId === row.id ? (
+                              <>
+                                <button className="btn btn-primary h-8 px-2 text-xs" type="button" disabled={companyLoading} onClick={() => void saveCompanyMaster()}>
+                                  <Save size={14} aria-hidden="true" /> 保存
+                                </button>
+                                <button className="btn btn-secondary h-8 w-8 p-0" type="button" title="キャンセル" aria-label="編集をキャンセル" disabled={companyLoading} onClick={() => setEditingCompanyId(null)}>
+                                  <X size={15} aria-hidden="true" />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button className="btn btn-secondary h-8 w-8 p-0" type="button" title="編集" aria-label={`${row.primary_company}を編集`} disabled={companyLoading} onClick={() => startEditingCompany(row)}>
+                                  <Pencil size={15} aria-hidden="true" />
+                                </button>
+                                <button className="btn btn-secondary h-8 w-8 p-0 text-red-700" type="button" title="削除" aria-label={`${row.primary_company}を削除`} disabled={companyLoading} onClick={() => void removeCompanyMaster(row.id)}>
+                                  <Trash2 size={15} aria-hidden="true" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -468,7 +616,7 @@ export function AdminDashboard() {
           </div>
         </section>
 
-        <section className="panel -mx-4 grid gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
+        <section className={`${activeTab === "schedules" ? "grid" : "hidden"} panel -mx-4 gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border`}>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="field">
               <span className="label">表示する予定</span>
@@ -488,9 +636,7 @@ export function AdminDashboard() {
           </div>
         </section>
 
-        {message ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800">{message}</div> : null}
-
-        <section className="overflow-hidden rounded-md border border-border bg-white">
+        <section className={`${activeTab === "schedules" ? "block" : "hidden"} overflow-hidden rounded-md border border-border bg-white`}>
           <div className="overflow-x-auto">
             <table className={statusFilter === "work" ? "min-w-[840px] w-full border-collapse text-sm" : "min-w-[960px] w-full border-collapse text-sm"}>
               <thead className="bg-slate-800 text-white">

@@ -21,6 +21,19 @@
 
 ## DB設計案
 
+### company_master
+
+一次会社・二次会社の選択肢です。Supabaseを正データとし、管理画面から編集します。
+
+| column | type | note |
+| --- | --- | --- |
+| id | uuid | primary key |
+| primary_company | text | 一次会社名 |
+| secondary_company | text | 二次会社名。空欄可 |
+| sort_order | integer | 入力画面と管理画面での表示順 |
+
+一次会社・二次会社の組み合わせには重複防止インデックスを設定します。
+
 ### schedule_groups
 
 一次会社単位の予定グループです。
@@ -30,7 +43,7 @@
 | id | uuid | primary key |
 | work_date | date | 作業日 |
 | status | text | `work` または `no_work` |
-| primary_company | text | 一次会社名。CSVの表記をそのまま保存 |
+| primary_company | text | 一次会社名。会社マスタの表記をそのまま保存 |
 | primary_count | integer | 一次会社人数 |
 | work_area | text | 作業エリア |
 | work_content | text | 作業内容 |
@@ -127,15 +140,13 @@ Web管理画面から `.xlsx` を出力します。
 | Q | 取込日時 |
 | R | 取込元ファイル |
 
-## Box CSV取得
+## 会社マスタ取得
 
-`GET /api/companies` でBox公開CSVを取得します。
+`GET /api/companies` でSupabaseの `company_master` を取得します。
 
-- サーバー側でCSVを取得する
-- ブラウザからBoxへ直接アクセスしない
-- CSVは一定時間キャッシュする
-- 取得失敗時は直近キャッシュがあればそれを返す
-- キャッシュもない場合はフォームにエラーを表示する
+- ブラウザからSupabaseへ直接アクセスせず、Next.js API routesを経由する
+- 取得に失敗した場合はフォームにエラーを表示する
+- 0件の場合は空の会社マスタとして扱う
 - 会社名は正規化しない
 
 ## 後から変えると影響が大きい点

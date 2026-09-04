@@ -10,7 +10,7 @@
 - 職人側フォームはログイン不要で完全公開にする
 - 管理画面は共有パスワードでログイン必須にする
 - 現場は1つとして扱い、現場IDや現場選択は持たない
-- 会社マスタはBox公開CSVを正とし、アプリ側ではキャッシュして利用する
+- 会社マスタを含むすべての業務データはSupabase PostgreSQLを正とする
 - 同じ作業日・同じ一次会社の再送信は上書きする
 - 送信履歴は残さない
 - 入力締め時刻は20:00とする
@@ -29,10 +29,6 @@ npm run dev
 ```text
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
-BOX_COMPANY_CSV_URL=
-MICROSOFT_TENANT_ID=
-MICROSOFT_CLIENT_ID=
-MICROSOFT_CLIENT_SECRET=
 ADMIN_PASSWORD=
 ADMIN_SESSION_SECRET=
 EXCEL_FEED_TOKEN=
@@ -41,6 +37,8 @@ EXCEL_FEED_TOKEN=
 ## Supabase
 
 `supabase/schema.sql` をSupabase SQL Editorで実行します。
+
+旧版の `schema.sql` を実行済みの場合は、`supabase/migrations/20260904_supabase_only_company_master.sql` を1回実行してください。会社マスタの既存データを保ったまま、行ID・表示順・重複防止・DB権限を更新します。この移行SQLをすでに実行済みの場合は、追加で `supabase/migrations/20260904_add_company_master_order.sql` を実行します。現在の `schema.sql` は再実行でも同じ更新を適用できます。
 
 `new row violates row-level security policy` が出る場合は、既存データを残したまま `supabase/fix-rls-policies.sql` をSupabase SQL Editorで実行します。
 
@@ -79,7 +77,6 @@ VercelではRoot Directoryを `ktnk` にします。
 ```text
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
-BOX_COMPANY_CSV_URL
 ADMIN_PASSWORD
 ADMIN_SESSION_SECRET
 EXCEL_FEED_TOKEN
@@ -101,23 +98,9 @@ npm install
 
 ## 会社マスタ
 
-会社名リストは CSV でも Excel でも読み込めます。Boxに置く会社CSVは `company-master-template.csv` を元に作成し、Excelの場合は同じ列名の `一次会社` / `二次会社` を持つシートを使います。
+会社名リストはSupabaseの `company_master` テーブルで管理します。管理画面の「協力会社一覧」タブから追加・編集・並び替え・削除でき、職人側フォームへ即時反映されます。UUIDは行の内部識別にだけ使い、画面には表示しません。
 
-`BOX_COMPANY_CSV_URL` には、Boxの共有ファイルURL、またはCSV/Excelの本体を直接ダウンロードできる公開URLを設定してください。Box共有ファイルURLを使う場合は、フォルダではなくファイル単体を共有し、ダウンロードを許可してください。
-
-CSVの列:
-
-```text
-一次会社,二次会社
-```
-
-二次会社がない一次会社は、二次会社を空欄にします。
-
-```text
-搬入センター,
-```
-
-会社名はアプリ側で正規化・統合しません。
+二次会社がない一次会社は、二次会社を空欄にして登録します。同じ一次会社・二次会社の組み合わせは重複登録できません。
 
 ## ExcelのWeb同期
 

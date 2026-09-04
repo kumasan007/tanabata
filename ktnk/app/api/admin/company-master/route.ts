@@ -14,7 +14,8 @@ export async function GET(request: Request) {
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("company_master")
-      .select("primary_company, secondary_company")
+      .select("id, primary_company, secondary_company, sort_order")
+      .order("sort_order", { ascending: true })
       .order("primary_company", { ascending: true })
       .order("secondary_company", { ascending: true, nullsFirst: true });
 
@@ -50,12 +51,34 @@ export async function POST(request: Request) {
     }
 
     const supabase = createServiceClient();
-    const { error } = await supabase.from("company_master").insert([
-      {
-        primary_company: primaryCompany,
-        secondary_company: secondaryCompany || null,
-      },
-    ]);
+    const { data: lastRow, error: orderError } = await supabase
+      .from("company_master")
+      .select("sort_order")
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (orderError) throw orderError;
+
+    let duplicateQuery = supabase
+      .from("company_master")
+      .select("id")
+      .eq("primary_company", primaryCompany);
+
+    duplicateQuery = secondaryCompany
+      ? duplicateQuery.eq("secondary_company", secondaryCompany)
+      : duplicateQuery.is("secondary_company", null);
+
+    const { data: existing, error: findError } = await duplicateQuery.maybeSingle();
+    if (findError) throw findError;
+    if (existing) {
+      return NextResponse.json({ error: "同じ会社マスタがすでに登録されています。" }, { status: 409 });
+    }
+
+    const { error } = await supabase.from("company_master").insert({
+      primary_company: primaryCompany,
+      secondary_company: secondaryCompany || null,
+      sort_order: (lastRow?.sort_order ?? -1) + 1,
+    });
 
     if (error) throw error;
     return NextResponse.json({ ok: true });
@@ -69,6 +92,89 @@ export async function POST(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  const authorized = assertAdminFromRequest(request);
+  if (!authorized) {
+    return NextResponse.json({ error: "管理者ログインが必要です。" }, { status: 401 });
+  }
+
+  try {
+    const body = (await request.json()) as {
+      id?: string;
+      primaryCompany?: string;
+      secondaryCompany?: string;
+      orderedIds?: string[];
+    };
+    const supabase = createServiceClient();
+
+    if (Array.isArray(body.orderedIds)) {
+      const orderedIds = [...new Set(body.orderedIds.filter((id) => typeof id === "string" && id.trim()))];
+      if (orderedIds.length !== body.orderedIds.length) {
+        return NextResponse.json({ error: "並び順の指定が正しくありません。" }, { status: 400 });
+      }
+
+      const { data: rows, error: rowsError } = await supabase.from("company_master").select("id");
+      if (rowsError) throw rowsError;
+
+      const existingIds = new Set((rows ?? []).map((row) => row.id));
+      if (orderedIds.length !== existingIds.size || orderedIds.some((id) => !existingIds.has(id))) {
+        return NextResponse.json({ error: "会社一覧が更新されています。再読み込みしてください。" }, { status: 409 });
+      }
+
+      const results = await Promise.all(
+        orderedIds.map((id, sortOrder) =>
+          supabase.from("company_master").update({ sort_order: sortOrder }).eq("id", id),
+        ),
+      );
+      const updateError = results.find((result) => result.error)?.error;
+      if (updateError) throw updateError;
+
+      return NextResponse.json({ ok: true });
+    }
+
+    const id = body.id?.trim();
+    const primaryCompany = body.primaryCompany?.trim() ?? "";
+    const secondaryCompany = body.secondaryCompany?.trim() ?? "";
+
+    if (!id || !primaryCompany) {
+      return NextResponse.json({ error: "更新対象と一次会社を入力してください。" }, { status: 400 });
+    }
+
+    let duplicateQuery = supabase
+      .from("company_master")
+      .select("id")
+      .eq("primary_company", primaryCompany)
+      .neq("id", id);
+    duplicateQuery = secondaryCompany
+      ? duplicateQuery.eq("secondary_company", secondaryCompany)
+      : duplicateQuery.is("secondary_company", null);
+
+    const { data: existing, error: findError } = await duplicateQuery.maybeSingle();
+    if (findError) throw findError;
+    if (existing) {
+      return NextResponse.json({ error: "同じ会社マスタがすでに登録されています。" }, { status: 409 });
+    }
+
+    const { data, error } = await supabase
+      .from("company_master")
+      .update({ primary_company: primaryCompany, secondary_company: secondaryCompany || null })
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) {
+      return NextResponse.json({ error: "更新対象の会社マスタが見つかりません。" }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "会社マスタの更新に失敗しました。" },
+      { status: 500 },
+    );
+  }
+}
+
 export async function DELETE(request: Request) {
   const authorized = assertAdminFromRequest(request);
   if (!authorized) {
@@ -77,21 +183,19 @@ export async function DELETE(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const primaryCompany = searchParams.get("primaryCompany")?.trim();
-    const secondaryCompany = searchParams.get("secondaryCompany")?.trim() ?? "";
+    const id = searchParams.get("id")?.trim();
 
-    if (!primaryCompany) {
+    if (!id) {
       return NextResponse.json({ error: "削除対象が指定されていません。" }, { status: 400 });
     }
 
     const supabase = createServiceClient();
-    const { error } = await supabase
-      .from("company_master")
-      .delete()
-      .eq("primary_company", primaryCompany)
-      .eq("secondary_company", secondaryCompany || null);
+    const { data, error } = await supabase.from("company_master").delete().eq("id", id).select("id").maybeSingle();
 
     if (error) throw error;
+    if (!data) {
+      return NextResponse.json({ error: "削除対象の会社マスタが見つかりません。" }, { status: 404 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
