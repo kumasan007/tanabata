@@ -1,4 +1,4 @@
-import { createServiceClient } from "@/lib/supabase";
+import { createServerClient } from "@/lib/supabase";
 import type { CompanyMaster } from "@/lib/types";
 
 type CompanyMasterRecord = {
@@ -8,7 +8,7 @@ type CompanyMasterRecord = {
 };
 
 export async function getCompanyMaster(): Promise<CompanyMaster> {
-  const supabase = createServiceClient();
+  const supabase = createServerClient();
   const { data, error } = await supabase
     .from("company_master")
     .select("primary_company, secondary_company, sort_order")

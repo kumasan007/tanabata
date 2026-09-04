@@ -114,17 +114,33 @@ alter table public.schedule_subcompanies enable row level security;
 
 grant usage on schema public to anon, authenticated, service_role;
 
-revoke all on public.company_master from anon, authenticated;
-revoke all on public.schedule_groups from anon, authenticated;
-revoke all on public.schedule_subcompanies from anon, authenticated;
-
-grant select, insert, update, delete on public.company_master to service_role;
-grant select, insert, update, delete on public.schedule_groups to service_role;
-grant select, insert, update, delete on public.schedule_subcompanies to service_role;
+grant select, insert, update, delete on public.company_master to anon, authenticated, service_role;
+grant select, insert, update, delete on public.schedule_groups to anon, authenticated, service_role;
+grant select, insert, update, delete on public.schedule_subcompanies to anon, authenticated, service_role;
 
 drop policy if exists company_master_app_all on public.company_master;
+create policy company_master_app_all
+on public.company_master
+for all
+to anon, authenticated
+using (true)
+with check (true);
 
--- このアプリはNext.js API routesを入口とし、DBはservice roleだけが操作します。
+create policy schedule_groups_app_all
+on public.schedule_groups
+for all
+to anon, authenticated
+using (true)
+with check (true);
+
+create policy schedule_subcompanies_app_all
+on public.schedule_subcompanies
+for all
+to anon, authenticated
+using (true)
+with check (true);
+
+-- このアプリはNext.js API routesを入口とし、service roleとanonキーの両方に対応します。
 
 create function public.set_updated_at()
 returns trigger

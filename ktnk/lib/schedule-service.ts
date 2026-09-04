@@ -1,4 +1,4 @@
-import { createServiceClient } from "@/lib/supabase";
+import { createServerClient } from "@/lib/supabase";
 import type {
   ExportRow,
   ScheduleGroupRow,
@@ -17,7 +17,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
     throw new Error("登録対象の日付がありません。");
   }
 
-  const supabase = createServiceClient();
+  const supabase = createServerClient();
   const savedIds: string[] = [];
 
   for (const workDate of dates) {
@@ -90,7 +90,7 @@ export type ScheduleSearchParams = {
 };
 
 export async function getSchedules(params: ScheduleSearchParams) {
-  const supabase = createServiceClient();
+  const supabase = createServerClient();
 
   let query = supabase
     .from("schedule_groups")
@@ -135,7 +135,7 @@ export async function getSchedules(params: ScheduleSearchParams) {
 }
 
 export async function getScheduleSummariesByPrimaryCompany(primaryCompany: string): Promise<ScheduleSummary[]> {
-  const supabase = createServiceClient();
+  const supabase = createServerClient();
   const dateFrom = todayInTokyoString();
   const startDate = parseLocalDate(dateFrom);
   const dateTo = startDate ? toDateString(addDays(startDate, 6)) : dateFrom;

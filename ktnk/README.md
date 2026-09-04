@@ -17,6 +17,8 @@
 - Excel出力は日付ごとにシートを分ける
 - CSV出力も残し、既存Excelへ手動で貼り付け・新規シート追加できるようにする
 
+業務データの流れは `ブラウザ → Next.js API routes → Supabase` に統一しています。Boxなどの外部ストレージからデータを取得・同期する処理はありません。
+
 ## 開発
 
 ```bash
@@ -28,11 +30,15 @@ npm run dev
 
 ```text
 SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_ANON_KEY=
 ADMIN_PASSWORD=
 ADMIN_SESSION_SECRET=
 EXCEL_FEED_TOKEN=
 ```
+
+Supabase接続はサーバー側のNext.js API routesに集約し、`SUPABASE_URL` と `SUPABASE_ANON_KEY` を使用します。`supabase/migrations/20260904_allow_anon_app_access.sql` を実行して、必要なRLSポリシーを適用してください。
+
+anonキー運用では公開キーを知る利用者がSupabase REST APIを直接操作できるため、管理画面のログインはアプリ画面とAPIに対する制御になります。DBへの直接操作も防止したい場合はservice role運用を使用してください。
 
 ## Supabase
 
@@ -76,7 +82,7 @@ VercelではRoot Directoryを `ktnk` にします。
 
 ```text
 SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_ANON_KEY
 ADMIN_PASSWORD
 ADMIN_SESSION_SECRET
 EXCEL_FEED_TOKEN
@@ -120,7 +126,7 @@ https://your-vercel-domain.example/api/excel-feed?token=EXCEL_FEED_TOKEN&dateFro
 
 ## Excel運用
 
-`excel/作業予定マスタ.xlsx` をマスタExcelの土台として使います。
+`excel/作業予定マスタ.xlsx` はSupabaseに保存された予定を閲覧・加工するための出力先です。Excelファイルを正データとしては扱いません。
 
 取込マクロは `excel/vba/ImportSchedules.bas` に分けて置いています。この環境ではExcel本体の自動操作が使えないため、直接 `.xlsm` にマクロを埋め込んだ状態では作成していません。
 

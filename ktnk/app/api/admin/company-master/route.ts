@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { assertAdminFromRequest } from "@/lib/supabase";
-import { createServiceClient } from "@/lib/supabase";
+import { createServerClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = createServiceClient();
+    const supabase = createServerClient();
     const { data, error } = await supabase
       .from("company_master")
       .select("id, primary_company, secondary_company, sort_order")
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "一次会社を入力してください。" }, { status: 400 });
     }
 
-    const supabase = createServiceClient();
+    const supabase = createServerClient();
     const { data: lastRow, error: orderError } = await supabase
       .from("company_master")
       .select("sort_order")
@@ -105,7 +105,7 @@ export async function PATCH(request: Request) {
       secondaryCompany?: string;
       orderedIds?: string[];
     };
-    const supabase = createServiceClient();
+    const supabase = createServerClient();
 
     if (Array.isArray(body.orderedIds)) {
       const orderedIds = [...new Set(body.orderedIds.filter((id) => typeof id === "string" && id.trim()))];
@@ -189,7 +189,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "削除対象が指定されていません。" }, { status: 400 });
     }
 
-    const supabase = createServiceClient();
+    const supabase = createServerClient();
     const { data, error } = await supabase.from("company_master").delete().eq("id", id).select("id").maybeSingle();
 
     if (error) throw error;

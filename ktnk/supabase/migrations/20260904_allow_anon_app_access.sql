@@ -1,5 +1,4 @@
--- ktnk RLS修正SQL
--- Next.js API routesをservice roleまたはanonキーで操作できるようにします。
+-- サーバー側のSupabaseクライアントでanonキーを利用できるようにする。
 
 grant usage on schema public to anon, authenticated, service_role;
 

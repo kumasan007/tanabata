@@ -2,6 +2,9 @@
 
 ## 決定事項
 
+- 会社マスタと作業予定を含むすべての業務データはSupabaseを唯一の正データ源とする
+- Box、SharePoint、OneDriveなどの外部ファイルから会社マスタを同期しない
+- Excel／CSVはSupabaseデータの出力・閲覧用途に限定する
 - 職人側フォームは完全公開とする
 - 現場は1つだけ扱う
 - 同じ作業日・同じ一次会社の予定は1件だけ持つ
@@ -18,6 +21,19 @@
 - 職人側フォームの日付入力は、当面は1日だけとする
 - APIとDBは、将来の複数日登録再開に備えて期間登録に対応したまま残す
 - 作業エリア・作業内容は「前回と同じ」を選べる
+
+## データフロー
+
+```text
+職人入力画面 ─┐
+管理画面     ─┼─> Next.js API routes ─> Supabase PostgreSQL
+Excel出力    <┘
+```
+
+- ブラウザからの業務データ操作はNext.js API routesを経由する
+- APIは `SUPABASE_URL` と `SUPABASE_ANON_KEY` でSupabaseへ接続する
+- 会社マスタ・作業予定ともに外部サービスからの取込や同期は行わない
+- Excel／CSVフィードはSupabaseからの一方向出力とする
 
 ## DB設計案
 
@@ -106,6 +122,8 @@ unique (work_date, primary_company)
 ## Excel出力
 
 Web管理画面から `.xlsx` を出力します。
+
+Excelは正データではなく、Supabaseに保存された予定の閲覧・受け渡し用です。Excel側で変更した内容をSupabaseへ戻す同期処理は持ちません。
 
 - 日付ごとにシートを分ける
 - 二次会社ごとに1行出力する

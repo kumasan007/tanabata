@@ -1,15 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminCookieFromRequest, verifyAdminSessionToken } from "@/lib/admin-auth";
 
-export function createServiceClient() {
-  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+export function createServerClient() {
+  const url = process.env.SUPABASE_URL;
+  const apiKey = process.env.SUPABASE_ANON_KEY;
 
-  if (!url || !serviceRoleKey) {
-    throw new Error("Supabase server environment variables are not set.");
+  if (!url || !apiKey) {
+    throw new Error("SUPABASE_URL / SUPABASE_ANON_KEY を設定してください。");
   }
 
-  return createClient(url, serviceRoleKey, {
+  return createClient(url, apiKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
