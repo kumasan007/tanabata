@@ -14,8 +14,7 @@ export async function GET(request: Request) {
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("company_master")
-      .select("id, primary_company, secondary_company, sort_order")
-      .order("sort_order", { ascending: true })
+      .select("primary_company, secondary_company")
       .order("primary_company", { ascending: true })
       .order("secondary_company", { ascending: true, nullsFirst: true });
 
@@ -55,7 +54,6 @@ export async function POST(request: Request) {
       {
         primary_company: primaryCompany,
         secondary_company: secondaryCompany || null,
-        sort_order: Date.now(),
       },
     ]);
 
@@ -79,13 +77,20 @@ export async function DELETE(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
-    if (!id) {
+    const primaryCompany = searchParams.get("primaryCompany")?.trim();
+    const secondaryCompany = searchParams.get("secondaryCompany")?.trim() ?? "";
+
+    if (!primaryCompany) {
       return NextResponse.json({ error: "削除対象が指定されていません。" }, { status: 400 });
     }
 
     const supabase = createServiceClient();
-    const { error } = await supabase.from("company_master").delete().eq("id", id);
+    const { error } = await supabase
+      .from("company_master")
+      .delete()
+      .eq("primary_company", primaryCompany)
+      .eq("secondary_company", secondaryCompany || null);
+
     if (error) throw error;
 
     return NextResponse.json({ ok: true });

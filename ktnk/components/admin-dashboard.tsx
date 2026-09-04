@@ -30,7 +30,7 @@ export function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("work");
   const [sortBy, setSortBy] = useState<SortBy>("dateAsc");
   const [result, setResult] = useState<AdminResult>({ rows: [], count: 0 });
-  const [companyRows, setCompanyRows] = useState<Array<{ id: string; primary_company: string; secondary_company: string | null; sort_order: number }>>([]);
+  const [companyRows, setCompanyRows] = useState<Array<{ primary_company: string; secondary_company: string | null }>>([]);
   const [newPrimaryCompany, setNewPrimaryCompany] = useState("");
   const [newSecondaryCompany, setNewSecondaryCompany] = useState("");
   const [message, setMessage] = useState("");
@@ -175,9 +175,12 @@ export function AdminDashboard() {
       .catch(() => null);
   }
 
-  async function removeCompanyMaster(id: string) {
+  async function removeCompanyMaster(primaryCompany: string, secondaryCompany: string | null) {
     if (!authenticated) return;
-    const response = await fetch(`/api/admin/company-master?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    const params = new URLSearchParams({ primaryCompany });
+    if (secondaryCompany) params.set("secondaryCompany", secondaryCompany);
+
+    const response = await fetch(`/api/admin/company-master?${params.toString()}`, { method: "DELETE" });
     const body = await response.json();
 
     if (!response.ok) {
@@ -447,12 +450,12 @@ export function AdminDashboard() {
                       </td>
                     </tr>
                   ) : (
-                    companyRows.map((row) => (
-                      <tr key={row.id} className="border-t border-border bg-white">
+                    companyRows.map((row, index) => (
+                      <tr key={`${row.primary_company}-${row.secondary_company ?? ""}-${index}`} className="border-t border-border bg-white">
                         <td className="px-3 py-2">{row.primary_company}</td>
                         <td className="px-3 py-2">{row.secondary_company ?? "-"}</td>
                         <td className="px-3 py-2 text-center">
-                          <button className="btn btn-secondary h-8 px-3 text-xs" type="button" onClick={() => void removeCompanyMaster(row.id)}>
+                          <button className="btn btn-secondary h-8 px-3 text-xs" type="button" onClick={() => void removeCompanyMaster(row.primary_company, row.secondary_company)}>
                             削除
                           </button>
                         </td>

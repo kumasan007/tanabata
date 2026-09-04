@@ -1,19 +1,12 @@
 create extension if not exists pgcrypto;
 
 create table if not exists public.company_master (
-  id uuid primary key default gen_random_uuid(),
   primary_company text not null,
-  secondary_company text,
-  sort_order integer not null default 0,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  secondary_company text
 );
 
 create index if not exists company_master_primary_idx
   on public.company_master (primary_company);
-
-create index if not exists company_master_sort_idx
-  on public.company_master (sort_order);
 
 create table if not exists public.schedule_groups (
   id uuid primary key default gen_random_uuid(),
@@ -93,22 +86,6 @@ with check (true);
 
 -- This app uses Next.js API routes as the entry point.
 -- The database policy is intentionally simple because the worker form is public.
-
-create or replace function public.set_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
-
-drop trigger if exists company_master_set_updated_at on public.company_master;
-create trigger company_master_set_updated_at
-before update on public.company_master
-for each row
-execute function public.set_updated_at();
 
 drop trigger if exists schedule_groups_set_updated_at on public.schedule_groups;
 create trigger schedule_groups_set_updated_at
