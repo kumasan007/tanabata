@@ -30,6 +30,9 @@ export function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("work");
   const [sortBy, setSortBy] = useState<SortBy>("dateAsc");
   const [result, setResult] = useState<AdminResult>({ rows: [], count: 0 });
+  const [companyRows, setCompanyRows] = useState<Array<{ id: string; primary_company: string; secondary_company: string | null; sort_order: number }>>([]);
+  const [newPrimaryCompany, setNewPrimaryCompany] = useState("");
+  const [newSecondaryCompany, setNewSecondaryCompany] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -75,6 +78,8 @@ export function AdminDashboard() {
       .then((response) => response.json())
       .then((body) => setCompanyMaster(body))
       .catch(() => setCompanyMaster(null));
+
+    void refreshCompanyMaster();
   }, [authenticated]);
 
   useEffect(() => {
@@ -126,6 +131,65 @@ export function AdminDashboard() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function refreshCompanyMaster() {
+    const response = await fetch("/api/admin/company-master", { headers: { accept: "application/json" } });
+    const body = await response.json();
+    if (!response.ok) {
+      setCompanyRows([]);
+      return;
+    }
+    setCompanyRows(body.rows ?? []);
+  }
+
+  async function addCompanyMaster() {
+    if (!authenticated) return;
+    const primaryCompany = newPrimaryCompany.trim();
+    const secondaryCompany = newSecondaryCompany.trim();
+
+    if (!primaryCompany) {
+      setMessage("一次会社を入力してください。");
+      return;
+    }
+
+    setMessage("");
+
+    const response = await fetch("/api/admin/company-master", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ primaryCompany, secondaryCompany }),
+    });
+    const body = await response.json();
+
+    if (!response.ok) {
+      setMessage(body.error ?? "会社マスタの追加に失敗しました。");
+      return;
+    }
+
+    setNewPrimaryCompany("");
+    setNewSecondaryCompany("");
+    await refreshCompanyMaster();
+    fetch("/api/companies?force=1")
+      .then((res) => res.ok ? res.json() : null)
+      .catch(() => null);
+  }
+
+  async function removeCompanyMaster(id: string) {
+    if (!authenticated) return;
+    const response = await fetch(`/api/admin/company-master?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    const body = await response.json();
+
+    if (!response.ok) {
+      setMessage(body.error ?? "会社マスタの削除に失敗しました。");
+      return;
+    }
+
+    setMessage("");
+    await refreshCompanyMaster();
+    fetch("/api/companies?force=1")
+      .then((res) => res.ok ? res.json() : null)
+      .catch(() => null);
   }
 
   async function download(format: "xlsx" | "csv") {
@@ -342,6 +406,61 @@ export function AdminDashboard() {
                 <Download size={18} aria-hidden="true" />
                 Excel
               </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel -mx-4 grid gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border">
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-bold text-slate-950">会社マスタ編集</h2>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+            <label className="field">
+              <span className="label">一次会社</span>
+              <input className="input" value={newPrimaryCompany} onChange={(event) => setNewPrimaryCompany(event.target.value)} placeholder="例: 山田設備" />
+            </label>
+            <label className="field">
+              <span className="label">二次会社</span>
+              <input className="input" value={newSecondaryCompany} onChange={(event) => setNewSecondaryCompany(event.target.value)} placeholder="例: 山田配管工業（空欄可）" />
+            </label>
+            <button className="btn btn-primary mt-6" type="button" onClick={() => void addCompanyMaster()}>
+              追加
+            </button>
+          </div>
+
+          <div className="overflow-hidden rounded-md border border-border bg-slate-50">
+            <div className="max-h-64 overflow-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead className="bg-slate-200 text-slate-800">
+                  <tr>
+                    <th className="px-3 py-2 text-left">一次会社</th>
+                    <th className="px-3 py-2 text-left">二次会社</th>
+                    <th className="px-3 py-2 text-center">削除</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {companyRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-3 py-4 text-center text-slate-500">
+                        会社マスタがありません
+                      </td>
+                    </tr>
+                  ) : (
+                    companyRows.map((row) => (
+                      <tr key={row.id} className="border-t border-border bg-white">
+                        <td className="px-3 py-2">{row.primary_company}</td>
+                        <td className="px-3 py-2">{row.secondary_company ?? "-"}</td>
+                        <td className="px-3 py-2 text-center">
+                          <button className="btn btn-secondary h-8 px-3 text-xs" type="button" onClick={() => void removeCompanyMaster(row.id)}>
+                            削除
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </section>

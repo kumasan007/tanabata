@@ -1,1 +1,1 @@
-https://ktnk-0a.vercel.app/
+https://ktnk-one.vercel.app/

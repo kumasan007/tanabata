@@ -30,6 +30,9 @@ npm run dev
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 BOX_COMPANY_CSV_URL=
+MICROSOFT_TENANT_ID=
+MICROSOFT_CLIENT_ID=
+MICROSOFT_CLIENT_SECRET=
 ADMIN_PASSWORD=
 ADMIN_SESSION_SECRET=
 EXCEL_FEED_TOKEN=
@@ -96,13 +99,13 @@ npm install
 
 職人側フォームは `/`、管理画面は `/admin` です。
 
-## 会社CSV
+## 会社マスタ
 
-Boxに置く会社CSVは `company-master-template.csv` を元に作成します。
+会社名リストは CSV でも Excel でも読み込めます。Boxに置く会社CSVは `company-master-template.csv` を元に作成し、Excelの場合は同じ列名の `一次会社` / `二次会社` を持つシートを使います。
 
-`BOX_COMPANY_CSV_URL` には、BoxのCSV共有ファイルURL、またはCSV本体を直接ダウンロードできる公開URLを設定してください。Box共有ファイルURLを使う場合は、フォルダではなくCSVファイル単体を共有し、ダウンロードを許可してください。
+`BOX_COMPANY_CSV_URL` には、Boxの共有ファイルURL、またはCSV/Excelの本体を直接ダウンロードできる公開URLを設定してください。Box共有ファイルURLを使う場合は、フォルダではなくファイル単体を共有し、ダウンロードを許可してください。
 
-列:
+CSVの列:
 
 ```text
 一次会社,二次会社
