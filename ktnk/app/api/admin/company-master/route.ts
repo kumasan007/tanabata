@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const supabase = createServerClient();
     const { data, error } = await supabase
       .from("company_master")
-      .select("id, primary_company, secondary_company, sort_order")
+      .select("id, primary_company, secondary_company, primary_trade_roles, sort_order")
       .order("sort_order", { ascending: true })
       .order("primary_company", { ascending: true })
       .order("secondary_company", { ascending: true, nullsFirst: true });
@@ -42,9 +42,11 @@ export async function POST(request: Request) {
       primaryCompany?: string;
       secondaryCompany?: string;
       secondaryCompanies?: string[];
+      primaryTradeRoles?: string[];
     };
 
     const primaryCompany = (body.primaryCompany ?? "").trim();
+    const primaryTradeRoles = normalizeTradeRoles(body.primaryTradeRoles);
     const requestedSecondaries = Array.isArray(body.secondaryCompanies)
       ? body.secondaryCompanies
       : [body.secondaryCompany ?? ""];
@@ -84,11 +86,21 @@ export async function POST(request: Request) {
       newValues.map((secondaryCompany, index) => ({
         primary_company: primaryCompany,
         secondary_company: secondaryCompany,
+        primary_trade_roles: primaryTradeRoles,
         sort_order: startOrder + index,
       })),
     );
 
     if (error) throw error;
+
+    if (primaryTradeRoles.length > 0 && (existingRows ?? []).length > 0) {
+      const { error: roleUpdateError } = await supabase
+        .from("company_master")
+        .update({ primary_trade_roles: primaryTradeRoles })
+        .eq("primary_company", primaryCompany);
+      if (roleUpdateError) throw roleUpdateError;
+    }
+
     return NextResponse.json({
       ok: true,
       addedCount: newValues.length,
@@ -115,6 +127,7 @@ export async function PATCH(request: Request) {
       id?: string;
       primaryCompany?: string;
       secondaryCompany?: string;
+      primaryTradeRoles?: string[];
       orderedIds?: string[];
     };
     const supabase = createServerClient();
@@ -147,6 +160,7 @@ export async function PATCH(request: Request) {
     const id = body.id?.trim();
     const primaryCompany = body.primaryCompany?.trim() ?? "";
     const secondaryCompany = body.secondaryCompany?.trim() ?? "";
+    const primaryTradeRoles = Array.isArray(body.primaryTradeRoles) ? normalizeTradeRoles(body.primaryTradeRoles) : null;
 
     if (!id || !primaryCompany) {
       return NextResponse.json({ error: "更新対象と一次会社を入力してください。" }, { status: 400 });
@@ -169,13 +183,25 @@ export async function PATCH(request: Request) {
 
     const { data, error } = await supabase
       .from("company_master")
-      .update({ primary_company: primaryCompany, secondary_company: secondaryCompany || null })
+      .update({
+        primary_company: primaryCompany,
+        secondary_company: secondaryCompany || null,
+        ...(primaryTradeRoles === null ? {} : { primary_trade_roles: primaryTradeRoles }),
+      })
       .eq("id", id)
       .select("id")
       .maybeSingle();
     if (error) throw error;
     if (!data) {
       return NextResponse.json({ error: "更新対象の会社マスタが見つかりません。" }, { status: 404 });
+    }
+
+    if (primaryTradeRoles !== null) {
+      const { error: roleUpdateError } = await supabase
+        .from("company_master")
+        .update({ primary_trade_roles: primaryTradeRoles })
+        .eq("primary_company", primaryCompany);
+      if (roleUpdateError) throw roleUpdateError;
     }
 
     return NextResponse.json({ ok: true });
@@ -185,6 +211,17 @@ export async function PATCH(request: Request) {
       { status: 500 },
     );
   }
+}
+
+function normalizeTradeRoles(values: unknown) {
+  if (!Array.isArray(values)) return [];
+  return [
+    ...new Set(
+      values
+        .map((value) => String(value).trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 export async function DELETE(request: Request) {

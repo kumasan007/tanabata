@@ -12,11 +12,13 @@ create table if not exists public.company_master (
   id uuid primary key default gen_random_uuid(),
   primary_company text not null,
   secondary_company text,
+  primary_trade_roles text[] not null default '{}'::text[],
   sort_order integer not null default 0
 );
 
 alter table public.company_master
   add column if not exists id uuid default gen_random_uuid(),
+  add column if not exists primary_trade_roles text[] not null default '{}'::text[],
   add column if not exists sort_order integer not null default 0;
 
 update public.company_master

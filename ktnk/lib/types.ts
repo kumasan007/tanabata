@@ -4,6 +4,7 @@ export type SubcompanyKind = "current" | "next_visit";
 export type CompanyMaster = {
   primaryCompanies: string[];
   secondariesByPrimary: Record<string, string[]>;
+  primaryTradeRolesByPrimary: Record<string, string[]>;
   loadedAt: string;
 };
 
@@ -11,6 +12,7 @@ export type CompanyMasterRow = {
   id: string;
   primary_company: string;
   secondary_company: string | null;
+  primary_trade_roles: string[] | null;
   sort_order: number;
 };
 

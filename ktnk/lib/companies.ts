@@ -4,6 +4,7 @@ import type { CompanyMaster } from "@/lib/types";
 type CompanyMasterRecord = {
   primary_company: string;
   secondary_company: string | null;
+  primary_trade_roles: string[] | null;
   sort_order: number;
 };
 
@@ -11,7 +12,7 @@ export async function getCompanyMaster(): Promise<CompanyMaster> {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("company_master")
-    .select("primary_company, secondary_company, sort_order")
+    .select("primary_company, secondary_company, primary_trade_roles, sort_order")
     .order("sort_order", { ascending: true })
     .order("primary_company", { ascending: true })
     .order("secondary_company", { ascending: true, nullsFirst: true });
@@ -26,6 +27,7 @@ export async function getCompanyMaster(): Promise<CompanyMaster> {
 function buildCompanyMaster(rows: CompanyMasterRecord[]): CompanyMaster {
   const primaryCompanies: string[] = [];
   const secondariesByPrimary: Record<string, string[]> = {};
+  const primaryTradeRolesByPrimary: Record<string, string[]> = {};
 
   for (const row of rows) {
     const primary = row.primary_company.trim();
@@ -36,6 +38,7 @@ function buildCompanyMaster(rows: CompanyMasterRecord[]): CompanyMaster {
     if (!Object.prototype.hasOwnProperty.call(secondariesByPrimary, primary)) {
       primaryCompanies.push(primary);
       secondariesByPrimary[primary] = [];
+      primaryTradeRolesByPrimary[primary] = row.primary_trade_roles ?? [];
     }
 
     if (secondary && !secondariesByPrimary[primary].includes(secondary)) {
@@ -46,6 +49,7 @@ function buildCompanyMaster(rows: CompanyMasterRecord[]): CompanyMaster {
   return {
     primaryCompanies,
     secondariesByPrimary,
+    primaryTradeRolesByPrimary,
     loadedAt: new Date().toISOString(),
   };
 }

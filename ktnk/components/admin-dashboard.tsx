@@ -1,6 +1,24 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Building2, CalendarDays, Download, LogIn, LogOut, Pencil, Save, Search, Trash2, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Building2,
+  CalendarDays,
+  CalendarRange,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  List,
+  LogIn,
+  LogOut,
+  Pencil,
+  Save,
+  Search,
+  Table2,
+  Trash2,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { CompanyMaster, CompanyMasterRow, ExportRow } from "@/lib/types";
@@ -11,13 +29,28 @@ type AdminResult = {
   count: number;
 };
 
-type RangePreset = "today" | "tomorrow" | "week";
+type RangePreset = "today" | "tomorrow" | "week" | "custom";
 type StatusFilter = "work" | "no_work";
 type SortBy = "dateAsc" | "dateDesc" | "primaryAsc";
 type AdminTab = "schedules" | "companies";
+type ScheduleView = "summary" | "calendar";
 type CompanyGroup = {
   primaryCompany: string;
   rows: CompanyMasterRow[];
+};
+type ScheduleSummaryRow = {
+  key: string;
+  workDate: string;
+  primaryCompany: string;
+  primaryCount: number | "";
+  totalCount: number;
+  workArea: string;
+  workContent: string;
+  nextVisitDate: string;
+  details: Array<{
+    company: string;
+    count: number | "";
+  }>;
 };
 
 const tomorrow = () => toDateString(addDays(new Date(), 1));
@@ -35,14 +68,19 @@ export function AdminDashboard() {
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("work");
   const [sortBy, setSortBy] = useState<SortBy>("dateAsc");
+  const [scheduleView, setScheduleView] = useState<ScheduleView>("summary");
+  const [expandedScheduleKeys, setExpandedScheduleKeys] = useState<string[]>([]);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
   const [result, setResult] = useState<AdminResult>({ rows: [], count: 0 });
   const [companyRows, setCompanyRows] = useState<CompanyMasterRow[]>([]);
   const [newPrimaryCompany, setNewPrimaryCompany] = useState("");
   const [newSecondaryCompanies, setNewSecondaryCompanies] = useState("");
+  const [newPrimaryRoles, setNewPrimaryRoles] = useState("");
   const [selectedPrimaryCompany, setSelectedPrimaryCompany] = useState<string | null>(null);
   const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
   const [editPrimaryCompany, setEditPrimaryCompany] = useState("");
   const [editSecondaryCompany, setEditSecondaryCompany] = useState("");
+  const [editPrimaryRoles, setEditPrimaryRoles] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [companyLoading, setCompanyLoading] = useState(false);
@@ -60,6 +98,12 @@ export function AdminDashboard() {
       return compareText(a.workDate, b.workDate) || compareText(a.primaryCompany, b.primaryCompany);
     });
   }, [result.rows, sortBy, statusFilter]);
+
+  const summaryRows = useMemo(() => buildScheduleSummaryRows(visibleRows, statusFilter), [visibleRows, statusFilter]);
+  const calendarDays = useMemo(() => buildCalendarDays(dateFrom, dateTo), [dateFrom, dateTo]);
+  const calendarRowsByDate = useMemo(() => groupSummaryRowsByDate(summaryRows), [summaryRows]);
+  const selectedCalendarRows = selectedCalendarDate ? calendarRowsByDate[selectedCalendarDate] ?? [] : [];
+  const totalWorkerCount = summaryRows.reduce((sum, row) => sum + row.totalCount, 0);
 
   const primaryCompanyOptions = companyMaster?.primaryCompanies ?? [];
 
@@ -106,6 +150,11 @@ export function AdminDashboard() {
     if (!authenticated) return;
     void search();
   }, [authenticated]);
+
+  useEffect(() => {
+    setExpandedScheduleKeys([]);
+    setSelectedCalendarDate(null);
+  }, [dateFrom, dateTo, primaryCompany, secondaryCompany, statusFilter]);
 
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -173,6 +222,7 @@ export function AdminDashboard() {
   async function addCompanyMaster() {
     if (!authenticated) return;
     const primaryCompany = newPrimaryCompany.trim();
+    const primaryTradeRoles = parseRoleText(newPrimaryRoles);
     const secondaryCompanies = [
       ...new Set(
         newSecondaryCompanies
@@ -194,13 +244,14 @@ export function AdminDashboard() {
       const response = await fetch("/api/admin/company-master", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ primaryCompany, secondaryCompanies }),
+        body: JSON.stringify({ primaryCompany, secondaryCompanies, primaryTradeRoles }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "会社マスタの追加に失敗しました。");
 
       setNewPrimaryCompany("");
       setNewSecondaryCompanies("");
+      setNewPrimaryRoles("");
       await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "会社マスタの追加に失敗しました。");
@@ -234,6 +285,7 @@ export function AdminDashboard() {
     setEditingCompanyId(row.id);
     setEditPrimaryCompany(row.primary_company);
     setEditSecondaryCompany(row.secondary_company ?? "");
+    setEditPrimaryRoles(formatRoles(row.primary_trade_roles));
     setMessage("");
   }
 
@@ -253,6 +305,7 @@ export function AdminDashboard() {
           id: editingCompanyId,
           primaryCompany: editPrimaryCompany,
           secondaryCompany: editSecondaryCompany,
+          primaryTradeRoles: parseRoleText(editPrimaryRoles),
         }),
       });
       const body = await response.json();
@@ -337,8 +390,16 @@ export function AdminDashboard() {
     return params.toString();
   }
 
+  function toggleScheduleRow(key: string) {
+    setExpandedScheduleKeys((current) =>
+      current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
+    );
+  }
+
   function setQuickRange(preset: RangePreset) {
     setRangePreset(preset);
+
+    if (preset === "custom") return;
 
     const base = new Date();
     if (preset === "tomorrow") {
@@ -486,10 +547,31 @@ export function AdminDashboard() {
             >
               今週
             </button>
+            <button
+              className={rangePreset === "custom" ? "btn btn-primary h-10" : "btn btn-secondary h-10"}
+              type="button"
+              onClick={() => setQuickRange("custom")}
+            >
+              <CalendarRange size={18} aria-hidden="true" />
+              任意期間
+            </button>
             <div className="flex min-h-10 items-center text-sm font-semibold text-slate-600">
               {dateFrom === dateTo ? dateFrom : `${dateFrom} - ${dateTo}`}
             </div>
           </div>
+
+          {rangePreset === "custom" ? (
+            <div className="grid gap-3 sm:grid-cols-2 md:max-w-xl">
+              <label className="field">
+                <span className="label">開始日</span>
+                <input className="input" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+              </label>
+              <label className="field">
+                <span className="label">終了日</span>
+                <input className="input" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+              </label>
+            </div>
+          ) : null}
 
           <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
             <label className="field">
@@ -530,7 +612,7 @@ export function AdminDashboard() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
             <div className="text-sm font-semibold text-slate-700">
-              予定 {result.count} 件 / 表示 {visibleRows.length} 行 / 出力 {result.rows.length} 行
+              予定 {result.count} 件 / 集約 {summaryRows.length} 件 / 合計 {totalWorkerCount} 人 / 出力 {result.rows.length} 行
             </div>
             <div className="flex flex-wrap gap-2">
               <button className="btn btn-secondary" type="button" onClick={() => download("csv")} disabled={loading}>
@@ -554,10 +636,14 @@ export function AdminDashboard() {
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">一次 {companyGroups.length}社 / 登録 {companyRows.length}件</span>
           </div>
 
-          <div className="grid items-start gap-3 md:grid-cols-[1fr_1.5fr_auto]">
+          <div className="grid items-start gap-3 md:grid-cols-[1fr_1fr_1.5fr_auto]">
             <label className="field">
               <span className="label">一次会社</span>
               <input className="input" value={newPrimaryCompany} onChange={(event) => setNewPrimaryCompany(event.target.value)} placeholder="例: 山田設備" />
+            </label>
+            <label className="field">
+              <span className="label">職種</span>
+              <input className="input" value={newPrimaryRoles} onChange={(event) => setNewPrimaryRoles(event.target.value)} placeholder="例: 多能工、配管工" />
             </label>
             <label className="field">
               <span className="label">二次会社（複数入力可・1行に1社）</span>
@@ -586,10 +672,11 @@ export function AdminDashboard() {
 
           <div className="overflow-hidden rounded-md border border-border bg-slate-50">
             <div className="max-h-[36rem] overflow-auto">
-              <table className="min-w-[680px] w-full border-collapse text-sm">
+              <table className="min-w-[900px] w-full border-collapse text-sm">
                 <thead className="bg-slate-200 text-slate-800">
                   <tr>
                     <th className="px-3 py-2 text-left">一次会社</th>
+                    <th className="px-3 py-2 text-left">職種</th>
                     <th className="px-3 py-2 text-left">二次会社</th>
                     <th className="w-40 px-3 py-2 text-center">操作</th>
                   </tr>
@@ -597,7 +684,7 @@ export function AdminDashboard() {
                 <tbody>
                   {companyRows.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-3 py-8 text-center text-slate-500">
+                      <td colSpan={4} className="px-3 py-8 text-center text-slate-500">
                         協力会社がまだ登録されていません
                       </td>
                     </tr>
@@ -611,6 +698,13 @@ export function AdminDashboard() {
                             <button className={`rounded px-2 py-1 text-left font-semibold ${selectedPrimaryCompany === row.primary_company ? "bg-sky-700 text-white" : "text-sky-800 hover:bg-sky-100"}`} type="button" onClick={() => setSelectedPrimaryCompany(row.primary_company)}>
                               {row.primary_company}
                             </button>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {editingCompanyId === row.id ? (
+                            <input className="input h-10" value={editPrimaryRoles} onChange={(event) => setEditPrimaryRoles(event.target.value)} aria-label="職種を編集" placeholder="例: 多能工、配管工" />
+                          ) : (
+                            <RoleBadges roles={row.primary_trade_roles ?? []} />
                           )}
                         </td>
                         <td className="px-3 py-2">
@@ -651,7 +745,7 @@ export function AdminDashboard() {
         </section>
 
         <section className={`${activeTab === "schedules" ? "grid" : "hidden"} panel -mx-4 gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border`}>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
             <label className="field">
               <span className="label">表示する予定</span>
               <select className="input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
@@ -667,18 +761,36 @@ export function AdminDashboard() {
                 <option value="primaryAsc">一次会社順</option>
               </select>
             </label>
+            <div className="field">
+              <span className="label">表示形式</span>
+              <div className="inline-flex h-12 overflow-hidden rounded-md border border-border bg-white">
+                <button
+                  className={`inline-flex items-center gap-2 px-4 text-sm font-semibold ${scheduleView === "summary" ? "bg-slate-800 text-white" : "text-slate-700 hover:bg-slate-50"}`}
+                  type="button"
+                  onClick={() => setScheduleView("summary")}
+                >
+                  <List size={17} aria-hidden="true" />
+                  一覧
+                </button>
+                <button
+                  className={`inline-flex items-center gap-2 border-l border-border px-4 text-sm font-semibold ${scheduleView === "calendar" ? "bg-slate-800 text-white" : "text-slate-700 hover:bg-slate-50"}`}
+                  type="button"
+                  onClick={() => setScheduleView("calendar")}
+                >
+                  <Table2 size={17} aria-hidden="true" />
+                  カレンダー
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 
-        <section className={`${activeTab === "schedules" ? "block" : "hidden"} overflow-hidden rounded-md border border-border bg-white`}>
+        <section className={`${activeTab === "schedules" && scheduleView === "summary" ? "block" : "hidden"} overflow-hidden rounded-md border border-border bg-white`}>
           <div className="overflow-x-auto">
-            <table className={statusFilter === "work" ? "min-w-[840px] w-full border-collapse text-sm" : "min-w-[960px] w-full border-collapse text-sm"}>
+            <table className="min-w-[900px] w-full border-collapse text-sm">
               <thead className="bg-slate-800 text-white">
                 <tr>
-                  {(statusFilter === "work"
-                    ? ["作業日", "一次会社", "一次人数", "二次会社", "二次人数", "作業エリア", "作業内容"]
-                    : ["作業日", "一次会社", "来場予定日", "一次人数", "二次会社", "二次人数", "作業エリア", "作業内容"]
-                  ).map((header) => (
+                  {["作業日", "一次会社", "合計人数", "作業エリア", "作業内容", "内訳"].map((header) => (
                     <th key={header} className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                       {header}
                     </th>
@@ -686,42 +798,134 @@ export function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.length === 0 ? (
+                {summaryRows.length === 0 ? (
                   <tr>
-                    <td colSpan={statusFilter === "work" ? 7 : 8} className="px-3 py-8 text-center text-slate-500">
+                    <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
                       データなし
                     </td>
                   </tr>
                 ) : (
-                  visibleRows.map((row, index) => (
-                    <tr key={`${row.workDate}-${row.primaryCompany}-${row.secondaryCompany}-${row.nextSecondaryCompany}-${index}`} className="border-t border-border">
-                      {statusFilter === "work" ? (
-                        <>
-                          <td className="whitespace-nowrap px-3 py-2">{row.workDate}</td>
-                          <td className="whitespace-nowrap px-3 py-2">{row.primaryCompany}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-right">{row.primaryCount}</td>
-                          <td className="whitespace-nowrap px-3 py-2">{row.secondaryCompany}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-right">{row.secondaryCount}</td>
-                          <td className="whitespace-nowrap px-3 py-2">{row.workArea}</td>
-                          <td className="min-w-48 px-3 py-2">{row.workContent}</td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="whitespace-nowrap px-3 py-2">{row.workDate}</td>
-                          <td className="whitespace-nowrap px-3 py-2">{row.primaryCompany}</td>
-                          <td className="whitespace-nowrap px-3 py-2">{row.nextVisitDate}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-right">{row.nextPrimaryCount}</td>
-                          <td className="whitespace-nowrap px-3 py-2">{row.nextSecondaryCompany}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-right">{row.nextSecondaryCount}</td>
-                          <td className="whitespace-nowrap px-3 py-2">{row.nextWorkArea}</td>
-                          <td className="min-w-48 px-3 py-2">{row.nextWorkContent}</td>
-                        </>
-                      )}
-                    </tr>
-                  ))
+                  summaryRows.map((row) => {
+                    const expanded = expandedScheduleKeys.includes(row.key);
+                    return (
+                      <tr key={row.key} className="border-t border-border align-top">
+                        <td className="whitespace-nowrap px-3 py-3">
+                          <button className="inline-flex items-center gap-1 font-semibold text-sky-800 hover:text-sky-950" type="button" onClick={() => toggleScheduleRow(row.key)}>
+                            {expanded ? <ChevronDown size={17} aria-hidden="true" /> : <ChevronRight size={17} aria-hidden="true" />}
+                            {row.workDate}
+                          </button>
+                          {statusFilter === "no_work" && row.nextVisitDate ? <div className="mt-1 text-xs text-slate-500">来場予定 {row.nextVisitDate}</div> : null}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 font-semibold">{row.primaryCompany}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right font-bold">{row.totalCount}</td>
+                        <td className="whitespace-nowrap px-3 py-3">{row.workArea}</td>
+                        <td className="min-w-56 px-3 py-3">{row.workContent}</td>
+                        <td className="px-3 py-3">
+                          <button className="btn btn-secondary h-9 px-3" type="button" onClick={() => toggleScheduleRow(row.key)}>
+                            {expanded ? "閉じる" : `${row.details.length}件`}
+                          </button>
+                          {expanded ? (
+                            <div className="mt-2 grid gap-1 rounded-md bg-slate-50 p-2 text-xs text-slate-700">
+                              <div className="flex justify-between gap-3">
+                                <span>一次会社</span>
+                                <span className="font-semibold">{row.primaryCount === "" ? "-" : `${row.primaryCount}人`}</span>
+                              </div>
+                              {row.details.length > 0 ? (
+                                row.details.map((detail, index) => (
+                                  <div key={`${detail.company}-${index}`} className="flex justify-between gap-3 border-t border-border pt-1">
+                                    <span>{detail.company || "二次会社なし"}</span>
+                                    <span className="font-semibold">{detail.count === "" ? "-" : `${detail.count}人`}</span>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="border-t border-border pt-1 text-slate-500">二次会社なし</div>
+                              )}
+                            </div>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <section className={`${activeTab === "schedules" && scheduleView === "calendar" ? "grid" : "hidden"} gap-3`}>
+          <div className="overflow-hidden rounded-md border border-border bg-white">
+            <div className="grid grid-cols-7 border-b border-border bg-slate-800 text-center text-xs font-bold text-white">
+              {["月", "火", "水", "木", "金", "土", "日"].map((day) => (
+                <div key={day} className="px-2 py-2">
+                  {day}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 bg-border gap-px">
+              {calendarDays.leadingBlanks.map((blank) => (
+                <div key={blank} className="min-h-28 bg-slate-50" />
+              ))}
+              {calendarDays.days.map((day) => {
+                const rows = calendarRowsByDate[day] ?? [];
+                const dayTotal = rows.reduce((sum, row) => sum + row.totalCount, 0);
+                const selected = selectedCalendarDate === day;
+                return (
+                  <button
+                    key={day}
+                    className={`min-h-32 bg-white p-2 text-left align-top hover:bg-sky-50 ${selected ? "ring-2 ring-inset ring-sky-700" : ""}`}
+                    type="button"
+                    onClick={() => setSelectedCalendarDate(day)}
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-1">
+                      <span className="text-sm font-bold text-slate-900">{day.slice(5)}</span>
+                      {dayTotal > 0 ? <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] font-bold text-sky-900">{dayTotal}人</span> : null}
+                    </div>
+                    <div className="grid gap-1">
+                      {rows.slice(0, 3).map((row) => (
+                        <div key={row.key} className="rounded border border-slate-200 bg-slate-50 px-1.5 py-1">
+                          <div className="truncate text-xs font-bold text-slate-900">{row.primaryCompany}</div>
+                          <div className="truncate text-[11px] text-slate-600">
+                            {row.totalCount}人 / {row.workArea || "-"}
+                          </div>
+                          <div className="truncate text-[11px] text-slate-500">{row.workContent || "-"}</div>
+                        </div>
+                      ))}
+                      {rows.length > 3 ? <div className="text-[11px] font-semibold text-slate-500">他 {rows.length - 3} 件</div> : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-md border border-border bg-white p-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-bold text-slate-950">{selectedCalendarDate ?? "日付を選択"} の詳細</h2>
+              {selectedCalendarDate ? <span className="text-sm font-semibold text-slate-600">{selectedCalendarRows.length} 件</span> : null}
+            </div>
+            {!selectedCalendarDate ? (
+              <p className="text-sm text-slate-500">カレンダーの日付をクリックすると詳細を表示します。</p>
+            ) : selectedCalendarRows.length === 0 ? (
+              <p className="text-sm text-slate-500">この日の予定はありません。</p>
+            ) : (
+              <div className="grid gap-2 md:grid-cols-2">
+                {selectedCalendarRows.map((row) => (
+                  <button key={row.key} className="rounded-md border border-border p-3 text-left hover:bg-slate-50" type="button" onClick={() => {
+                    setScheduleView("summary");
+                    setExpandedScheduleKeys((current) => (current.includes(row.key) ? current : [...current, row.key]));
+                  }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-bold text-slate-950">{row.primaryCompany}</div>
+                        <div className="mt-1 truncate text-sm text-slate-600">{row.workArea || "-"}</div>
+                      </div>
+                      <div className="shrink-0 rounded bg-slate-100 px-2 py-1 text-sm font-bold text-slate-900">{row.totalCount}人</div>
+                    </div>
+                    <div className="mt-2 line-clamp-2 text-sm text-slate-700">{row.workContent || "-"}</div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </div>
@@ -741,4 +945,114 @@ function decodeFilename(disposition: string) {
   } catch {
     return null;
   }
+}
+
+function RoleBadges({ roles }: { roles: string[] }) {
+  if (roles.length === 0) return <span className="text-slate-400">-</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {roles.map((role) => (
+        <span key={role} className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+          {role}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function buildScheduleSummaryRows(rows: ExportRow[], statusFilter: StatusFilter): ScheduleSummaryRow[] {
+  const groups = new Map<string, ScheduleSummaryRow>();
+
+  for (const row of rows) {
+    const workArea = statusFilter === "work" ? row.workArea : row.nextWorkArea;
+    const workContent = statusFilter === "work" ? row.workContent : row.nextWorkContent;
+    const primaryCount = statusFilter === "work" ? row.primaryCount : row.nextPrimaryCount;
+    const secondaryCompany = statusFilter === "work" ? row.secondaryCompany : row.nextSecondaryCompany;
+    const secondaryCount = statusFilter === "work" ? row.secondaryCount : row.nextSecondaryCount;
+    const key = [
+      statusFilter,
+      row.workDate,
+      row.primaryCompany,
+      row.nextVisitDate,
+      workArea,
+      workContent,
+    ].join("::");
+
+    if (!groups.has(key)) {
+      const primaryCountNumber = numberValue(primaryCount);
+      groups.set(key, {
+        key,
+        workDate: row.workDate,
+        primaryCompany: row.primaryCompany,
+        primaryCount,
+        totalCount: primaryCountNumber,
+        workArea,
+        workContent,
+        nextVisitDate: row.nextVisitDate,
+        details: [],
+      });
+    }
+
+    const group = groups.get(key);
+    if (!group) continue;
+
+    if (secondaryCompany || secondaryCount !== "") {
+      group.details.push({ company: secondaryCompany, count: secondaryCount });
+      group.totalCount += numberValue(secondaryCount);
+    }
+  }
+
+  return [...groups.values()];
+}
+
+function groupSummaryRowsByDate(rows: ScheduleSummaryRow[]) {
+  return rows.reduce<Record<string, ScheduleSummaryRow[]>>((acc, row) => {
+    acc[row.workDate] ??= [];
+    acc[row.workDate].push(row);
+    return acc;
+  }, {});
+}
+
+function buildCalendarDays(dateFrom: string, dateTo: string) {
+  const start = localDate(dateFrom);
+  const end = localDate(dateTo);
+  if (!start || !end || start > end) return { days: [], leadingBlanks: [] as string[] };
+
+  const days: string[] = [];
+  let cursor = start;
+  while (cursor <= end) {
+    days.push(toDateString(cursor));
+    cursor = addDays(cursor, 1);
+  }
+
+  const mondayBasedIndex = (start.getDay() + 6) % 7;
+  return {
+    days,
+    leadingBlanks: Array.from({ length: mondayBasedIndex }, (_, index) => `blank-${index}`),
+  };
+}
+
+function localDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function numberValue(value: number | "") {
+  return typeof value === "number" ? value : 0;
+}
+
+function parseRoleText(value: string) {
+  return [
+    ...new Set(
+      value
+        .split(/\r?\n|,|、/)
+        .map((role) => role.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+function formatRoles(roles: string[] | null | undefined) {
+  return (roles ?? []).join("、");
 }
