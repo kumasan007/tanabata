@@ -24,11 +24,13 @@ const emptyForm = (): ScheduleSubmitInput => {
     status: "work",
     primaryCompany: "",
     primaryCount: 0,
+    usePreviousPrimaryCount: false,
     currentSubcompanies: [],
     workArea: "",
     workContent: "",
     nextVisitDate: null,
     nextPrimaryCount: 0,
+    usePreviousNextPrimaryCount: false,
     nextSubcompanies: [],
     nextWorkArea: "",
     nextWorkContent: "",
@@ -135,7 +137,7 @@ export function ScheduleForm() {
   function validateBeforeSubmit() {
     const activeSubcompanies = form.status === "work" ? form.currentSubcompanies : form.nextSubcompanies;
     const hasSecondaryCountWithoutCompany = activeSubcompanies.some(
-      (row) => (row.workerCount ?? 0) > 0 && row.secondaryCompany.trim() === "",
+      (row) => ((row.workerCount ?? 0) > 0 || row.usePreviousWorkerCount) && row.secondaryCompany.trim() === "",
     );
 
     if (hasSecondaryCountWithoutCompany) {
@@ -143,24 +145,24 @@ export function ScheduleForm() {
     }
 
     if (form.status !== "work") {
-      if (form.nextPrimaryCount === null) {
+      if (!form.usePreviousNextPrimaryCount && form.nextPrimaryCount === null) {
         return "一次会社人数を入力してください。";
       }
 
-      const nextSecondaryTotal = form.nextSubcompanies.reduce((sum, row) => sum + (row.workerCount ?? 0), 0);
-      if (form.nextPrimaryCount === 0 && nextSecondaryTotal < 1) {
+      const nextSecondaryTotal = form.nextSubcompanies.reduce((sum, row) => sum + (row.usePreviousWorkerCount ? 1 : row.workerCount ?? 0), 0);
+      if (!form.usePreviousNextPrimaryCount && form.nextPrimaryCount === 0 && nextSecondaryTotal < 1) {
         return "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。";
       }
 
       return "";
     }
 
-    if (form.primaryCount === null) {
+    if (!form.usePreviousPrimaryCount && form.primaryCount === null) {
       return "一次会社人数を入力してください。";
     }
 
-    const secondaryTotal = form.currentSubcompanies.reduce((sum, row) => sum + (row.workerCount ?? 0), 0);
-    if (form.primaryCount === 0 && secondaryTotal < 1) {
+    const secondaryTotal = form.currentSubcompanies.reduce((sum, row) => sum + (row.usePreviousWorkerCount ? 1 : row.workerCount ?? 0), 0);
+    if (!form.usePreviousPrimaryCount && form.primaryCount === 0 && secondaryTotal < 1) {
       return "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。";
     }
 
@@ -245,8 +247,9 @@ export function ScheduleForm() {
                 一次会社
                 <span className="required-mark" aria-label="必須">*</span>
               </span>
-              <select
+              <input
                 className="input"
+                list="primary-companies"
                 value={form.primaryCompany}
                 onChange={(event) =>
                   patch({
@@ -255,15 +258,16 @@ export function ScheduleForm() {
                     nextSubcompanies: [],
                   })
                 }
+                placeholder="入力または選択"
                 required
-              >
-                <option value="">選択</option>
+              />
+              <datalist id="primary-companies">
                 {companyMaster?.primaryCompanies.map((company) => (
                   <option key={company} value={company}>
                     {company}
                   </option>
                 ))}
-              </select>
+              </datalist>
             </label>
 
             {form.status === "work" ? (
@@ -271,7 +275,16 @@ export function ScheduleForm() {
                 <span className="label">
                   人数
                   <span className="required-mark" aria-label="必須">*</span>
-                </span>
+                  </span>
+                <label className="flex min-h-9 items-center gap-2 rounded-md bg-slate-100 px-2 text-xs font-semibold text-slate-800">
+                  <input
+                    className="h-4 w-4 accent-sky-700"
+                    type="checkbox"
+                    checked={Boolean(form.usePreviousPrimaryCount)}
+                    onChange={(event) => patch({ usePreviousPrimaryCount: event.target.checked })}
+                  />
+                  前回と同じ
+                </label>
                 <input
                   className="input px-2 text-right"
                   inputMode="numeric"
@@ -279,6 +292,7 @@ export function ScheduleForm() {
                   type="number"
                   value={form.primaryCount ?? 0}
                   onChange={(event) => patch({ primaryCount: event.target.value === "" ? 0 : Number(event.target.value) })}
+                  disabled={Boolean(form.usePreviousPrimaryCount)}
                   required
                 />
               </label>
@@ -382,6 +396,15 @@ export function ScheduleForm() {
                     一次会社人数
                     <span className="required-mark" aria-label="必須">*</span>
                   </span>
+                  <label className="flex min-h-9 items-center gap-2 rounded-md bg-slate-100 px-2 text-xs font-semibold text-slate-800">
+                    <input
+                      className="h-4 w-4 accent-sky-700"
+                      type="checkbox"
+                      checked={Boolean(form.usePreviousNextPrimaryCount)}
+                      onChange={(event) => patch({ usePreviousNextPrimaryCount: event.target.checked })}
+                    />
+                    前回と同じ
+                  </label>
                   <input
                     className="input"
                     inputMode="numeric"
@@ -391,6 +414,7 @@ export function ScheduleForm() {
                     onChange={(event) =>
                       patch({ nextPrimaryCount: event.target.value === "" ? 0 : Number(event.target.value) })
                     }
+                    disabled={Boolean(form.usePreviousNextPrimaryCount)}
                     required
                   />
                 </label>

@@ -11,6 +11,8 @@ import type {
 import { addDays, expandDateRange, formatDateTime, parseLocalDate, todayInTokyoString, toDateString } from "@/lib/utils";
 import type { ScheduleSubmitParsed } from "@/lib/validation";
 
+const SAME_AS_PREVIOUS = "前回と同じ";
+
 export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
   const dates = expandDateRange(input.startDate, input.endDate, input.excludeWeekends);
   if (dates.length === 0) {
@@ -21,6 +23,10 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
   const savedIds: string[] = [];
 
   for (const workDate of dates) {
+    const previous = usesPreviousValue(input)
+      ? await getPreviousScheduleForCopy(input.primaryCompany, input.status, workDate)
+      : null;
+
     const { data: existing, error: findError } = await supabase
       .from("schedule_groups")
       .select("id")
@@ -44,13 +50,13 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
       work_date: workDate,
       status: input.status,
       primary_company: input.primaryCompany,
-      primary_count: input.status === "work" ? input.primaryCount : null,
-      work_area: input.status === "work" ? emptyToNull(input.workArea) : null,
-      work_content: input.status === "work" ? emptyToNull(input.workContent) : null,
+      primary_count: input.status === "work" ? resolvePreviousNumber(input.primaryCount, input.usePreviousPrimaryCount, previous?.primary_count, "一次会社人数") : null,
+      work_area: input.status === "work" ? emptyToNull(resolvePreviousText(input.workArea, previous?.work_area, "作業エリア")) : null,
+      work_content: input.status === "work" ? emptyToNull(resolvePreviousText(input.workContent, previous?.work_content, "作業内容")) : null,
       next_visit_date: input.status === "no_work" ? input.nextVisitDate : null,
-      next_primary_count: input.status === "no_work" ? input.nextPrimaryCount : null,
-      next_work_area: input.status === "no_work" ? emptyToNull(input.nextWorkArea) : null,
-      next_work_content: input.status === "no_work" ? emptyToNull(input.nextWorkContent) : null,
+      next_primary_count: input.status === "no_work" ? resolvePreviousNumber(input.nextPrimaryCount, input.usePreviousNextPrimaryCount, previous?.next_primary_count, "一次会社人数") : null,
+      next_work_area: input.status === "no_work" ? emptyToNull(resolvePreviousText(input.nextWorkArea, previous?.next_work_area, "作業エリア")) : null,
+      next_work_content: input.status === "no_work" ? emptyToNull(resolvePreviousText(input.nextWorkContent, previous?.next_work_content, "作業内容")) : null,
     };
 
     const { data: group, error: upsertError } = await supabase
@@ -63,7 +69,10 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
 
     const subcompanyRows = buildSubcompanyRows(
       group.id,
-      input.status === "work" ? input.currentSubcompanies : input.nextSubcompanies,
+      resolveSubcompanyInputs(
+        input.status === "work" ? input.currentSubcompanies : input.nextSubcompanies,
+        previous?.subcompanies.filter((sub) => sub.kind === (input.status === "work" ? "current" : "next_visit")) ?? [],
+      ),
       input.status === "work" ? "current" : "next_visit",
     );
 
@@ -132,6 +141,27 @@ export async function getSchedules(params: ScheduleSearchParams) {
   }
 
   return schedules;
+}
+
+async function getPreviousScheduleForCopy(primaryCompany: string, status: ScheduleStatus, workDate: string) {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from("schedule_groups")
+    .select(
+      `
+      *,
+      schedule_subcompanies (*)
+    `,
+    )
+    .eq("primary_company", primaryCompany)
+    .eq("status", status)
+    .lt("work_date", workDate)
+    .order("work_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throwSupabaseError(error, "前回の予定取得に失敗しました。");
+  return data ? normalizeScheduleRow(data) : null;
 }
 
 export async function getScheduleSummariesByPrimaryCompany(primaryCompany: string): Promise<ScheduleSummary[]> {
@@ -251,6 +281,60 @@ function buildSubcompanyRows(scheduleGroupId: string, subcompanies: SubcompanyIn
       sort_order: index,
     }))
     .filter((row) => row.secondary_company || (row.worker_count !== null && row.worker_count > 0));
+}
+
+function resolveSubcompanyInputs(
+  subcompanies: SubcompanyInput[],
+  previousSubcompanies: ScheduleSubcompanyRow[],
+): SubcompanyInput[] {
+  return subcompanies.map((subcompany) => {
+    if (!subcompany.usePreviousWorkerCount) return subcompany;
+
+    const secondaryCompany = subcompany.secondaryCompany.trim();
+    const previous = previousSubcompanies.find((row) => (row.secondary_company ?? "") === secondaryCompany);
+    if (!previous) {
+      throw new Error(`${secondaryCompany}の前回人数が見つかりません。`);
+    }
+
+    return {
+      ...subcompany,
+      workerCount: previous.worker_count,
+    };
+  });
+}
+
+function usesPreviousValue(input: ScheduleSubmitParsed) {
+  return (
+    input.workArea === SAME_AS_PREVIOUS ||
+    input.workContent === SAME_AS_PREVIOUS ||
+    input.nextWorkArea === SAME_AS_PREVIOUS ||
+    input.nextWorkContent === SAME_AS_PREVIOUS ||
+    input.usePreviousPrimaryCount ||
+    input.usePreviousNextPrimaryCount ||
+    input.currentSubcompanies.some((subcompany) => subcompany.usePreviousWorkerCount) ||
+    input.nextSubcompanies.some((subcompany) => subcompany.usePreviousWorkerCount)
+  );
+}
+
+function resolvePreviousText(value: string, previousValue: string | null | undefined, fieldName: string) {
+  if (value !== SAME_AS_PREVIOUS) return value;
+  if (previousValue === null || previousValue === undefined || previousValue.trim() === "") {
+    throw new Error(`前回の${fieldName}が見つかりません。`);
+  }
+  return previousValue;
+}
+
+function resolvePreviousNumber(
+  value: number | null,
+  usePrevious: boolean | undefined,
+  previousValue: number | null | undefined,
+  fieldName: string,
+) {
+  if (!usePrevious) return value;
+  if (previousValue === null || previousValue === undefined) {
+    throw new Error(`前回の${fieldName}が見つかりません。`);
+  }
+  return previousValue;
 }
 
 function normalizeScheduleRow(

@@ -33,27 +33,38 @@ export function SubcompanyFields({ title, rows, options, onChange }: Props) {
         <div className="grid gap-3">
           {rows.map((row, index) => (
             <div key={index} className="compact-panel grid gap-3 p-3">
-              <div className="grid grid-cols-[1fr_88px_40px] gap-2">
+              <div className="grid grid-cols-[1fr_112px_40px] gap-2">
                 <label className="field">
                   <span className="label">二次会社</span>
-                  <select
+                  <input
                     className="input"
+                    list={`secondary-companies-${title}-${index}`}
                     value={row.secondaryCompany}
                     onChange={(event) => updateRow(index, { secondaryCompany: event.target.value })}
-                  >
-                    <option value="">選択</option>
+                    placeholder="入力または選択"
+                  />
+                  <datalist id={`secondary-companies-${title}-${index}`}>
                     {options.map((option) => (
                       <option key={option} value={option}>
                         {option}
                       </option>
                     ))}
-                  </select>
+                  </datalist>
                 </label>
                 <label className="field">
                   <span className="label">
                     人数
                     <span className="required-mark" aria-label="必須">*</span>
                   </span>
+                  <label className="flex min-h-9 items-center gap-1 rounded-md bg-slate-100 px-2 text-[11px] font-semibold text-slate-800">
+                    <input
+                      className="h-4 w-4 accent-sky-700"
+                      type="checkbox"
+                      checked={Boolean(row.usePreviousWorkerCount)}
+                      onChange={(event) => updateRow(index, { usePreviousWorkerCount: event.target.checked })}
+                    />
+                    前回
+                  </label>
                   <input
                     className="input px-2 text-right"
                     inputMode="numeric"
@@ -65,6 +76,7 @@ export function SubcompanyFields({ title, rows, options, onChange }: Props) {
                         workerCount: event.target.value === "" ? 0 : Number(event.target.value),
                       })
                     }
+                    disabled={Boolean(row.usePreviousWorkerCount)}
                     required
                   />
                 </label>
@@ -86,7 +98,7 @@ export function SubcompanyFields({ title, rows, options, onChange }: Props) {
       <button
         type="button"
         className="btn btn-secondary h-14 w-full border-2 border-dashed text-base"
-        onClick={() => onChange([...rows, { secondaryCompany: "", workerCount: 0 }])}
+        onClick={() => onChange([...rows, { secondaryCompany: "", workerCount: 0, usePreviousWorkerCount: false }])}
       >
         <Plus size={22} aria-hidden="true" />
         {title}を追加する

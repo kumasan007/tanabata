@@ -19,6 +19,7 @@ export type CompanyMasterRow = {
 export type SubcompanyInput = {
   secondaryCompany: string;
   workerCount: number | null;
+  usePreviousWorkerCount?: boolean;
 };
 
 export type ScheduleSubmitInput = {
@@ -28,11 +29,13 @@ export type ScheduleSubmitInput = {
   status: ScheduleStatus;
   primaryCompany: string;
   primaryCount: number | null;
+  usePreviousPrimaryCount?: boolean;
   currentSubcompanies: SubcompanyInput[];
   workArea: string;
   workContent: string;
   nextVisitDate: string | null;
   nextPrimaryCount: number | null;
+  usePreviousNextPrimaryCount?: boolean;
   nextSubcompanies: SubcompanyInput[];
   nextWorkArea: string;
   nextWorkContent: string;

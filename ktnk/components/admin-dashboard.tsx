@@ -808,9 +808,28 @@ export function AdminDashboard() {
                   summaryRows.map((row) => {
                     const expanded = expandedScheduleKeys.includes(row.key);
                     return (
-                      <tr key={row.key} className="border-t border-border align-top">
+                      <tr
+                        key={row.key}
+                        className="cursor-pointer border-t border-border align-top hover:bg-slate-50"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => toggleScheduleRow(row.key)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            toggleScheduleRow(row.key);
+                          }
+                        }}
+                      >
                         <td className="whitespace-nowrap px-3 py-3">
-                          <button className="inline-flex items-center gap-1 font-semibold text-sky-800 hover:text-sky-950" type="button" onClick={() => toggleScheduleRow(row.key)}>
+                          <button
+                            className="inline-flex items-center gap-1 font-semibold text-sky-800 hover:text-sky-950"
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleScheduleRow(row.key);
+                            }}
+                          >
                             {expanded ? <ChevronDown size={17} aria-hidden="true" /> : <ChevronRight size={17} aria-hidden="true" />}
                             {row.workDate}
                           </button>
@@ -821,20 +840,27 @@ export function AdminDashboard() {
                         <td className="whitespace-nowrap px-3 py-3">{row.workArea}</td>
                         <td className="min-w-56 px-3 py-3">{row.workContent}</td>
                         <td className="px-3 py-3">
-                          <button className="btn btn-secondary h-9 px-3" type="button" onClick={() => toggleScheduleRow(row.key)}>
+                          <button
+                            className="btn btn-secondary h-9 px-3"
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleScheduleRow(row.key);
+                            }}
+                          >
                             {expanded ? "閉じる" : `${row.details.length}件`}
                           </button>
                           {expanded ? (
-                            <div className="mt-2 grid gap-1 rounded-md bg-slate-50 p-2 text-xs text-slate-700">
-                              <div className="flex justify-between gap-3">
-                                <span>一次会社</span>
-                                <span className="font-semibold">{row.primaryCount === "" ? "-" : `${row.primaryCount}人`}</span>
+                            <div className="mt-2 grid gap-1 rounded-md bg-slate-50 p-2 text-sm text-slate-700">
+                              <div className="grid grid-cols-[1fr_72px] items-center gap-3 rounded bg-white px-2 py-2">
+                                <span className="font-semibold text-slate-950">{row.primaryCompany}</span>
+                                <span className="text-right font-bold">{row.primaryCount === "" ? "-" : `${row.primaryCount}人`}</span>
                               </div>
                               {row.details.length > 0 ? (
                                 row.details.map((detail, index) => (
-                                  <div key={`${detail.company}-${index}`} className="flex justify-between gap-3 border-t border-border pt-1">
+                                  <div key={`${detail.company}-${index}`} className="grid grid-cols-[1fr_72px] items-center gap-3 border-t border-border px-2 py-2">
                                     <span>{detail.company || "二次会社なし"}</span>
-                                    <span className="font-semibold">{detail.count === "" ? "-" : `${detail.count}人`}</span>
+                                    <span className="text-right font-semibold">{detail.count === "" ? "-" : `${detail.count}人`}</span>
                                   </div>
                                 ))
                               ) : (
