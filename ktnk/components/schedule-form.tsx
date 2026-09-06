@@ -164,6 +164,80 @@ function WorkField({
   );
 }
 
+function SchedulePreview({
+  schedule,
+  primaryCompany,
+}: {
+  schedule: PreviousSchedule;
+  primaryCompany: string;
+}) {
+  const companies = [
+    {
+      secondaryCompany: primaryCompany,
+      workerCount: schedule.primaryCount ?? 0,
+    },
+    ...schedule.subcompanies.filter((row) => row.secondaryCompany),
+  ];
+  return (
+    <div className="overflow-hidden rounded-xl border border-border text-base">
+      <table className="w-full table-fixed text-left">
+        <caption className="sr-only">会社ごとの人数</caption>
+        <thead className="bg-slate-50 text-sm text-slate-500">
+          <tr>
+            <th scope="col" className="px-4 py-2 font-medium">
+              会社名
+            </th>
+            <th scope="col" className="w-20 px-4 py-2 text-right font-medium">
+              人数
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {companies.map((row, index) => (
+            <tr key={index}>
+              <td className="break-words px-4 py-2.5">
+                {row.secondaryCompany}
+              </td>
+              <td className="px-4 py-2.5 text-right font-semibold tabular-nums">
+                {row.workerCount ?? 0}
+                <span className="ml-1 text-sm font-normal text-slate-500">
+                  人
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="border-t border-border bg-slate-50">
+          <tr>
+            <th scope="row" className="px-4 py-2.5 text-sm font-medium">
+              合計
+            </th>
+            <td className="px-4 py-2.5 text-right font-bold tabular-nums">
+              {companies.reduce(
+                (total, row) => total + (row.workerCount ?? 0),
+                0,
+              )}
+              <span className="ml-1 text-sm font-normal text-slate-500">
+                人
+              </span>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+      <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-3 border-t border-border px-4 py-3 text-sm leading-6">
+        <dt className="text-slate-500">作業エリア</dt>
+        <dd className="whitespace-pre-wrap break-words">
+          {schedule.workArea || "未入力"}
+        </dd>
+        <dt className="text-slate-500">作業内容</dt>
+        <dd className="whitespace-pre-wrap break-words">
+          {schedule.workContent || "未入力"}
+        </dd>
+      </dl>
+    </div>
+  );
+}
+
 export function ScheduleForm({
   initialDate,
   today,
@@ -171,119 +245,91 @@ export function ScheduleForm({
   initialDate: string;
   today: string;
 }) {
-  const [form, setForm] = useState<ScheduleSubmitInput>(() =>
-    emptyForm(initialDate),
-  );
+  const [form, setForm] = useState<ScheduleSubmitInput>(() => emptyForm(""));
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(
     null,
   );
   const [companyError, setCompanyError] = useState("");
   const [companyRetry, setCompanyRetry] = useState(0);
-  const [summaries, setSummaries] = useState<ScheduleSummary[]>([]);
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [summaryError, setSummaryError] = useState("");
-  const [summaryVersion, setSummaryVersion] = useState(0);
+  const [choosingCompany, setChoosingCompany] = useState(true);
+  const [choice, setChoice] = useState<"same" | "new" | null>(null);
+  const [statusChosen, setStatusChosen] = useState(false);
+  const [customDate, setCustomDate] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [copyVersion, setCopyVersion] = useState(0);
+  const [sourceRetry, setSourceRetry] = useState(0);
+  const [sourceResult, setSourceResult] = useState<{
+    company: string;
+    source: PreviousSchedule | null;
+    today: string;
+    error: string;
+  } | null>(null);
+  const [previousResult, setPreviousResult] = useState<{
+    key: string;
+    previous: PreviousSchedule | null;
+    error: string;
+  } | null>(null);
+  const [previousRetry, setPreviousRetry] = useState(0);
   const [submitState, setSubmitState] = useState<SubmitState>({
     status: "idle",
   });
-  const [statusChosen, setStatusChosen] = useState(false);
-  const [detailsShown, setDetailsShown] = useState(false);
-  const [stepError, setStepError] = useState("");
-  const [copyNotice, setCopyNotice] = useState("");
-  const [copyVersion, setCopyVersion] = useState(0);
-  const contentRef = useRef<HTMLElement>(null);
-  const companyStep = statusChosen && Boolean(parseLocalDate(form.startDate));
-  const contentStep =
-    companyStep && Boolean(form.primaryCompany) && detailsShown;
-  useEffect(() => {
-    if (contentStep) contentRef.current?.focus({ preventScroll: false });
-  }, [contentStep]);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaries, setSummaries] = useState<ScheduleSummary[] | null>(null);
+  const [summaryError, setSummaryError] = useState("");
+  const [summaryVersion, setSummaryVersion] = useState(0);
   const submitting = useRef(false);
   const resultRef = useRef<HTMLDivElement>(null);
-  const isWork = form.status === "work";
-  const secondaryOptions = useMemo(
-    () => companyMaster?.secondariesByPrimary[form.primaryCompany] ?? [],
-    [companyMaster, form.primaryCompany],
+  const source =
+    sourceResult?.company === form.primaryCompany ? sourceResult.source : null;
+  const sourceLoading = Boolean(
+    form.primaryCompany && sourceResult?.company !== form.primaryCompany,
   );
+  const sourceError =
+    sourceResult?.company === form.primaryCompany ? sourceResult.error : "";
+  const sourceIsToday = source?.workDate === sourceResult?.today;
+  const validDate = Boolean(parseLocalDate(form.startDate));
+  const ready = Boolean(
+    form.primaryCompany &&
+    choice &&
+    validDate &&
+    statusChosen &&
+    !choosingCompany,
+  );
+  const showEditor = ready && (choice === "new" || editing);
+  const isWork = form.status === "work";
+  const busy = submitState.status === "submitting";
   const activeRows = isWork ? form.currentSubcompanies : form.nextSubcompanies;
   const activeCount = isWork ? form.primaryCount : form.nextPrimaryCount;
   const totalCount =
     (activeCount ?? 0) +
     activeRows.reduce((sum, row) => sum + (row.workerCount ?? 0), 0);
+  const area = isWork ? form.workArea : form.nextWorkArea;
+  const content = isWork ? form.workContent : form.nextWorkContent;
+  const secondaryOptions = useMemo(
+    () => companyMaster?.secondariesByPrimary[form.primaryCompany] ?? [],
+    [companyMaster, form.primaryCompany],
+  );
   const previousKey = JSON.stringify([
     form.primaryCompany,
     form.status,
     form.startDate,
   ]);
-  const [previousResult, setPreviousResult] = useState<{
-    key: string;
-    data: PreviousSchedule | null;
-    today: PreviousSchedule | null;
-    error: string;
-  } | null>(null);
-  const [previousRetry, setPreviousRetry] = useState(0);
   const previous =
-    previousResult?.key === previousKey ? previousResult.data : null;
-  const todaySchedule =
-    previousResult?.key === previousKey ? previousResult.today : null;
-  const canCopyToday = isWork && form.startDate > today;
-  const previousLoading = Boolean(
-    form.primaryCompany &&
-    parseLocalDate(form.startDate) &&
-    previousResult?.key !== previousKey,
-  );
+    previousResult?.key === previousKey ? previousResult.previous : null;
   const previousCounts = new Map(
     previous?.subcompanies.map((row) => [
       row.secondaryCompany,
       row.workerCount,
     ]) ?? [],
   );
-
-  useEffect(() => {
-    if (!form.primaryCompany || !parseLocalDate(form.startDate)) return;
-    const controller = new AbortController();
-    setPreviousResult(null);
-    const params = new URLSearchParams({
-      primaryCompany: form.primaryCompany,
-      status: form.status,
-      workDate: form.startDate,
-      includeToday: "1",
-    });
-    fetch("/api/schedules/previous?" + params, {
-      signal: controller.signal,
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        const body = await response.json();
-        if (!response.ok) throw new Error("前回の予定を取得できませんでした。");
-        if (!controller.signal.aborted)
-          setPreviousResult({
-            key: previousKey,
-            data: body.previous,
-            today: body.today ?? null,
-            error: "",
-          });
-      })
-      .catch(() => {
-        if (!controller.signal.aborted)
-          setPreviousResult({
-            key: previousKey,
-            data: null,
-            today: null,
-            error: "前回の予定を取得できませんでした。",
-          });
-      });
-    return () => controller.abort();
-  }, [
-    form.primaryCompany,
-    form.status,
-    form.startDate,
-    previousKey,
-    previousRetry,
-  ]);
-  const area = isWork ? form.workArea : form.nextWorkArea;
-  const content = isWork ? form.workContent : form.nextWorkContent;
-  const busy = submitState.status === "submitting";
+  const dateOptions = [
+    { label: "今日", date: today },
+    { label: "明日", date: initialDate },
+    {
+      label: "明後日",
+      date: toDateString(addDays(parseLocalDate(initialDate)!, 1)),
+    },
+  ];
 
   useEffect(() => {
     const controller = new AbortController();
@@ -293,75 +339,124 @@ export function ScheduleForm({
         const body = await response.json();
         if (!response.ok)
           throw new Error(body.error ?? "会社一覧を取得できませんでした。");
-        setCompanyMaster(body);
+        if (!controller.signal.aborted) setCompanyMaster(body);
       })
-      .catch((error) => {
+      .catch(() => {
         if (!controller.signal.aborted)
-          setCompanyError(
-            error instanceof Error
-              ? error.message
-              : "会社一覧を取得できませんでした。",
-          );
+          setCompanyError("会社一覧を取得できませんでした。");
       });
     return () => controller.abort();
   }, [companyRetry]);
 
   useEffect(() => {
+    if (!form.primaryCompany) return;
     const controller = new AbortController();
-    setSummaries([]);
-    setSummaryError("");
-    if (!form.primaryCompany.trim()) {
-      setSummaryLoading(false);
-      return () => controller.abort();
-    }
-    setSummaryLoading(true);
-    const timer = window.setTimeout(async () => {
-      try {
-        const response = await fetch(
-          `/api/schedules/summary?primaryCompany=${encodeURIComponent(form.primaryCompany)}`,
-          { signal: controller.signal },
-        );
+    setSourceResult(null);
+    fetch(
+      "/api/schedules/copy-source?" +
+        new URLSearchParams({ primaryCompany: form.primaryCompany }),
+      { signal: controller.signal, cache: "no-store" },
+    )
+      .then(async (response) => {
         const body = await response.json();
-        if (!response.ok)
-          throw new Error("記入済みの予定を取得できませんでした。");
+        if (!response.ok) throw new Error();
+        if (!controller.signal.aborted)
+          setSourceResult({
+            company: form.primaryCompany,
+            source: body.source,
+            today: body.today,
+            error: "",
+          });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setSourceResult({
+            company: form.primaryCompany,
+            source: null,
+            today: "",
+            error: "前回の作業を取得できませんでした。",
+          });
+      });
+    return () => controller.abort();
+  }, [form.primaryCompany, sourceRetry]);
+
+  useEffect(() => {
+    if (!showEditor) return;
+    const controller = new AbortController();
+    setPreviousResult(null);
+    fetch(
+      "/api/schedules/previous?" +
+        new URLSearchParams({
+          primaryCompany: form.primaryCompany,
+          status: form.status,
+          workDate: form.startDate,
+        }),
+      { signal: controller.signal, cache: "no-store" },
+    )
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error();
+        if (!controller.signal.aborted)
+          setPreviousResult({
+            key: previousKey,
+            previous: body.previous,
+            error: "",
+          });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setPreviousResult({
+            key: previousKey,
+            previous: null,
+            error: "前回の値を取得できませんでした。",
+          });
+      });
+    return () => controller.abort();
+  }, [
+    showEditor,
+    form.primaryCompany,
+    form.status,
+    form.startDate,
+    previousKey,
+    previousRetry,
+  ]);
+
+  useEffect(() => {
+    if (!summaryOpen || !form.primaryCompany) return;
+    const controller = new AbortController();
+    setSummaries(null);
+    setSummaryError("");
+    fetch(
+      "/api/schedules/summary?" +
+        new URLSearchParams({ primaryCompany: form.primaryCompany }),
+      { signal: controller.signal },
+    )
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error();
         if (!controller.signal.aborted) setSummaries(body.summaries ?? []);
-      } catch {
+      })
+      .catch(() => {
         if (!controller.signal.aborted)
           setSummaryError("記入済みの予定を取得できませんでした。");
-      } finally {
-        if (!controller.signal.aborted) setSummaryLoading(false);
-      }
-    }, 350);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [form.primaryCompany, summaryVersion]);
+      });
+    return () => controller.abort();
+  }, [summaryOpen, form.primaryCompany, summaryVersion]);
 
   useEffect(() => {
     if (submitState.status === "success" || submitState.status === "error")
-      resultRef.current?.focus({
-        preventScroll: submitState.status === "error",
-      });
+      resultRef.current?.focus();
   }, [submitState]);
 
   function patch(value: Partial<ScheduleSubmitInput>) {
-    setStepError("");
-    setCopyNotice("");
-    if (
-      value.primaryCompany !== undefined &&
-      value.primaryCompany !== form.primaryCompany
-    )
-      setDetailsShown(false);
+    setSubmitState({ status: "idle" });
     setForm((current) => {
-      const contextChanged =
-        (value.primaryCompany !== undefined &&
-          value.primaryCompany !== current.primaryCompany) ||
+      const next = { ...current, ...value };
+      if (
         (value.startDate !== undefined &&
           value.startDate !== current.startDate) ||
-        (value.status !== undefined && value.status !== current.status);
-      const next = { ...current, ...value };
-      if (contextChanged) {
+        (value.status !== undefined && value.status !== current.status)
+      ) {
         next.usePreviousPrimaryCount = false;
         next.usePreviousNextPrimaryCount = false;
         next.currentSubcompanies = next.currentSubcompanies.map((row) => ({
@@ -375,38 +470,80 @@ export function ScheduleForm({
       }
       return next;
     });
-    if (submitState.status === "error" || submitState.status === "success")
+  }
+  function selectCompany(company: string) {
+    if (company !== form.primaryCompany) {
+      setForm({ ...emptyForm(""), primaryCompany: company });
+      setChoice(null);
+      setStatusChosen(false);
+      setEditing(false);
+      setCustomDate(false);
+      setSummaryOpen(false);
+      setCopyVersion((v) => v + 1);
       setSubmitState({ status: "idle" });
+    }
+    setChoosingCompany(false);
   }
-
-  function validateBeforeSubmit() {
-    if (!form.primaryCompany.trim()) return "一次会社を選択してください。";
-    if (
-      activeRows.some(
-        (row) =>
-          ((row.workerCount ?? 0) > 0 || row.usePreviousWorkerCount) &&
-          !row.secondaryCompany.trim(),
-      )
-    )
-      return "二次会社人数を入力する場合は、二次会社を選択してください。";
-    if (isWork && activeCount === null)
-      return "一次会社人数を入力してください。";
-    if (isWork && totalCount < 1)
-      return "作業ありの場合は、一次会社・二次会社の合計人数を1人以上にしてください。";
-    return "";
+  function answer(same: boolean) {
+    if (same && !source) return;
+    const next = {
+      ...emptyForm(form.startDate),
+      primaryCompany: form.primaryCompany,
+    };
+    if (same && source) {
+      next.primaryCount = source.primaryCount ?? 0;
+      next.workArea = source.workArea ?? "";
+      next.workContent = source.workContent ?? "";
+      next.currentSubcompanies = source.subcompanies
+        .filter((row) => row.secondaryCompany)
+        .map((row) => ({
+          ...row,
+          workerCount: row.workerCount ?? 0,
+          usePreviousWorkerCount: false,
+        }));
+    }
+    setForm(next);
+    setChoice(same ? "same" : "new");
+    setStatusChosen(same);
+    setEditing(false);
+    setCopyVersion((v) => v + 1);
+    setSubmitState({ status: "idle" });
   }
-
+  function selectDate(date: string) {
+    patch({ startDate: date, endDate: date });
+  }
+  function resetForm() {
+    setForm(emptyForm(""));
+    setChoice(null);
+    setStatusChosen(false);
+    setChoosingCompany(true);
+    setEditing(false);
+    setCustomDate(false);
+    setSummaryOpen(false);
+    setSubmitState({ status: "idle" });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting.current || !companyStep) return;
-    const message = validateBeforeSubmit();
-    if (message) {
-      if (contentStep) setSubmitState({ status: "error", message });
-      else setStepError(message);
+    if (!ready || submitting.current) return;
+    if (isWork && totalCount < 1) {
+      setEditing(true);
+      setSubmitState({
+        status: "error",
+        message: "作業ありの場合は、合計人数を1人以上にしてください。",
+      });
       return;
     }
-    if (!contentStep) {
-      setDetailsShown(true);
+    if (
+      activeRows.some(
+        (row) => !row.secondaryCompany.trim() && (row.workerCount ?? 0) > 0,
+      )
+    ) {
+      setEditing(true);
+      setSubmitState({
+        status: "error",
+        message: "二次会社を選択してください。",
+      });
       return;
     }
     submitting.current = true;
@@ -438,13 +575,14 @@ export function ScheduleForm({
       const body = await response.json();
       if (!response.ok)
         throw new Error(
-          body.error ?? "送信に失敗しました。時間をおいて再度お試しください。",
+          body.error ?? "送信に失敗しました。再度お試しください。",
         );
       setSubmitState({
         status: "success",
         dates: body.dates ?? [form.startDate],
       });
-      setSummaryVersion((value) => value + 1);
+      setSummaryVersion((v) => v + 1);
+      setSourceRetry((v) => v + 1);
     } catch (error) {
       setSubmitState({
         status: "error",
@@ -456,50 +594,8 @@ export function ScheduleForm({
     }
   }
 
-  function copyToday() {
-    if (!todaySchedule || !canCopyToday) return;
-    patch({
-      primaryCount: todaySchedule.primaryCount ?? 0,
-      usePreviousPrimaryCount: false,
-      currentSubcompanies: todaySchedule.subcompanies
-        .filter((row) => row.secondaryCompany)
-        .map((row) => ({
-          ...row,
-          workerCount: row.workerCount ?? 0,
-          usePreviousWorkerCount: false,
-        })),
-      workArea: todaySchedule.workArea ?? "",
-      workContent: todaySchedule.workContent ?? "",
-    });
-    setCopyVersion((value) => value + 1);
-    setCopyNotice(
-      "本日の内容をコピーしました。変更があれば、そのまま編集してください。",
-    );
-    setDetailsShown(true);
-  }
-
-  function continueAnotherDate() {
-    const date = toDateString(
-      addDays(
-        parseLocalDate(form.startDate) ?? parseLocalDate(initialDate)!,
-        1,
-      ),
-    );
-    patch({ startDate: date, endDate: date });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  const dateOptions = [
-    { label: "今日", date: today },
-    { label: "明日", date: initialDate },
-    {
-      label: "明後日",
-      date: toDateString(addDays(parseLocalDate(initialDate)!, 1)),
-    },
-  ];
-
   return (
-    <div className="simple-schedule min-h-screen pb-36 sm:pb-8">
+    <div className="simple-schedule min-h-screen pb-32 sm:pb-8">
       <header className="border-b border-border bg-white">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-4">
           <h1 className="text-xl font-bold text-slate-900">作業予定入力</h1>
@@ -508,131 +604,25 @@ export function ScheduleForm({
           </Link>
         </div>
       </header>
-      <main className="mx-auto max-w-2xl px-3 py-4 sm:px-4">
-        <form
-          id="schedule-form"
-          onSubmit={handleSubmit}
-          className="min-w-0 space-y-5"
-        >
-          {companyError ? (
-            <div
-              role="alert"
-              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800"
-            >
-              <span>{companyError}</span>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setCompanyRetry((value) => value + 1)}
-              >
-                再読み込み
-              </button>
-            </div>
-          ) : null}
-          <fieldset disabled={busy} className="grid min-w-0 gap-5">
+      <main className="mx-auto max-w-2xl px-3 py-5 sm:px-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <fieldset disabled={busy} className="grid min-w-0 gap-4">
             <legend className="sr-only">作業予定の入力</legend>
-            <section className="panel p-4 sm:p-5">
-              <SectionHeading title="作業日と予定" />
-              {!statusChosen && (
-                <p className="mb-4 text-base text-slate-600">
-                  日付を確認して、作業あり・なしを選んでください。
-                </p>
-              )}
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                <label className="field">
-                  <span className="label">
-                    作業日<span className="required-mark">*</span>
-                  </span>
-                  <input
-                    className="input"
-                    type="date"
-                    value={form.startDate}
-                    onChange={(event) =>
-                      patch({
-                        startDate: event.target.value,
-                        endDate: event.target.value,
-                      })
-                    }
-                    required
-                  />
-                </label>
-                <div
-                  className="grid grid-cols-3 gap-1 rounded-md bg-slate-100 p-1"
-                  aria-label="日付をすばやく選択"
-                >
-                  {dateOptions.map((option) => (
-                    <button
-                      type="button"
-                      key={option.label}
-                      className="date-shortcut"
-                      aria-pressed={form.startDate === option.date}
-                      onClick={() =>
-                        patch({
-                          startDate: option.date,
-                          endDate: option.date,
-                        })
-                      }
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div
-                className="mt-5 grid grid-cols-2 gap-3"
-                role="group"
-                aria-label="作業の有無"
-              >
-                <button
-                  type="button"
-                  className="status-option"
-                  aria-pressed={statusChosen && isWork}
-                  onClick={() => {
-                    setStatusChosen(true);
-                    patch({ status: "work" });
-                  }}
-                >
-                  作業あり
-                </button>
-                <button
-                  type="button"
-                  className="status-option"
-                  aria-pressed={statusChosen && !isWork}
-                  onClick={() => {
-                    setStatusChosen(true);
-                    patch({ status: "no_work" });
-                  }}
-                >
-                  作業なし
-                </button>
-              </div>
-            </section>
-
-            {companyStep && (
-              <section className="panel p-4 sm:p-5">
-                <SectionHeading title="会社と人数" />
-                <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-3 sm:grid-cols-[minmax(0,1fr)_170px]">
+            <section className="panel p-5 sm:p-6">
+              {choosingCompany ? (
+                <>
+                  <SectionHeading title="一次会社を選んでください" />
                   <label className="field">
-                    <span className="label">
-                      一次会社<span className="required-mark">*</span>
-                    </span>
+                    <span className="sr-only">一次会社</span>
                     <select
+                      autoFocus
                       className="input"
                       value={form.primaryCompany}
                       disabled={!companyMaster || Boolean(companyError)}
-                      required
-                      onChange={(event) =>
-                        patch({
-                          primaryCompany: event.target.value,
-                          currentSubcompanies: [],
-                          nextSubcompanies: [],
-                        })
-                      }
+                      onChange={(event) => selectCompany(event.target.value)}
                     >
                       <option value="" disabled>
-                        {!companyMaster
-                          ? "会社一覧を読み込み中…"
-                          : "会社を選択してください"}
+                        {companyMaster ? "会社を選択" : "読み込み中…"}
                       </option>
                       {companyMaster?.primaryCompanies.map((company) => (
                         <option key={company} value={company}>
@@ -640,367 +630,443 @@ export function ScheduleForm({
                         </option>
                       ))}
                     </select>
-                    {companyMaster?.primaryCompanies.length === 0 ? (
-                      <p className="text-sm text-red-700">
-                        会社が登録されていません。管理者にご確認ください。
-                      </p>
-                    ) : null}
                   </label>
-                  <CountField
-                    required={isWork}
-                    value={activeCount}
-                    previous={Boolean(
-                      isWork
-                        ? form.usePreviousPrimaryCount
-                        : form.usePreviousNextPrimaryCount,
-                    )}
-                    previousValue={previous?.primaryCount}
-                    onChange={(count) =>
-                      patch(
-                        isWork
-                          ? {
-                              primaryCount: count,
-                              usePreviousPrimaryCount: false,
-                            }
-                          : {
-                              nextPrimaryCount: count,
-                              usePreviousNextPrimaryCount: false,
-                            },
-                      )
-                    }
-                    onPreviousChange={() => {
-                      if (previous?.primaryCount != null)
-                        patch(
-                          isWork
-                            ? {
-                                primaryCount: previous.primaryCount,
-                                usePreviousPrimaryCount: true,
-                              }
-                            : {
-                                nextPrimaryCount: previous.primaryCount,
-                                usePreviousNextPrimaryCount: true,
-                              },
-                        );
-                    }}
-                  />
-                </div>
-                {form.primaryCompany &&
-                  canCopyToday &&
-                  !previousLoading &&
-                  previousResult?.key === previousKey &&
-                  !previousResult.error && (
-                    <section
-                      aria-label="本日の内容"
-                      className="mt-5 rounded-md border border-border bg-slate-50 p-4"
+                  {form.primaryCompany && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary mt-3"
+                      onClick={() => setChoosingCompany(false)}
                     >
-                      <h3 className="text-base font-bold">
-                        本日と同じ作業ですか？
-                      </h3>
-                      {todaySchedule ? (
-                        <>
-                          <p className="mt-2 text-sm text-slate-600">
-                            {displayDate(todaySchedule.workDate)}の登録内容
-                          </p>
-                          <dl className="mt-3 space-y-2 text-base">
-                            <div>
-                              <dt className="font-semibold">一次会社人数</dt>
-                              <dd>{todaySchedule.primaryCount ?? 0} 人</dd>
-                            </div>
-                            {todaySchedule.subcompanies
-                              .filter((row) => row.secondaryCompany)
-                              .map((row, index) => (
-                                <div key={index}>
-                                  <dt className="font-semibold">
-                                    {row.secondaryCompany}
-                                  </dt>
-                                  <dd>{row.workerCount ?? 0} 人</dd>
-                                </div>
-                              ))}
-                            <div>
-                              <dt className="font-semibold">作業エリア</dt>
-                              <dd className="whitespace-pre-wrap break-words">
-                                {todaySchedule.workArea || "未入力"}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="font-semibold">作業内容</dt>
-                              <dd className="whitespace-pre-wrap break-words">
-                                {todaySchedule.workContent || "未入力"}
-                              </dd>
-                            </div>
-                          </dl>
-                          <p className="mt-3 text-sm text-slate-600">
-                            人数・二次会社・エリア・内容をコピーします。作業日は変更しません。
-                          </p>
-                          <button
-                            type="button"
-                            className="btn btn-secondary mt-3 w-full"
-                            onClick={copyToday}
-                          >
-                            本日の内容をコピー
-                          </button>
-                        </>
-                      ) : (
-                        <p className="mt-2 text-base text-slate-600">
-                          本日の作業予定は登録されていません。下の項目から入力してください。
-                        </p>
-                      )}
-                    </section>
+                      変更せず戻る
+                    </button>
                   )}
-                {copyNotice && (
-                  <p role="status" className="mt-3 text-base text-primary">
-                    {copyNotice}
-                  </p>
-                )}
-                {form.primaryCompany && (
-                  <div
-                    className="my-3 text-sm leading-6 text-slate-600"
-                    aria-live="polite"
-                  >
-                    {previousLoading ? (
-                      "前回の予定を確認しています…"
-                    ) : previousResult?.key === previousKey &&
-                      previousResult.error ? (
-                      <>
-                        <p>{previousResult.error}</p>
-                        <button
-                          type="button"
-                          className="btn btn-secondary mt-2"
-                          onClick={() => setPreviousRetry((value) => value + 1)}
-                        >
-                          前回の予定を再読み込み
-                        </button>
-                      </>
-                    ) : previous ? (
-                      <p>
-                        前回：{displayDate(previous.workDate)}
-                        。各項目の「前回をコピー」で入力できます。
-                      </p>
-                    ) : (
-                      <p>この日付より前の同じ作業区分の予定はありません。</p>
-                    )}
+                  {companyMaster?.primaryCompanies.length === 0 && (
+                    <p className="mt-3 text-base text-slate-600">
+                      会社が登録されていません。管理者にご確認ください。
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm text-slate-500">一次会社</p>
+                    <p className="mt-1 break-words text-lg font-bold">
+                      {form.primaryCompany}
+                    </p>
                   </div>
-                )}
-                {form.primaryCompany.trim() ? (
-                  <details className="my-4 rounded-md border border-border bg-slate-50/70">
-                    <summary className="min-h-12 cursor-pointer px-4 py-3 text-base font-semibold text-slate-700">
-                      記入済みの予定
-                      <span className="ml-2 text-sm font-normal text-slate-600">
-                        今日から7日分
-                      </span>
-                    </summary>
-                    <div
-                      className="border-t border-border px-4 py-3"
-                      aria-live="polite"
-                    >
-                      {summaryLoading ? (
-                        <p className="text-sm text-slate-500">
-                          確認しています…
-                        </p>
-                      ) : summaryError ? (
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm text-red-700">{summaryError}</p>
-                          <button
-                            type="button"
-                            className="btn btn-secondary text-sm"
-                            onClick={() =>
-                              setSummaryVersion((value) => value + 1)
-                            }
-                          >
-                            再試行
-                          </button>
-                        </div>
-                      ) : summaries.length === 0 ? (
-                        <p className="text-sm text-slate-500">
-                          今日以降の記入済み予定はありません。
-                        </p>
-                      ) : (
-                        <div className="divide-y divide-border">
-                          {summaries.map((summary) => (
-                            <div
-                              key={summary.id}
-                              className="py-3 first:pt-0 last:pb-0"
-                            >
-                              <p className="flex flex-wrap gap-2 text-sm font-semibold text-slate-700">
-                                <span>{displayDate(summary.workDate)}</span>
-                                <span
-                                  className={
-                                    summary.status === "作業あり"
-                                      ? "text-primary"
-                                      : "text-slate-600"
-                                  }
-                                >
-                                  {summary.status}
-                                </span>
-                                {summary.nextVisitDate ? (
-                                  <span>次回来場 {summary.nextVisitDate}</span>
-                                ) : null}
-                              </p>
-                              <p className="mt-1 text-sm leading-5 text-slate-500">
-                                {summary.companyText}
-                              </p>
-                              <p className="text-sm leading-5 text-slate-500">
-                                {[
-                                  summary.status === "作業あり"
-                                    ? summary.workArea
-                                    : summary.nextWorkArea,
-                                  summary.status === "作業あり"
-                                    ? summary.workContent
-                                    : summary.nextWorkContent,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" / ")}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </details>
-                ) : null}
-                {form.primaryCompany && !isWork ? (
-                  <div className="mt-5 grid gap-4">
-                    <label className="field">
-                      <span className="label">
-                        次回来場予定日
-                        <span className="ml-2 text-sm font-normal text-slate-600">
-                          任意
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setChoosingCompany(true)}
+                  >
+                    会社を変更
+                  </button>
+                </div>
+              )}
+              {companyError && (
+                <div role="alert" className="mt-3 text-red-700">
+                  <p>{companyError}</p>
+                  <button
+                    type="button"
+                    className="btn btn-secondary mt-2"
+                    onClick={() => setCompanyRetry((v) => v + 1)}
+                  >
+                    再読み込み
+                  </button>
+                </div>
+              )}
+            </section>
+
+            {form.primaryCompany && !choosingCompany && (
+              <>
+                <section className="panel p-5 sm:p-6">
+                  <SectionHeading title="入力する日付を選んでください" />
+                  <div className="grid grid-cols-3 gap-2">
+                    {dateOptions.map((option) => (
+                      <button
+                        key={option.label}
+                        type="button"
+                        className="status-option flex-col gap-1 px-2"
+                        aria-pressed={
+                          !customDate && form.startDate === option.date
+                        }
+                        onClick={() => {
+                          setCustomDate(false);
+                          selectDate(option.date);
+                        }}
+                      >
+                        <span>{option.label}</span>
+                        <span className="text-sm font-normal">
+                          {option.date.slice(5).replace("-", "/")}
                         </span>
-                      </span>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary mt-3 w-full"
+                    aria-expanded={customDate}
+                    aria-controls="custom-work-date"
+                    onClick={() => {
+                      if (!customDate) {
+                        setCustomDate(true);
+                        selectDate("");
+                      }
+                    }}
+                  >
+                    任意の日付を選ぶ
+                  </button>
+                  {customDate && (
+                    <label className="field mt-3" id="custom-work-date">
+                      <span className="label">作業日</span>
                       <input
                         className="input"
                         type="date"
-                        value={form.nextVisitDate ?? ""}
-                        onChange={(event) =>
-                          patch({ nextVisitDate: event.target.value || null })
-                        }
+                        value={form.startDate}
+                        onChange={(event) => selectDate(event.target.value)}
+                        required
                       />
                     </label>
-                  </div>
-                ) : null}
-                {form.primaryCompany && (
-                  <div className="mt-4 border-t border-border pt-5">
-                    <SubcompanyFields
-                      title="二次会社"
-                      rows={activeRows}
-                      options={secondaryOptions}
-                      countRequired={isWork}
-                      previousCounts={previousCounts}
-                      onChange={(rows) =>
-                        patch(
-                          isWork
-                            ? { currentSubcompanies: rows }
-                            : { nextSubcompanies: rows },
-                        )
-                      }
-                    />
-                  </div>
-                )}
-                {form.primaryCompany && !detailsShown && (
-                  <div className="mt-5">
-                    {stepError && (
-                      <p role="alert" className="mb-3 text-sm text-red-700">
-                        {stepError}
-                      </p>
+                  )}
+                </section>
+
+                {validDate && (
+                  <section className="panel p-5 sm:p-6">
+                    {choice === null ? (
+                      sourceLoading ? (
+                        <div role="status" className="text-base text-slate-600">
+                          前回の作業を確認しています…
+                          <button
+                            type="button"
+                            className="btn btn-secondary mt-4 w-full"
+                            onClick={() => answer(false)}
+                          >
+                            新しく入力する
+                          </button>
+                        </div>
+                      ) : sourceError ? (
+                        <>
+                          <p role="alert" className="text-red-700">
+                            {sourceError}
+                          </p>
+                          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => setSourceRetry((v) => v + 1)}
+                            >
+                              再読み込み
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              onClick={() => answer(false)}
+                            >
+                              新しく入力する
+                            </button>
+                          </div>
+                        </>
+                      ) : source ? (
+                        <>
+                          <SectionHeading
+                            title={
+                              sourceIsToday
+                                ? "今日と同じ作業ですか？"
+                                : "前回と同じ作業ですか？"
+                            }
+                          />
+                          <p className="mb-4 text-sm text-slate-500">
+                            {displayDate(source.workDate)}の作業
+                          </p>
+                          <SchedulePreview
+                            schedule={source}
+                            primaryCompany={form.primaryCompany}
+                          />
+                          <div className="mt-5 grid grid-cols-2 gap-3">
+                            <button
+                              type="button"
+                              className="btn min-h-14 border-2 border-emerald-300 bg-emerald-50 text-lg text-emerald-900 hover:bg-emerald-100"
+                              onClick={() => answer(true)}
+                            >
+                              はい
+                            </button>
+                            <button
+                              type="button"
+                              className="btn min-h-14 border-2 border-slate-300 bg-slate-50 text-lg text-slate-800 hover:bg-slate-100"
+                              onClick={() => answer(false)}
+                            >
+                              いいえ
+                            </button>
+                          </div>
+                          <p className="mt-3 text-sm text-slate-500">
+                            「はい」で人数・作業内容を引き継ぎます。あとから編集できます。
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-base text-slate-600">
+                            これまでの作業予定はありません。
+                          </p>
+                          <button
+                            type="button"
+                            className="btn btn-primary mt-4 w-full"
+                            onClick={() => answer(false)}
+                          >
+                            新しく入力する
+                          </button>
+                        </>
+                      )
+                    ) : (
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-semibold">
+                          {choice === "same"
+                            ? "作業内容を引き継いで入力"
+                            : "新しく入力"}
+                        </p>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => {
+                            setChoice(null);
+                            setSubmitState({ status: "idle" });
+                          }}
+                        >
+                          選び直す
+                        </button>
+                      </div>
                     )}
+                  </section>
+                )}
+
+                {choice === "new" && validDate && (
+                  <section className="panel p-5 sm:p-6">
+                    <SectionHeading title="作業はありますか？" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        className="status-option"
+                        aria-pressed={statusChosen && isWork}
+                        onClick={() => {
+                          setStatusChosen(true);
+                          patch({ status: "work" });
+                        }}
+                      >
+                        作業あり
+                      </button>
+                      <button
+                        type="button"
+                        className="status-option"
+                        aria-pressed={statusChosen && !isWork}
+                        onClick={() => {
+                          setStatusChosen(true);
+                          patch({ status: "no_work" });
+                        }}
+                      >
+                        作業なし
+                      </button>
+                    </div>
+                  </section>
+                )}
+
+                {ready && !showEditor && (
+                  <section className="panel p-5 sm:p-6">
+                    <SectionHeading title="この内容で送信します" />
+                    <p className="mb-4 font-semibold text-primary">
+                      {displayDate(form.startDate)}・作業あり
+                    </p>
+                    <SchedulePreview
+                      primaryCompany={form.primaryCompany}
+                      schedule={{
+                        workDate: form.startDate,
+                        primaryCount: form.primaryCount,
+                        workArea: form.workArea,
+                        workContent: form.workContent,
+                        subcompanies: form.currentSubcompanies,
+                      }}
+                    />
                     <button
                       type="button"
-                      className="btn btn-primary w-full"
-                      onClick={() => {
-                        const message = validateBeforeSubmit();
-                        if (message) {
-                          setStepError(message);
-                          return;
-                        }
-                        setDetailsShown(true);
-                      }}
+                      className="btn btn-secondary mt-5 w-full"
+                      onClick={() => setEditing(true)}
                     >
-                      作業内容へ進む
+                      内容を編集
                     </button>
-                  </div>
+                  </section>
                 )}
-              </section>
-            )}
 
-            {contentStep && (
-              <section
-                ref={contentRef}
-                tabIndex={-1}
-                aria-label="作業内容の入力"
-                className="panel p-4 sm:p-5"
-              >
-                <SectionHeading
-                  title={isWork ? "作業内容" : "次回の作業内容"}
-                />
-                <div className="space-y-4">
-                  <WorkField
-                    key={`${previousKey}-${copyVersion}-area`}
-                    previousValue={previous?.workArea}
-                    label="作業エリア"
-                    value={area}
-                    placeholder="例：10階、12階"
-                    onChange={(value) =>
-                      patch(
-                        isWork ? { workArea: value } : { nextWorkArea: value },
-                      )
-                    }
-                  />
-                  <WorkField
-                    key={`${previousKey}-${copyVersion}-content`}
-                    previousValue={previous?.workContent}
-                    label="作業内容"
-                    value={content}
-                    multiline
-                    placeholder="例：配管つり込み作業"
-                    onChange={(value) =>
-                      patch(
-                        isWork
-                          ? { workContent: value }
-                          : { nextWorkContent: value },
-                      )
-                    }
-                  />
-                </div>
-              </section>
+                {showEditor && (
+                  <section className="panel p-5 sm:p-6">
+                    <SectionHeading
+                      title={
+                        isWork ? "人数と作業内容" : "次回来場の予定（任意）"
+                      }
+                    />
+                    <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-3 sm:grid-cols-[minmax(0,1fr)_170px]">
+                      <div className="field">
+                        <span className="label" id="selected-company-label">
+                          一次会社
+                        </span>
+                        <div
+                          role="textbox"
+                          aria-readonly="true"
+                          aria-labelledby="selected-company-label"
+                          className="input flex h-auto min-h-14 items-center break-all bg-slate-50 py-3"
+                        >
+                          {form.primaryCompany}
+                        </div>
+                      </div>
+                      <CountField
+                        value={activeCount}
+                        required={isWork}
+                        previous={Boolean(
+                          isWork
+                            ? form.usePreviousPrimaryCount
+                            : form.usePreviousNextPrimaryCount,
+                        )}
+                        previousValue={previous?.primaryCount}
+                        onChange={(count) =>
+                          patch(
+                            isWork
+                              ? {
+                                  primaryCount: count,
+                                  usePreviousPrimaryCount: false,
+                                }
+                              : {
+                                  nextPrimaryCount: count,
+                                  usePreviousNextPrimaryCount: false,
+                                },
+                          )
+                        }
+                        onPreviousChange={() => {
+                          if (previous?.primaryCount != null)
+                            patch(
+                              isWork
+                                ? {
+                                    primaryCount: previous.primaryCount,
+                                    usePreviousPrimaryCount: true,
+                                  }
+                                : {
+                                    nextPrimaryCount: previous.primaryCount,
+                                    usePreviousNextPrimaryCount: true,
+                                  },
+                            );
+                        }}
+                      />
+                    </div>
+                    {previousResult?.key === previousKey &&
+                      previousResult.error && (
+                        <div role="alert" className="mt-3 text-sm text-red-700">
+                          {previousResult.error}
+                          <button
+                            type="button"
+                            className="btn btn-secondary ml-2"
+                            onClick={() => setPreviousRetry((v) => v + 1)}
+                          >
+                            再読み込み
+                          </button>
+                        </div>
+                      )}
+                    {!isWork && (
+                      <label className="field mt-4">
+                        <span className="label">次回来場予定日（任意）</span>
+                        <input
+                          type="date"
+                          className="input"
+                          value={form.nextVisitDate ?? ""}
+                          onChange={(event) =>
+                            patch({ nextVisitDate: event.target.value || null })
+                          }
+                        />
+                      </label>
+                    )}
+                    <div className="my-5 border-y border-border py-5">
+                      <SubcompanyFields
+                        title="二次会社"
+                        rows={activeRows}
+                        options={secondaryOptions}
+                        countRequired={isWork}
+                        previousCounts={previousCounts}
+                        onChange={(rows) =>
+                          patch(
+                            isWork
+                              ? { currentSubcompanies: rows }
+                              : { nextSubcompanies: rows },
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-4">
+                      <WorkField
+                        key={`${previousKey}-${copyVersion}-area`}
+                        label="作業エリア"
+                        value={area}
+                        previousValue={previous?.workArea}
+                        placeholder="例：10階、12階"
+                        onChange={(value) =>
+                          patch(
+                            isWork
+                              ? { workArea: value }
+                              : { nextWorkArea: value },
+                          )
+                        }
+                      />
+                      <WorkField
+                        key={`${previousKey}-${copyVersion}-content`}
+                        label="作業内容"
+                        value={content}
+                        previousValue={previous?.workContent}
+                        placeholder="例：配管つり込み作業"
+                        multiline
+                        onChange={(value) =>
+                          patch(
+                            isWork
+                              ? { workContent: value }
+                              : { nextWorkContent: value },
+                          )
+                        }
+                      />
+                    </div>
+                  </section>
+                )}
+              </>
             )}
           </fieldset>
 
-          {contentStep &&
+          {ready &&
             (submitState.status === "success" ? (
               <div
                 ref={resultRef}
                 tabIndex={-1}
                 role="status"
-                className="rounded-md border border-emerald-200 bg-emerald-50 p-6 outline-none"
+                className="panel border-emerald-200 bg-emerald-50 p-5"
               >
-                <h2 className="text-lg font-bold text-emerald-900">
+                <h2 className="text-lg font-bold text-primary">
                   作業予定を送信しました
                 </h2>
-                <p className="mt-2 text-sm leading-6 text-emerald-800">
+                <p className="mt-2 text-base">
                   {submitState.dates.map(displayDate).join("、")}
-                  の予定を登録しました。
-                  <br />
-                  ご協力ありがとうございます。
                 </p>
-                <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   <button
                     type="button"
                     className="btn btn-primary"
-                    onClick={continueAnotherDate}
+                    onClick={() => {
+                      const date = toDateString(
+                        addDays(parseLocalDate(form.startDate)!, 1),
+                      );
+                      setCustomDate(
+                        !dateOptions.some((option) => option.date === date),
+                      );
+                      selectDate(date);
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                   >
                     同じ内容で別日を入力
                   </button>
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() => {
-                      setForm(emptyForm(initialDate));
-                      setStatusChosen(false);
-                      setDetailsShown(false);
-                      setCopyNotice("");
-                      setSubmitState({ status: "idle" });
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
+                    onClick={resetForm}
                   >
                     新しく入力
                   </button>
@@ -1008,45 +1074,93 @@ export function ScheduleForm({
               </div>
             ) : (
               <div className="submit-bar">
-                {submitState.status === "error" ? (
+                {submitState.status === "error" && (
                   <div
                     ref={resultRef}
                     tabIndex={-1}
                     role="alert"
-                    className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+                    className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-red-700"
                   >
                     {submitState.message}
                   </div>
-                ) : null}
+                )}
                 <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-700">
-                      {displayDate(form.startDate)}
-                      <span className="mx-2 text-slate-300">/</span>
+                  <div>
+                    <p className="text-sm font-semibold">
+                      {displayDate(form.startDate)}・
                       {isWork ? "作業あり" : "作業なし"}
                     </p>
                     <p className="mt-1 text-sm text-slate-600">
-                      {!isWork ? "次回予定 " : "合計 "}
-                      {totalCount} 人
+                      {isWork ? "合計" : "次回予定"} {totalCount} 人
                     </p>
                   </div>
                   <button
                     type="submit"
-                    className="btn btn-primary min-h-12 px-5 sm:px-8"
+                    className="btn btn-primary min-h-14 px-5"
                     disabled={busy || !companyMaster || Boolean(companyError)}
                   >
                     {busy ? "送信中…" : "予定を送信"}
                   </button>
                 </div>
-                <p className="hidden">
-                  同じ日付・一次会社で送信済みの場合は、今回の内容で上書きされます。
-                </p>
               </div>
             ))}
-          {contentStep && (
-            <p className="px-1 text-sm leading-7 text-slate-600">
-              同じ日付・一次会社の再送信は上書きされます。
-            </p>
+          {ready && (
+            <>
+              <p className="px-1 text-sm leading-6 text-slate-500">
+                同じ日付・一次会社の再送信は上書きされます。
+              </p>
+              <details
+                className="panel p-4"
+                open={summaryOpen}
+                onToggle={(event) => setSummaryOpen(event.currentTarget.open)}
+              >
+                <summary className="cursor-pointer text-base font-semibold">
+                  記入済みの予定を見る
+                </summary>
+                <div className="mt-3 space-y-3 text-sm leading-6">
+                  {summaryError ? (
+                    <>
+                      <p role="alert">{summaryError}</p>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setSummaryVersion((v) => v + 1)}
+                      >
+                        再読み込み
+                      </button>
+                    </>
+                  ) : summaries === null ? (
+                    "読み込み中…"
+                  ) : summaries.length === 0 ? (
+                    "今日から7日分の記入済み予定はありません。"
+                  ) : (
+                    summaries.map((summary) => (
+                      <div key={summary.id}>
+                        <p className="font-semibold">
+                          {displayDate(summary.workDate)} {summary.status}
+                        </p>
+                        <p>{summary.companyText}</p>
+                        <p>
+                          {[
+                            summary.status === "作業あり"
+                              ? summary.workArea
+                              : summary.nextWorkArea,
+                            summary.status === "作業あり"
+                              ? summary.workContent
+                              : summary.nextWorkContent,
+                          ]
+                            .filter(Boolean)
+                            .join(" / ")}
+                        </p>
+                        {summary.nextVisitDate && (
+                          <p>次回来場 {summary.nextVisitDate}</p>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </details>
+            </>
           )}
         </form>
       </main>

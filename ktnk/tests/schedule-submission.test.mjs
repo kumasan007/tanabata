@@ -104,6 +104,63 @@ test("本日以前・作業なし・本日コピー未要求では余分な本�
   assert.equal(todayCalls.length, 0);
 });
 
+function copySourceRoute(source, calls, fail = false) {
+  return loadModule("app/api/schedules/copy-source/route.ts", {
+    "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
+    "@/lib/utils": { ...loadModule("lib/utils.ts"), todayInTokyoString: () => "2026-09-06" },
+    "@/lib/schedule-service": {
+      getPreviousScheduleForCopy: async (...args) => {
+        calls.push(args);
+        if (fail) throw new Error("Database unavailable");
+        return source;
+      },
+    },
+  }).GET;
+}
+
+test("会社選択後のコピー元は本日までの作業ありを検索し、実際の内容を返す", async () => {
+  for (const workDate of ["2026-09-06", "2026-09-01"]) {
+    const calls = [];
+    const get = copySourceRoute({
+      work_date: workDate, primary_count: 3, work_area: "2階", work_content: "配管",
+      subcompanies: [
+        { kind: "current", secondary_company: "B", worker_count: 2 },
+        { kind: "next_visit", secondary_company: "C", worker_count: 9 },
+      ],
+    }, calls);
+    const response = await get({ url: "http://localhost/api/schedules/copy-source?primaryCompany=A" });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.today, "2026-09-06");
+    assert.equal(response.body.source.workDate, workDate);
+    assert.equal(response.body.source.primaryCount, 3);
+    assert.equal(response.body.source.workArea, "2階");
+    assert.equal(response.body.source.workContent, "配管");
+    assert.equal(response.body.source.subcompanies.length, 1);
+    assert.equal(response.body.source.subcompanies[0].secondaryCompany, "B");
+    assert.equal(response.body.source.subcompanies[0].workerCount, 2);
+    assert.deepEqual(calls, [["A", "work", "2026-09-07"]]);
+  }
+});
+
+test("コピー元取得は会社未選択でDBを呼ばない", async () => {
+  const calls = [];
+  const get = copySourceRoute(null, calls);
+  for (const query of ["", "?primaryCompany=%20"]) {
+    assert.equal((await get({ url: `http://localhost/api/schedules/copy-source${query}` })).status, 400);
+  }
+  assert.equal(calls.length, 0);
+});
+
+test("コピー元がない場合と取得失敗を区別する", async () => {
+  const request = { url: "http://localhost/api/schedules/copy-source?primaryCompany=A" };
+  const missing = await copySourceRoute(null, [])(request);
+  assert.equal(missing.status, 200);
+  assert.equal(missing.body.source, null);
+  const failed = await copySourceRoute(null, [], true)(request);
+  assert.equal(failed.status, 500);
+  assert.equal(failed.body.error, "前回の作業を取得できませんでした。");
+});
+
 const utils = loadModule("lib/utils.ts");
 const { scheduleSubmitSchema } = loadModule("lib/validation.ts");
 
