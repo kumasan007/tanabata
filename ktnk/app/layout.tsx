@@ -4,6 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "作業予定入力",
   description: "協力会社向けの作業予定入力画面。",
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {

@@ -7,6 +7,35 @@ import ts from "typescript";
 
 const nodeRequire = createRequire(import.meta.url);
 
+test("会社追加APIは既存一次会社への空追加・重複・不正型を拒否する", async () => {
+  const inserted = [];
+  const client = { from() {
+    let orderQuery = false;
+    const query = {
+      select(value) { orderQuery = value === "sort_order"; return query; },
+      order() { return query; }, limit() { return query; }, eq() { return query; },
+      maybeSingle: async () => ({ data: { sort_order: 1 }, error: null }),
+      then(resolve) { return Promise.resolve({ data: orderQuery ? [] : [{ secondary_company: "B" }], error: null }).then(resolve); },
+      insert: async rows => { inserted.push(...rows); return { error: null }; },
+    }; return query;
+  } };
+  const { POST } = loadModule("app/api/admin/company-master/route.ts", {
+    "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
+    "@/lib/supabase": { assertAdminFromRequest: () => true, createServerClient: () => client },
+  });
+  for (const [body, expected] of [
+    [{ primaryCompany: "A", secondaryCompanies: [] }, 409],
+    [{ primaryCompany: "A", secondaryCompanies: [" "] }, 409],
+    [{ primaryCompany: "A", secondaryCompanies: ["B"] }, 409],
+    [{ primaryCompany: 123 }, 400],
+    [{ primaryCompany: "A", secondaryCompanies: [123] }, 400],
+  ]) assert.equal((await POST({ json: async () => body })).status, expected);
+  assert.equal(inserted.length, 0);
+  assert.equal((await POST({ json: async () => ({ primaryCompany: "A", secondaryCompanies: ["B", "C", "C"] }) })).status, 200);
+  assert.equal(inserted.length, 1);
+  assert.equal(inserted[0].secondary_company, "C");
+});
+
 // Use the installed TypeScript compiler so these tests need no additional runner.
 function loadModule(path, dependencies = {}) {
   const source = readFileSync(new URL(`../${path}`, import.meta.url), "utf8");

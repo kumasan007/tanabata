@@ -58,8 +58,8 @@ export function SubcompanyFields({
       ) : (
         <div className="grid gap-3">
           {rows.map((row, index) => (
-            <div key={index} className="compact-panel grid gap-3 p-3 sm:p-4">
-              <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
+            <div key={index} className="grid gap-3 border-b border-border pb-4">
+              <div className="grid grid-cols-[minmax(0,1fr)_112px] items-start gap-3 sm:grid-cols-[minmax(0,1fr)_170px]">
                 <div className="field min-w-0">
                   <label
                     htmlFor={`${fieldId}-company-${index}`}
@@ -98,19 +98,7 @@ export function SubcompanyFields({
                     ))}
                   </select>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary h-12 px-2 text-slate-700 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-                  onClick={() => removeRow(index)}
-                  aria-label={`${row.secondaryCompany || `${index + 1}行目の二次会社`}を削除`}
-                  title="この会社を削除"
-                >
-                  削除
-                </button>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-slate-100 pt-3">
-                <div className="flex items-center gap-3">
+                <div className="field min-w-0">
                   <label
                     htmlFor={`${fieldId}-count-${index}`}
                     className="label whitespace-nowrap"
@@ -122,7 +110,7 @@ export function SubcompanyFields({
                       </span>
                     ) : null}
                   </label>
-                  <div className="relative w-24">
+                  <div className="relative">
                     <input
                       id={`${fieldId}-count-${index}`}
                       className="input pl-3 pr-7 tabular-nums"
@@ -149,20 +137,31 @@ export function SubcompanyFields({
                       人
                     </span>
                   </div>
+                  <CopyButton
+                    label={`${row.secondaryCompany || "二次会社"}の前回人数をコピー`}
+                    copied={Boolean(row.usePreviousWorkerCount)}
+                    disabled={previousCounts?.get(row.secondaryCompany) == null}
+                    onCopy={() => {
+                      const count = previousCounts?.get(row.secondaryCompany);
+                      if (count != null)
+                        updateRow(index, {
+                          workerCount: count,
+                          usePreviousWorkerCount: true,
+                        });
+                    }}
+                  />
                 </div>
-                <CopyButton
-                  label={`${row.secondaryCompany || "二次会社"}の前回人数をコピー`}
-                  copied={Boolean(row.usePreviousWorkerCount)}
-                  disabled={previousCounts?.get(row.secondaryCompany) == null}
-                  onCopy={() => {
-                    const count = previousCounts?.get(row.secondaryCompany);
-                    if (count != null)
-                      updateRow(index, {
-                        workerCount: count,
-                        usePreviousWorkerCount: true,
-                      });
-                  }}
-                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="btn btn-secondary h-12 px-2 text-slate-700 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                  onClick={() => removeRow(index)}
+                  aria-label={`${row.secondaryCompany || `${index + 1}行目の二次会社`}を削除`}
+                  title="この会社を削除"
+                >
+                  削除
+                </button>
               </div>
             </div>
           ))}

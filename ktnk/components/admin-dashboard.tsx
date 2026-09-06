@@ -14,14 +14,10 @@ import {
   LogIn,
   LogOut,
   LoaderCircle,
-  Pencil,
   Plus,
-  Save,
   Search,
   Table2,
-  Trash2,
   Users,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -33,7 +29,14 @@ type AdminResult = {
   count: number;
 };
 
-type RangePreset = "today" | "tomorrow" | "week" | "custom";
+type RangePreset =
+  | "today"
+  | "tomorrow"
+  | "week"
+  | "month"
+  | "nextMonth"
+  | "selectMonth"
+  | "custom";
 type StatusFilter = "work" | "no_work";
 type SortBy = "dateAsc" | "dateDesc" | "primaryAsc";
 type AdminTab = "schedules" | "companies";
@@ -325,6 +328,24 @@ export function AdminDashboard() {
       return;
     }
 
+    const existing = companyRows.filter(
+      (row) => row.primary_company === primaryCompany,
+    );
+    if (existing.length && secondaryCompanies.length === 0) {
+      setMessage(
+        "登録済みの一次会社です。追加する二次会社を入力してください。",
+      );
+      return;
+    }
+    if (
+      existing.length &&
+      secondaryCompanies.every((company) =>
+        existing.some((row) => row.secondary_company === company),
+      )
+    ) {
+      setMessage("入力された二次会社はすべて登録済みです。");
+      return;
+    }
     setMessage("");
     setCompanyLoading(true);
 
@@ -493,6 +514,13 @@ export function AdminDashboard() {
     setRangePreset(preset);
 
     if (preset === "custom") return;
+    if (["month", "nextMonth", "selectMonth"].includes(preset)) {
+      const now = new Date();
+      const month = now.getMonth() + (preset === "nextMonth" ? 1 : 0);
+      setDateFrom(toDateString(new Date(now.getFullYear(), month, 1)));
+      setDateTo(toDateString(new Date(now.getFullYear(), month + 1, 0)));
+      return;
+    }
 
     const base = new Date();
     if (preset === "tomorrow") {
@@ -661,13 +689,6 @@ export function AdminDashboard() {
       </header>
 
       <div className="mx-auto grid max-w-6xl gap-5 px-4 py-7 sm:px-6 sm:py-9">
-        <div>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
-            {activeTab === "schedules"
-              ? "作業予定を確認する"
-              : "協力会社を管理する"}
-          </h1>
-        </div>
         <nav
           className="flex gap-2 border-b border-slate-200"
           aria-label="管理画面メニュー"
@@ -792,6 +813,46 @@ export function AdminDashboard() {
             </div>
           </div>
 
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { value: "month", label: "今月" },
+                { value: "nextMonth", label: "来月" },
+                { value: "selectMonth", label: "月指定" },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                className={
+                  rangePreset === item.value
+                    ? "btn btn-primary"
+                    : "btn btn-secondary"
+                }
+                aria-pressed={rangePreset === item.value}
+                onClick={() => setQuickRange(item.value)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          {rangePreset === "selectMonth" && (
+            <label className="field max-w-xs">
+              <span className="label">対象の月</span>
+              <input
+                type="month"
+                className="input"
+                value={dateFrom.slice(0, 7)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (!/^\d{4}-\d{2}$/.test(value)) return;
+                  const [year, month] = value.split("-").map(Number);
+                  setDateFrom(`${value}-01`);
+                  setDateTo(toDateString(new Date(year, month, 0)));
+                }}
+              />
+            </label>
+          )}
           {rangePreset === "custom" ? (
             <div className="grid gap-3 sm:grid-cols-2 md:max-w-xl">
               <label className="field">
@@ -912,6 +973,7 @@ export function AdminDashboard() {
               <span className="label">一次会社</span>
               <input
                 className="input"
+                id="add-company-primary"
                 value={newPrimaryCompany}
                 onChange={(event) => setNewPrimaryCompany(event.target.value)}
                 placeholder="例: 山田設備"
@@ -991,146 +1053,138 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-md border border-border bg-slate-50">
-            <div className="max-h-[36rem] overflow-auto">
-              <table className="min-w-[900px] w-full border-collapse text-sm">
-                <thead className="sticky top-0 z-10 bg-slate-100 text-slate-600">
-                  <tr>
-                    <th className="px-3 py-2 text-left">一次会社</th>
-                    <th className="px-3 py-2 text-left">職種</th>
-                    <th className="px-3 py-2 text-left">二次会社</th>
-                    <th className="w-40 px-3 py-2 text-center">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {companyRows.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="px-3 py-8 text-center text-slate-500"
-                      >
-                        協力会社がまだ登録されていません
-                      </td>
-                    </tr>
-                  ) : (
-                    companyGroups
-                      .flatMap((group) => group.rows)
-                      .map((row) => (
-                        <tr
-                          key={row.id}
-                          className={`border-t border-border ${selectedPrimaryCompany === row.primary_company ? "bg-emerald-50" : "bg-white"}`}
-                        >
-                          <td className="px-3 py-2">
-                            {editingCompanyId === row.id ? (
-                              <input
-                                className="input h-10"
-                                value={editPrimaryCompany}
-                                onChange={(event) =>
-                                  setEditPrimaryCompany(event.target.value)
-                                }
-                                aria-label="一次会社を編集"
-                              />
-                            ) : (
-                              <button
-                                className={`rounded px-2 py-1 text-left font-semibold ${selectedPrimaryCompany === row.primary_company ? "bg-emerald-700 text-white" : "text-emerald-800 hover:bg-emerald-100"}`}
-                                type="button"
-                                onClick={() =>
-                                  setSelectedPrimaryCompany(row.primary_company)
-                                }
-                              >
-                                {row.primary_company}
-                              </button>
-                            )}
-                          </td>
-                          <td className="px-3 py-2">
-                            {editingCompanyId === row.id ? (
-                              <input
-                                className="input h-10"
-                                value={editPrimaryRoles}
-                                onChange={(event) =>
-                                  setEditPrimaryRoles(event.target.value)
-                                }
-                                aria-label="職種を編集"
-                                placeholder="例: 多能工、配管工"
-                              />
-                            ) : (
-                              <RoleBadges
-                                roles={row.primary_trade_roles ?? []}
-                              />
-                            )}
-                          </td>
-                          <td className="px-3 py-2">
-                            {editingCompanyId === row.id ? (
-                              <input
-                                className="input h-10"
-                                value={editSecondaryCompany}
-                                onChange={(event) =>
-                                  setEditSecondaryCompany(event.target.value)
-                                }
-                                aria-label="二次会社を編集"
-                                placeholder="空欄可"
-                              />
-                            ) : (
-                              (row.secondary_company ?? "-")
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <div className="flex justify-center gap-1">
-                              {editingCompanyId === row.id ? (
-                                <>
-                                  <button
-                                    className="btn btn-primary h-8 px-2 text-xs"
-                                    type="button"
-                                    disabled={companyLoading}
-                                    onClick={() => void saveCompanyMaster()}
-                                  >
-                                    <Save size={14} aria-hidden="true" /> 保存
-                                  </button>
-                                  <button
-                                    className="btn btn-secondary h-8 w-8 p-0"
-                                    type="button"
-                                    title="キャンセル"
-                                    aria-label="編集をキャンセル"
-                                    disabled={companyLoading}
-                                    onClick={() => setEditingCompanyId(null)}
-                                  >
-                                    <X size={15} aria-hidden="true" />
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <button
-                                    className="btn btn-secondary h-8 w-8 p-0"
-                                    type="button"
-                                    title="編集"
-                                    aria-label={`${row.primary_company}を編集`}
-                                    disabled={companyLoading}
-                                    onClick={() => startEditingCompany(row)}
-                                  >
-                                    <Pencil size={15} aria-hidden="true" />
-                                  </button>
-                                  <button
-                                    className="btn btn-secondary h-8 w-8 p-0 text-red-700"
-                                    type="button"
-                                    title="削除"
-                                    aria-label={`${row.primary_company}を削除`}
-                                    disabled={companyLoading}
-                                    onClick={() =>
-                                      void removeCompanyMaster(row.id)
-                                    }
-                                  >
-                                    <Trash2 size={15} aria-hidden="true" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+          <div className="grid gap-3">
+            {companyGroups.length === 0 && (
+              <p className="py-6 text-center text-slate-500">
+                協力会社がまだ登録されていません
+              </p>
+            )}
+            {companyGroups.map((group) => (
+              <details
+                key={group.primaryCompany}
+                className="rounded-xl border border-border bg-white"
+                onToggle={(event) => {
+                  if (event.currentTarget.open)
+                    setSelectedPrimaryCompany(group.primaryCompany);
+                }}
+              >
+                <summary className="cursor-pointer rounded-xl px-4 py-4 font-semibold text-slate-900 marker:text-emerald-700">
+                  <span className="break-words">{group.primaryCompany}</span>
+                  <span className="ml-3 text-sm font-normal text-slate-500">
+                    二次会社{" "}
+                    {group.rows.filter((row) => row.secondary_company).length}社
+                  </span>
+                </summary>
+                <div className="grid gap-3 border-t border-border p-3 sm:p-4">
+                  <button
+                    type="button"
+                    className="btn btn-secondary justify-self-start"
+                    onClick={() => {
+                      setNewPrimaryCompany(group.primaryCompany);
+                      setNewSecondaryCompanies("");
+                      document.getElementById("add-company-primary")?.focus();
+                    }}
+                  >
+                    この一次会社に追加
+                  </button>
+                  {group.rows.map((row) => (
+                    <div
+                      key={row.id}
+                      className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+                    >
+                      {editingCompanyId === row.id ? (
+                        <div className="grid gap-3">
+                          <label className="field">
+                            <span className="label">一次会社</span>
+                            <input
+                              className="input"
+                              value={editPrimaryCompany}
+                              onChange={(event) =>
+                                setEditPrimaryCompany(event.target.value)
+                              }
+                              aria-label="一次会社を編集"
+                            />
+                          </label>
+                          <label className="field">
+                            <span className="label">二次会社</span>
+                            <input
+                              className="input"
+                              value={editSecondaryCompany}
+                              onChange={(event) =>
+                                setEditSecondaryCompany(event.target.value)
+                              }
+                              aria-label="二次会社を編集"
+                            />
+                          </label>
+                          <label className="field">
+                            <span className="label">職種</span>
+                            <input
+                              className="input"
+                              value={editPrimaryRoles}
+                              onChange={(event) =>
+                                setEditPrimaryRoles(event.target.value)
+                              }
+                              aria-label="職種を編集"
+                            />
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="min-w-0">
+                          <p className="break-words font-semibold">
+                            {row.secondary_company || "一次会社のみ"}
+                          </p>
+                          <div className="mt-2">
+                            <RoleBadges roles={row.primary_trade_roles ?? []} />
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-start gap-2">
+                        {editingCompanyId === row.id ? (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              disabled={companyLoading}
+                              onClick={() => void saveCompanyMaster()}
+                            >
+                              保存
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => setEditingCompanyId(null)}
+                            >
+                              キャンセル
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              disabled={companyLoading}
+                              onClick={() => startEditingCompany(row)}
+                              aria-label={`${row.secondary_company || row.primary_company}を編集`}
+                            >
+                              編集
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary text-red-700"
+                              disabled={companyLoading}
+                              onClick={() => void removeCompanyMaster(row.id)}
+                              aria-label={`${row.secondary_company || row.primary_company}を削除`}
+                            >
+                              削除
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ))}
           </div>
         </section>
 
@@ -1383,10 +1437,6 @@ export function AdminDashboard() {
                 ))}
                 {calendarDays.days.map((day) => {
                   const rows = calendarRowsByDate[day] ?? [];
-                  const dayTotal = rows.reduce(
-                    (sum, row) => sum + row.totalCount,
-                    0,
-                  );
                   const selected = selectedCalendarDate === day;
                   return (
                     <div
@@ -1396,59 +1446,42 @@ export function AdminDashboard() {
                       <div className="mb-2 flex items-center justify-between gap-1">
                         <button
                           type="button"
-                          className="min-h-11 rounded px-1 text-sm font-bold text-emerald-800 hover:bg-emerald-50"
+                          className="min-h-11 whitespace-nowrap rounded px-1 text-sm font-bold text-emerald-800 hover:bg-emerald-50"
                           aria-expanded={selected}
                           aria-label={`${day}の予定`}
                           onClick={() =>
                             setSelectedCalendarDate(selected ? null : day)
                           }
                         >
-                          {day.slice(5)}
+                          {`${Number(day.slice(5, 7))}月${Number(day.slice(8))}日`}
                         </button>
-                        {dayTotal > 0 ? (
-                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-900">
-                            {dayTotal}人
-                          </span>
-                        ) : null}
                       </div>
                       <div className="grid gap-1">
                         {rows.slice(0, 3).map((row) => (
-                          <div
+                          <button
                             key={row.key}
-                            className="rounded border border-slate-200 bg-slate-50 px-1.5 py-1"
+                            type="button"
+                            className="flex min-h-8 w-full items-center gap-1 rounded bg-slate-50 px-1.5 text-left text-xs hover:bg-emerald-50"
+                            onClick={() => setSelectedCalendarDate(day)}
+                            title={`${row.primaryCompany} / ${row.totalCount}人`}
                           >
-                            <div className="text-xs font-bold text-slate-900">
-                              <CopyValue
-                                value={row.primaryCompany}
-                                label="一次会社"
-                              />
-                            </div>
-                            <div className="truncate text-[11px] text-slate-600">
-                              <CopyValue
-                                value={row.totalCount}
-                                label="合計人数"
-                              >
-                                {row.totalCount}人
-                              </CopyValue>{" "}
-                              /{" "}
-                              <CopyValue
-                                value={row.workArea}
-                                label="作業エリア"
-                              />
-                            </div>
-                            <div className="text-[11px] text-slate-500">
-                              <CopyValue
-                                value={row.workContent}
-                                label="作業内容"
-                              />
-                            </div>
-                          </div>
+                            <span className="min-w-0 truncate">
+                              {row.primaryCompany}
+                            </span>
+                            <span className="shrink-0 font-semibold">
+                              / {row.totalCount}人
+                            </span>
+                          </button>
                         ))}
-                        {rows.length > 3 ? (
-                          <div className="text-[11px] font-semibold text-slate-500">
-                            他 {rows.length - 3} 件
-                          </div>
-                        ) : null}
+                        {rows.length > 3 && (
+                          <button
+                            type="button"
+                            className="min-h-8 text-xs font-semibold text-emerald-800"
+                            onClick={() => setSelectedCalendarDate(day)}
+                          >
+                            ほか{rows.length - 3}社を表示
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
