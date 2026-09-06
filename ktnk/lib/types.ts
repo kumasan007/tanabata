@@ -22,6 +22,14 @@ export type SubcompanyInput = {
   usePreviousWorkerCount?: boolean;
 };
 
+export type PreviousSchedule = {
+  workDate: string;
+  primaryCount: number | null;
+  workArea: string | null;
+  workContent: string | null;
+  subcompanies: { secondaryCompany: string; workerCount: number | null }[];
+};
+
 export type ScheduleSubmitInput = {
   startDate: string;
   endDate: string;

@@ -3,24 +3,30 @@
 import {
   ArrowDown,
   ArrowUp,
+  ArrowUpRight,
   Building2,
   CalendarDays,
   CalendarRange,
   ChevronDown,
   ChevronRight,
   Download,
+  ClipboardList,
   List,
   LogIn,
   LogOut,
+  LoaderCircle,
   Pencil,
+  Plus,
   Save,
   Search,
+
   Table2,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CompanyMaster, CompanyMasterRow, ExportRow } from "@/lib/types";
 import { addDays, toDateString } from "@/lib/utils";
 
@@ -59,6 +65,7 @@ export function AdminDashboard() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [loginLoading, setLoginLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>("schedules");
   const [rangePreset, setRangePreset] = useState<RangePreset>("tomorrow");
   const [dateFrom, setDateFrom] = useState(tomorrow);
@@ -84,11 +91,13 @@ export function AdminDashboard() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [companyLoading, setCompanyLoading] = useState(false);
+  const [appliedFilters, setAppliedFilters] = useState({ dateFrom, dateTo, primaryCompany, secondaryCompany, statusFilter });
+  const hasPendingFilters = dateFrom !== appliedFilters.dateFrom || dateTo !== appliedFilters.dateTo || primaryCompany !== appliedFilters.primaryCompany || secondaryCompany !== appliedFilters.secondaryCompany || statusFilter !== appliedFilters.statusFilter;
 
   const visibleRows = useMemo(() => {
     const filtered = result.rows.filter((row) => {
-      if (statusFilter === "work" && row.status !== "作業あり") return false;
-      if (statusFilter === "no_work" && row.status !== "作業なし") return false;
+      if (appliedFilters.statusFilter === "work" && row.status !== "作業あり") return false;
+      if (appliedFilters.statusFilter === "no_work" && row.status !== "作業なし") return false;
       return true;
     });
 
@@ -97,10 +106,10 @@ export function AdminDashboard() {
       if (sortBy === "primaryAsc") return compareText(a.primaryCompany, b.primaryCompany) || compareText(a.workDate, b.workDate);
       return compareText(a.workDate, b.workDate) || compareText(a.primaryCompany, b.primaryCompany);
     });
-  }, [result.rows, sortBy, statusFilter]);
+  }, [result.rows, sortBy, appliedFilters.statusFilter]);
 
-  const summaryRows = useMemo(() => buildScheduleSummaryRows(visibleRows, statusFilter), [visibleRows, statusFilter]);
-  const calendarDays = useMemo(() => buildCalendarDays(dateFrom, dateTo), [dateFrom, dateTo]);
+  const summaryRows = useMemo(() => buildScheduleSummaryRows(visibleRows, appliedFilters.statusFilter), [visibleRows, appliedFilters.statusFilter]);
+  const calendarDays = useMemo(() => buildCalendarDays(appliedFilters.dateFrom, appliedFilters.dateTo), [appliedFilters.dateFrom, appliedFilters.dateTo]);
   const calendarRowsByDate = useMemo(() => groupSummaryRowsByDate(summaryRows), [summaryRows]);
   const selectedCalendarRows = selectedCalendarDate ? calendarRowsByDate[selectedCalendarDate] ?? [] : [];
   const totalWorkerCount = summaryRows.reduce((sum, row) => sum + row.totalCount, 0);
@@ -159,23 +168,23 @@ export function AdminDashboard() {
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
+    setLoginLoading(true);
 
-    const response = await fetch("/api/admin/login", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ password }),
-    });
-    const body = await response.json();
-
-    if (!response.ok) {
-      setMessage(body.error ?? "ログインに失敗しました。");
-      return;
+    try {
+      const response = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "ログインに失敗しました。");
+      setPassword("");
+      setAuthenticated(true);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "接続できませんでした。もう一度お試しください。");
+    } finally {
+      setLoginLoading(false);
     }
-
-    setPassword("");
-    setAuthenticated(true);
   }
 
   async function logout() {
@@ -187,6 +196,10 @@ export function AdminDashboard() {
 
   async function search() {
     if (!authenticated) return;
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      setMessage("終了日は開始日以降の日付を選択してください。");
+      return;
+    }
     setLoading(true);
     setMessage("");
 
@@ -195,6 +208,7 @@ export function AdminDashboard() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "取得に失敗しました。");
       setResult({ rows: body.rows ?? [], count: body.count ?? 0 });
+      setAppliedFilters({ dateFrom, dateTo, primaryCompany, secondaryCompany, statusFilter });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "取得に失敗しました。");
     } finally {
@@ -425,9 +439,9 @@ export function AdminDashboard() {
   if (checkingSession) {
     return (
       <main className="mx-auto grid min-h-screen max-w-xl place-items-center px-4">
-        <div className="compact-panel grid gap-3 p-5">
-          <h1 className="text-lg font-bold">管理画面</h1>
-          <p className="text-sm text-slate-700">確認中</p>
+        <div className="flex items-center gap-3 text-sm text-slate-500" role="status">
+          <LoaderCircle size={20} className="animate-spin text-emerald-700" aria-hidden="true" />
+          管理画面を準備しています
         </div>
       </main>
     );
@@ -435,70 +449,86 @@ export function AdminDashboard() {
 
   if (!authenticated) {
     return (
-      <main className="min-h-screen bg-slate-50">
-        <header className="border-b border-border bg-white">
-          <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-4">
-            <h1 className="text-xl font-bold text-slate-950">管理画面</h1>
-            <Link className="btn btn-secondary h-11 px-3 text-sm" href="/">
+      <main className="min-h-screen bg-[#f6f7f5]">
+        <header className="border-b border-border bg-white/90">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-5 sm:px-8">
+            <Link href="/" className="flex items-center gap-3 font-bold tracking-tight text-slate-900">
+              <span className="grid size-10 place-items-center rounded-xl bg-emerald-800 text-white"><CalendarDays size={20} aria-hidden="true" /></span>
+              作業予定管理
+            </Link>
+            <Link className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 transition-colors hover:text-emerald-800" href="/">
               入力画面へ
+              <ArrowUpRight size={16} aria-hidden="true" />
             </Link>
           </div>
         </header>
 
-        <div className="mx-auto grid max-w-md px-4 py-8">
-          <form onSubmit={login} className="compact-panel grid w-full gap-4 p-5">
-            <div>
-              <h2 className="text-xl font-bold text-slate-950">ログイン</h2>
-              <p className="mt-1 text-sm text-slate-600">作業予定確認</p>
+        <div className="mx-auto grid max-w-md px-5 py-14 sm:py-24">
+          <h1 className="mb-6 text-2xl font-bold text-slate-900">管理画面</h1>
+          <form onSubmit={login} className="compact-panel grid w-full gap-6 p-6 sm:p-8" aria-busy={loginLoading}>
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-xl bg-slate-100 text-slate-600"><LogIn size={19} aria-hidden="true" /></span>
+              <h2 className="text-lg font-bold tracking-tight text-slate-950">管理画面にログイン</h2>
             </div>
-            {message ? <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{message}</div> : null}
+            {message ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{message}</div> : null}
             <label className="field">
               <span className="label">パスワード</span>
               <input
                 className="input"
                 type="password"
+                name="password"
+                autoComplete="current-password"
+                placeholder="管理者パスワードを入力"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
               />
             </label>
-            <button className="btn btn-primary" type="submit">
-              <LogIn size={18} aria-hidden="true" />
-              ログイン
+            <button className="btn btn-primary w-full" type="submit" disabled={loginLoading}>
+              {loginLoading ? <LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> : <LogIn size={18} aria-hidden="true" />}
+              {loginLoading ? "ログインしています…" : "ログイン"}
             </button>
           </form>
+          <p className="mt-6 text-center text-xs leading-6 text-slate-500">作業予定の登録は<Link href="/" className="ml-1 font-medium text-emerald-800 underline underline-offset-4">入力画面</Link>から行えます。</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <header className="border-b border-border bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
-          <div>
-            <h1 className="text-xl font-bold text-slate-950">管理画面</h1>
-            <p className="mt-1 text-sm text-slate-600">管理者ログイン中</p>
+    <main className="min-h-screen bg-[#f6f7f5]">
+      <header className="border-b border-border bg-white/95">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
+          <div className="flex items-center gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-800 text-white"><CalendarDays size={20} aria-hidden="true" /></span>
+            <div>
+              <p className="font-bold tracking-tight text-slate-950">作業予定管理</p>
+
+            </div>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
-            <Link className="btn btn-secondary" href="/">
+            <Link className="btn btn-secondary px-3 text-xs sm:text-sm" href="/">
               入力画面へ
+              <ArrowUpRight size={15} aria-hidden="true" />
             </Link>
-            <button className="btn btn-secondary" type="button" onClick={logout}>
-              <LogOut size={18} aria-hidden="true" />
-              ログアウト
+            <button className="btn btn-secondary px-3" type="button" onClick={logout} aria-label="ログアウト">
+              <LogOut size={17} aria-hidden="true" />
+              <span className="hidden sm:inline">ログアウト</span>
             </button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-6xl gap-4 px-4 py-4">
-        <nav className="-mx-4 flex border-b border-border bg-white px-4 sm:mx-0 sm:rounded-t-md sm:border sm:border-b-0" role="tablist" aria-label="管理画面メニュー">
+      <div className="mx-auto grid max-w-6xl gap-5 px-4 py-7 sm:px-6 sm:py-9">
+        <div>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{activeTab === "schedules" ? "作業予定を確認する" : "協力会社を管理する"}</h1>
+
+        </div>
+        <nav className="flex gap-2 border-b border-slate-200" aria-label="管理画面メニュー">
           <button
-            className={`flex min-h-12 items-center gap-2 border-b-2 px-4 text-sm font-bold ${activeTab === "schedules" ? "border-sky-700 text-sky-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+            className={`flex min-h-12 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors sm:px-4 ${activeTab === "schedules" ? "border-emerald-700 text-emerald-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
             type="button"
-            role="tab"
-            aria-selected={activeTab === "schedules"}
+            aria-pressed={activeTab === "schedules"}
             onClick={() => {
               setActiveTab("schedules");
               setMessage("");
@@ -508,10 +538,9 @@ export function AdminDashboard() {
             作業予定確認
           </button>
           <button
-            className={`flex min-h-12 items-center gap-2 border-b-2 px-4 text-sm font-bold ${activeTab === "companies" ? "border-sky-700 text-sky-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+            className={`flex min-h-12 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors sm:px-4 ${activeTab === "companies" ? "border-emerald-700 text-emerald-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
             type="button"
-            role="tab"
-            aria-selected={activeTab === "companies"}
+            aria-pressed={activeTab === "companies"}
             onClick={() => {
               setActiveTab("companies");
               setMessage("");
@@ -522,13 +551,23 @@ export function AdminDashboard() {
           </button>
         </nav>
 
-        {message ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800">{message}</div> : null}
+        {message ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{message}</div> : null}
 
-        <section className={`${activeTab === "schedules" ? "grid" : "hidden"} panel -mx-4 gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border`}>
+        {activeTab === "schedules" ? (
+          <div className="grid grid-cols-3 gap-2 sm:gap-4" aria-live="polite">
+            <AdminStat icon={<ClipboardList size={18} aria-hidden="true" />} label="登録された予定" value={result.count} unit="件" />
+            <AdminStat icon={<Building2 size={18} aria-hidden="true" />} label="集約した予定" value={summaryRows.length} unit="件" />
+            <AdminStat icon={<Users size={18} aria-hidden="true" />} label="合計作業人数" value={totalWorkerCount} unit="人" accent />
+          </div>
+        ) : null}
+
+        <form onSubmit={(event) => { event.preventDefault(); void search(); }} className={`${activeTab === "schedules" ? "grid" : "hidden"} panel gap-5 p-4 sm:p-6`} aria-label="作業予定を検索">
+          <div className="flex items-center gap-2 text-sm font-bold text-slate-900"><Search size={16} className="text-emerald-700" aria-hidden="true" />検索条件</div>
           <div className="flex flex-wrap gap-2">
             <button
               className={rangePreset === "today" ? "btn btn-primary h-10" : "btn btn-secondary h-10"}
               type="button"
+              aria-pressed={rangePreset === "today"}
               onClick={() => setQuickRange("today")}
             >
               今日
@@ -536,6 +575,7 @@ export function AdminDashboard() {
             <button
               className={rangePreset === "tomorrow" ? "btn btn-primary h-10" : "btn btn-secondary h-10"}
               type="button"
+              aria-pressed={rangePreset === "tomorrow"}
               onClick={() => setQuickRange("tomorrow")}
             >
               明日
@@ -543,6 +583,7 @@ export function AdminDashboard() {
             <button
               className={rangePreset === "week" ? "btn btn-primary h-10" : "btn btn-secondary h-10"}
               type="button"
+              aria-pressed={rangePreset === "week"}
               onClick={() => setQuickRange("week")}
             >
               今週
@@ -550,6 +591,7 @@ export function AdminDashboard() {
             <button
               className={rangePreset === "custom" ? "btn btn-primary h-10" : "btn btn-secondary h-10"}
               type="button"
+              aria-pressed={rangePreset === "custom"}
               onClick={() => setQuickRange("custom")}
             >
               <CalendarRange size={18} aria-hidden="true" />
@@ -564,16 +606,16 @@ export function AdminDashboard() {
             <div className="grid gap-3 sm:grid-cols-2 md:max-w-xl">
               <label className="field">
                 <span className="label">開始日</span>
-                <input className="input" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+                <input className="input" type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} />
               </label>
               <label className="field">
                 <span className="label">終了日</span>
-                <input className="input" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+                <input className="input" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} />
               </label>
             </div>
           ) : null}
 
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_0.7fr_auto]">
             <label className="field">
               <span className="label">一次会社</span>
               <input
@@ -581,7 +623,7 @@ export function AdminDashboard() {
                 list="admin-primary-companies"
                 value={primaryCompany}
                 onChange={(event) => setPrimaryCompany(event.target.value)}
-                placeholder="入力または選択"
+                placeholder="すべての一次会社"
               />
               <datalist id="admin-primary-companies">
                 {primaryCompanyOptions.map((company) => (
@@ -596,7 +638,7 @@ export function AdminDashboard() {
                 list="admin-secondary-companies"
                 value={secondaryCompany}
                 onChange={(event) => setSecondaryCompany(event.target.value)}
-                placeholder="入力または選択"
+                placeholder="すべての二次会社"
               />
               <datalist id="admin-secondary-companies">
                 {secondaryCompanyOptions.map((company) => (
@@ -604,31 +646,38 @@ export function AdminDashboard() {
                 ))}
               </datalist>
             </label>
-            <button className="btn btn-primary mt-6" type="button" onClick={search} disabled={loading}>
-              <Search size={18} aria-hidden="true" />
-              検索
+            <label className="field">
+              <span className="label">表示する予定</span>
+              <select className="input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
+                <option value="work">作業あり</option>
+                <option value="no_work">作業なし</option>
+              </select>
+            </label>
+            <button className="btn btn-primary self-end" type="submit" disabled={loading}>
+              {loading ? <LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> : <Search size={18} aria-hidden="true" />}
+              {loading ? "取得中…" : "予定を検索"}
             </button>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-            <div className="text-sm font-semibold text-slate-700">
-              予定 {result.count} 件 / 集約 {summaryRows.length} 件 / 合計 {totalWorkerCount} 人 / 出力 {result.rows.length} 行
+            <div className="text-xs leading-6 text-slate-500">
+              {hasPendingFilters ? <span className="font-medium text-amber-700">検索条件が変更されています。「予定を検索」で一覧を更新してください。</span> : "条件を設定して「予定を検索」で一覧を更新します。"}
             </div>
             <div className="flex flex-wrap gap-2">
               <button className="btn btn-secondary" type="button" onClick={() => download("csv")} disabled={loading}>
                 <Download size={18} aria-hidden="true" />
                 CSV
               </button>
-              <button className="btn btn-primary" type="button" onClick={() => download("xlsx")} disabled={loading}>
+              <button className="btn btn-secondary" type="button" onClick={() => download("xlsx")} disabled={loading}>
                 <Download size={18} aria-hidden="true" />
                 Excel
               </button>
             </div>
           </div>
-        </section>
+        </form>
 
-        <section className={`${activeTab === "companies" ? "grid" : "hidden"} panel -mx-4 gap-4 px-4 py-4 sm:mx-0 sm:rounded-md sm:border`}>
-          <div className="mb-1 flex items-center justify-between gap-3">
+        <section className={`${activeTab === "companies" ? "grid" : "hidden"} panel gap-5 p-4 sm:p-6`}>
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-slate-950">協力会社一覧</h2>
               <p className="mt-1 text-sm text-slate-600">入力画面に表示する会社名と順番を管理します。</p>
@@ -636,7 +685,7 @@ export function AdminDashboard() {
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">一次 {companyGroups.length}社 / 登録 {companyRows.length}件</span>
           </div>
 
-          <div className="grid items-start gap-3 md:grid-cols-[1fr_1fr_1.5fr_auto]">
+          <div className="grid items-start gap-4 rounded-xl bg-slate-50 p-4 md:grid-cols-[1fr_1fr_1.5fr_auto]">
             <label className="field">
               <span className="label">一次会社</span>
               <input className="input" value={newPrimaryCompany} onChange={(event) => setNewPrimaryCompany(event.target.value)} placeholder="例: 山田設備" />
@@ -649,15 +698,16 @@ export function AdminDashboard() {
               <span className="label">二次会社（複数入力可・1行に1社）</span>
               <textarea className="textarea min-h-28" value={newSecondaryCompanies} onChange={(event) => setNewSecondaryCompanies(event.target.value)} placeholder={"例:\n山田配管工業\n鈴木電設\n佐藤工業"} />
             </label>
-            <button className="btn btn-primary mt-6" type="button" onClick={() => void addCompanyMaster()} disabled={companyLoading}>
+            <button className="btn btn-primary md:mt-6" type="button" onClick={() => void addCompanyMaster()} disabled={companyLoading}>
+              <Plus size={17} aria-hidden="true" />
               まとめて追加
             </button>
           </div>
 
-          <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2">
+          <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
             <div className="text-sm text-slate-700">
               {selectedPrimaryCompany ? (
-                <><span className="font-bold text-sky-900">{selectedPrimaryCompany}</span> の登録をまとめて移動します</>
+                <><span className="font-bold text-emerald-900">{selectedPrimaryCompany}</span> の登録をまとめて移動します</>
               ) : "一覧の一次会社名をクリックすると、その会社をまとめて並び替えられます。"}
             </div>
             <div className="flex gap-2">
@@ -673,7 +723,7 @@ export function AdminDashboard() {
           <div className="overflow-hidden rounded-md border border-border bg-slate-50">
             <div className="max-h-[36rem] overflow-auto">
               <table className="min-w-[900px] w-full border-collapse text-sm">
-                <thead className="bg-slate-200 text-slate-800">
+                <thead className="sticky top-0 z-10 bg-slate-100 text-slate-600">
                   <tr>
                     <th className="px-3 py-2 text-left">一次会社</th>
                     <th className="px-3 py-2 text-left">職種</th>
@@ -690,12 +740,12 @@ export function AdminDashboard() {
                     </tr>
                   ) : (
                     companyGroups.flatMap((group) => group.rows).map((row) => (
-                      <tr key={row.id} className={`border-t border-border ${selectedPrimaryCompany === row.primary_company ? "bg-sky-50" : "bg-white"}`}>
+                      <tr key={row.id} className={`border-t border-border ${selectedPrimaryCompany === row.primary_company ? "bg-emerald-50" : "bg-white"}`}>
                         <td className="px-3 py-2">
                           {editingCompanyId === row.id ? (
                             <input className="input h-10" value={editPrimaryCompany} onChange={(event) => setEditPrimaryCompany(event.target.value)} aria-label="一次会社を編集" />
                           ) : (
-                            <button className={`rounded px-2 py-1 text-left font-semibold ${selectedPrimaryCompany === row.primary_company ? "bg-sky-700 text-white" : "text-sky-800 hover:bg-sky-100"}`} type="button" onClick={() => setSelectedPrimaryCompany(row.primary_company)}>
+                            <button className={`rounded px-2 py-1 text-left font-semibold ${selectedPrimaryCompany === row.primary_company ? "bg-emerald-700 text-white" : "text-emerald-800 hover:bg-emerald-100"}`} type="button" onClick={() => setSelectedPrimaryCompany(row.primary_company)}>
                               {row.primary_company}
                             </button>
                           )}
@@ -744,37 +794,35 @@ export function AdminDashboard() {
           </div>
         </section>
 
-        <section className={`${activeTab === "schedules" ? "grid" : "hidden"} panel -mx-4 gap-3 px-4 py-4 sm:mx-0 sm:rounded-md sm:border`}>
-          <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
-            <label className="field">
-              <span className="label">表示する予定</span>
-              <select className="input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
-                <option value="work">作業あり</option>
-                <option value="no_work">作業なし</option>
-              </select>
-            </label>
-            <label className="field">
-              <span className="label">並び替え</span>
-              <select className="input" value={sortBy} onChange={(event) => setSortBy(event.target.value as SortBy)}>
+        <section className={`${activeTab === "schedules" ? "flex" : "hidden"} flex-wrap items-center justify-between gap-4 pt-2`} aria-label="検索結果の表示設定">
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-slate-900">作業予定 <span className="ml-1 text-sm font-medium text-slate-500">{summaryRows.length}件</span></h2>
+            <p className="mt-1 text-xs text-slate-500">{appliedFilters.dateFrom === appliedFilters.dateTo ? appliedFilters.dateFrom : `${appliedFilters.dateFrom} 〜 ${appliedFilters.dateTo}`} ・ {appliedFilters.statusFilter === "work" ? "作業あり" : "作業なし"}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label>
+              <span className="sr-only">並び替え</span>
+              <select className="input h-11 w-auto text-xs" value={sortBy} onChange={(event) => setSortBy(event.target.value as SortBy)}>
                 <option value="dateAsc">日付が早い順</option>
                 <option value="dateDesc">日付が遅い順</option>
                 <option value="primaryAsc">一次会社順</option>
               </select>
             </label>
-            <div className="field">
-              <span className="label">表示形式</span>
-              <div className="inline-flex h-12 overflow-hidden rounded-md border border-border bg-white">
+            <div role="group" aria-label="表示形式">
+              <div className="inline-flex h-11 gap-1 rounded-xl border border-border bg-white p-1">
                 <button
-                  className={`inline-flex items-center gap-2 px-4 text-sm font-semibold ${scheduleView === "summary" ? "bg-slate-800 text-white" : "text-slate-700 hover:bg-slate-50"}`}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors ${scheduleView === "summary" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
                   type="button"
+                  aria-pressed={scheduleView === "summary"}
                   onClick={() => setScheduleView("summary")}
                 >
                   <List size={17} aria-hidden="true" />
                   一覧
                 </button>
                 <button
-                  className={`inline-flex items-center gap-2 border-l border-border px-4 text-sm font-semibold ${scheduleView === "calendar" ? "bg-slate-800 text-white" : "text-slate-700 hover:bg-slate-50"}`}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors ${scheduleView === "calendar" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
                   type="button"
+                  aria-pressed={scheduleView === "calendar"}
                   onClick={() => setScheduleView("calendar")}
                 >
                   <Table2 size={17} aria-hidden="true" />
@@ -785,13 +833,40 @@ export function AdminDashboard() {
           </div>
         </section>
 
-        <section className={`${activeTab === "schedules" && scheduleView === "summary" ? "block" : "hidden"} overflow-hidden rounded-md border border-border bg-white`}>
-          <div className="overflow-x-auto">
+        <section className={`${activeTab === "schedules" && scheduleView === "summary" ? "block" : "hidden"} overflow-hidden rounded-2xl border border-border bg-white`} aria-label="作業予定一覧" aria-busy={loading}>
+          <div className="grid divide-y divide-slate-100 md:hidden">
+            {summaryRows.length === 0 ? <ScheduleEmpty loading={loading} /> : summaryRows.map((row) => {
+              const expanded = expandedScheduleKeys.includes(row.key);
+              return (
+                <article key={row.key} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-slate-500">{row.workDate}</p>
+                      <h3 className="mt-1.5 break-words font-bold text-slate-900">{row.primaryCompany}</h3>
+                    </div>
+                    <span className="shrink-0 rounded-xl bg-emerald-50 px-3 py-2 text-lg font-bold tabular-nums text-emerald-800">{row.totalCount}<span className="ml-1 text-xs font-medium">人</span></span>
+                  </div>
+                  <dl className="mt-4 grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-2 text-xs leading-6">
+                    <dt className="text-slate-500">作業エリア</dt><dd className="break-words text-slate-800">{row.workArea || "—"}</dd>
+                    <dt className="text-slate-500">作業内容</dt><dd className="break-words text-slate-800">{row.workContent || "—"}</dd>
+                    {appliedFilters.statusFilter === "no_work" && row.nextVisitDate ? <><dt className="text-slate-500">次回来場</dt><dd className="text-slate-800">{row.nextVisitDate}</dd></> : null}
+                  </dl>
+                  <button className="mt-4 inline-flex min-h-10 items-center gap-1.5 text-xs font-semibold text-emerald-800" type="button" aria-expanded={expanded} onClick={() => toggleScheduleRow(row.key)}>
+                    {expanded ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+                    {expanded ? "人数の内訳を閉じる" : "人数の内訳を確認"}
+                  </button>
+                  {expanded ? <ScheduleDetails row={row} /> : null}
+                </article>
+              );
+            })}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-[900px] w-full border-collapse text-sm">
-              <thead className="bg-slate-800 text-white">
+              <caption className="sr-only">会社ごとの作業予定と人数の内訳</caption>
+              <thead className="border-b border-border bg-slate-50 text-xs text-slate-500">
                 <tr>
                   {["作業日", "一次会社", "合計人数", "作業エリア", "作業内容", "内訳"].map((header) => (
-                    <th key={header} className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                    <th key={header} scope="col" className="whitespace-nowrap px-4 py-4 text-left font-semibold">
                       {header}
                     </th>
                   ))}
@@ -800,8 +875,8 @@ export function AdminDashboard() {
               <tbody>
                 {summaryRows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
-                      データなし
+                    <td colSpan={6}>
+                      <ScheduleEmpty loading={loading} />
                     </td>
                   </tr>
                 ) : (
@@ -810,21 +885,15 @@ export function AdminDashboard() {
                     return (
                       <tr
                         key={row.key}
-                        className="cursor-pointer border-t border-border align-top hover:bg-slate-50"
-                        role="button"
-                        tabIndex={0}
+                        className="cursor-pointer border-t border-border align-top transition-colors hover:bg-slate-50/80"
                         onClick={() => toggleScheduleRow(row.key)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            toggleScheduleRow(row.key);
-                          }
-                        }}
                       >
                         <td className="whitespace-nowrap px-3 py-3">
                           <button
-                            className="inline-flex items-center gap-1 font-semibold text-sky-800 hover:text-sky-950"
+                            className="inline-flex items-center gap-1 font-semibold text-emerald-800 hover:text-emerald-950"
                             type="button"
+                            aria-expanded={expanded}
+                            aria-label={`${row.workDate} ${row.primaryCompany}の人数内訳`}
                             onClick={(event) => {
                               event.stopPropagation();
                               toggleScheduleRow(row.key);
@@ -833,16 +902,18 @@ export function AdminDashboard() {
                             {expanded ? <ChevronDown size={17} aria-hidden="true" /> : <ChevronRight size={17} aria-hidden="true" />}
                             {row.workDate}
                           </button>
-                          {statusFilter === "no_work" && row.nextVisitDate ? <div className="mt-1 text-xs text-slate-500">来場予定 {row.nextVisitDate}</div> : null}
+                          {appliedFilters.statusFilter === "no_work" && row.nextVisitDate ? <div className="mt-1 text-xs text-slate-500">来場予定 {row.nextVisitDate}</div> : null}
                         </td>
                         <td className="whitespace-nowrap px-3 py-3 font-semibold">{row.primaryCompany}</td>
-                        <td className="whitespace-nowrap px-3 py-3 text-right font-bold">{row.totalCount}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right font-bold tabular-nums text-emerald-800">{row.totalCount}<span className="ml-1 text-xs font-normal text-slate-400">人</span></td>
                         <td className="whitespace-nowrap px-3 py-3">{row.workArea}</td>
                         <td className="min-w-56 px-3 py-3">{row.workContent}</td>
                         <td className="px-3 py-3">
                           <button
                             className="btn btn-secondary h-9 px-3"
                             type="button"
+                            aria-expanded={expanded}
+                            aria-label={`${row.primaryCompany}の人数内訳を${expanded ? "閉じる" : "表示"}`}
                             onClick={(event) => {
                               event.stopPropagation();
                               toggleScheduleRow(row.key);
@@ -850,24 +921,7 @@ export function AdminDashboard() {
                           >
                             {expanded ? "閉じる" : `${row.details.length}件`}
                           </button>
-                          {expanded ? (
-                            <div className="mt-2 grid gap-1 rounded-md bg-slate-50 p-2 text-sm text-slate-700">
-                              <div className="grid grid-cols-[1fr_72px] items-center gap-3 rounded bg-white px-2 py-2">
-                                <span className="font-semibold text-slate-950">{row.primaryCompany}</span>
-                                <span className="text-right font-bold">{row.primaryCount === "" ? "-" : `${row.primaryCount}人`}</span>
-                              </div>
-                              {row.details.length > 0 ? (
-                                row.details.map((detail, index) => (
-                                  <div key={`${detail.company}-${index}`} className="grid grid-cols-[1fr_72px] items-center gap-3 border-t border-border px-2 py-2">
-                                    <span>{detail.company || "二次会社なし"}</span>
-                                    <span className="text-right font-semibold">{detail.count === "" ? "-" : `${detail.count}人`}</span>
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="border-t border-border pt-1 text-slate-500">二次会社なし</div>
-                              )}
-                            </div>
-                          ) : null}
+                          {expanded ? <ScheduleDetails row={row} /> : null}
                         </td>
                       </tr>
                     );
@@ -879,8 +933,9 @@ export function AdminDashboard() {
         </section>
 
         <section className={`${activeTab === "schedules" && scheduleView === "calendar" ? "grid" : "hidden"} gap-3`}>
-          <div className="overflow-hidden rounded-md border border-border bg-white">
-            <div className="grid grid-cols-7 border-b border-border bg-slate-800 text-center text-xs font-bold text-white">
+          <div className="overflow-x-auto rounded-2xl border border-border bg-white">
+            <div className="min-w-[630px]">
+            <div className="grid grid-cols-7 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500">
               {["月", "火", "水", "木", "金", "土", "日"].map((day) => (
                 <div key={day} className="px-2 py-2">
                   {day}
@@ -898,13 +953,15 @@ export function AdminDashboard() {
                 return (
                   <button
                     key={day}
-                    className={`min-h-32 bg-white p-2 text-left align-top hover:bg-sky-50 ${selected ? "ring-2 ring-inset ring-sky-700" : ""}`}
+                    className={`min-h-32 bg-white p-2 text-left align-top hover:bg-emerald-50 ${selected ? "ring-2 ring-inset ring-emerald-700" : ""}`}
                     type="button"
+                    aria-pressed={selected}
+                    aria-label={`${day}、予定${rows.length}件、合計${dayTotal}人`}
                     onClick={() => setSelectedCalendarDate(day)}
                   >
                     <div className="mb-2 flex items-center justify-between gap-1">
                       <span className="text-sm font-bold text-slate-900">{day.slice(5)}</span>
-                      {dayTotal > 0 ? <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] font-bold text-sky-900">{dayTotal}人</span> : null}
+                      {dayTotal > 0 ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-900">{dayTotal}人</span> : null}
                     </div>
                     <div className="grid gap-1">
                       {rows.slice(0, 3).map((row) => (
@@ -922,11 +979,12 @@ export function AdminDashboard() {
                 );
               })}
             </div>
+            </div>
           </div>
 
-          <div className="rounded-md border border-border bg-white p-3">
+          <div className="rounded-2xl border border-border bg-white p-5">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-bold text-slate-950">{selectedCalendarDate ?? "日付を選択"} の詳細</h2>
+              <h2 className="text-base font-bold text-slate-950">{selectedCalendarDate ? `${selectedCalendarDate} の詳細` : "日付ごとの予定"}</h2>
               {selectedCalendarDate ? <span className="text-sm font-semibold text-slate-600">{selectedCalendarRows.length} 件</span> : null}
             </div>
             {!selectedCalendarDate ? (
@@ -956,6 +1014,45 @@ export function AdminDashboard() {
         </section>
       </div>
     </main>
+  );
+}
+
+function AdminStat({ icon, label, value, unit, accent = false }: { icon: ReactNode; label: string; value: number; unit: string; accent?: boolean }) {
+  return (
+    <div className={`rounded-2xl border p-3 sm:p-5 ${accent ? "border-emerald-200 bg-emerald-50/70" : "border-border bg-white"}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className={`text-[10px] font-medium sm:text-xs ${accent ? "text-emerald-800" : "text-slate-500"}`}>{label}</p>
+        <span className={`hidden sm:block ${accent ? "text-emerald-600" : "text-slate-400"}`}>{icon}</span>
+      </div>
+      <p className={`mt-3 text-2xl font-bold tracking-tight tabular-nums sm:text-3xl ${accent ? "text-emerald-900" : "text-slate-900"}`}>{value.toLocaleString("ja-JP")}<span className="ml-1.5 text-xs font-medium text-slate-500">{unit}</span></p>
+    </div>
+  );
+}
+
+function ScheduleEmpty({ loading }: { loading: boolean }) {
+  return (
+    <div className="flex flex-col items-center px-5 py-14 text-center" role="status">
+      <span className="grid size-12 place-items-center rounded-2xl bg-slate-50 text-slate-400">{loading ? <LoaderCircle size={22} className="animate-spin" aria-hidden="true" /> : <CalendarDays size={22} aria-hidden="true" />}</span>
+      <p className="mt-4 text-sm font-semibold text-slate-700">{loading ? "作業予定を取得しています" : "該当する予定はありません"}</p>
+      {!loading ? <p className="mt-2 text-xs leading-6 text-slate-500">日付や会社名などの検索条件を変更してお試しください。</p> : null}
+    </div>
+  );
+}
+
+function ScheduleDetails({ row }: { row: ScheduleSummaryRow }) {
+  return (
+    <div className="mt-2 grid min-w-40 gap-1 rounded-xl bg-slate-50 p-2 text-xs text-slate-600">
+      <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg bg-white px-3 py-2.5">
+        <span className="font-semibold text-slate-900">{row.primaryCompany}</span>
+        <span className="text-right font-bold tabular-nums">{row.primaryCount === "" ? "—" : `${row.primaryCount}人`}</span>
+      </div>
+      {row.details.length > 0 ? row.details.map((detail, index) => (
+        <div key={`${detail.company}-${index}`} className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2">
+          <span>{detail.company || "二次会社なし"}</span>
+          <span className="text-right font-semibold tabular-nums">{detail.count === "" ? "—" : `${detail.count}人`}</span>
+        </div>
+      )) : <p className="px-3 py-2 text-slate-400">二次会社なし</p>}
+    </div>
   );
 }
 

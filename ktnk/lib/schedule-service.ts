@@ -36,15 +36,11 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
 
     if (findError) throwSupabaseError(findError, "既存予定の確認に失敗しました。");
 
-    if (existing?.id) {
-      const { error: deleteError } = await supabase
-        .from("schedule_subcompanies")
-        .delete()
-        .eq("schedule_group_id", existing.id);
-
-      if (deleteError) throwSupabaseError(deleteError, "二次会社予定の削除に失敗しました。");
-    }
-
+    // Resolve every copied value before replacing any existing data.
+    const resolvedSubcompanies = resolveSubcompanyInputs(
+      input.status === "work" ? input.currentSubcompanies : input.nextSubcompanies,
+      previous?.subcompanies.filter((sub) => sub.kind === (input.status === "work" ? "current" : "next_visit")) ?? [],
+    );
     const payload = {
       id: existing?.id,
       work_date: workDate,
@@ -59,6 +55,22 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
       next_work_content: input.status === "no_work" ? emptyToNull(resolvePreviousText(input.nextWorkContent, previous?.next_work_content, "作業内容")) : null,
     };
 
+    if (input.status === "work") {
+      const secondaryTotal = resolvedSubcompanies.reduce((sum, subcompany) => sum + (subcompany.workerCount ?? 0), 0);
+      if (payload.primary_count === 0 && secondaryTotal < 1) {
+        throw new Error("一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。");
+      }
+    }
+
+    if (existing?.id) {
+      const { error: deleteError } = await supabase
+        .from("schedule_subcompanies")
+        .delete()
+        .eq("schedule_group_id", existing.id);
+
+      if (deleteError) throwSupabaseError(deleteError, "二次会社予定の削除に失敗しました。");
+    }
+
     const { data: group, error: upsertError } = await supabase
       .from("schedule_groups")
       .upsert(payload, { onConflict: "work_date,primary_company" })
@@ -69,10 +81,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
 
     const subcompanyRows = buildSubcompanyRows(
       group.id,
-      resolveSubcompanyInputs(
-        input.status === "work" ? input.currentSubcompanies : input.nextSubcompanies,
-        previous?.subcompanies.filter((sub) => sub.kind === (input.status === "work" ? "current" : "next_visit")) ?? [],
-      ),
+      resolvedSubcompanies,
       input.status === "work" ? "current" : "next_visit",
     );
 
@@ -143,7 +152,7 @@ export async function getSchedules(params: ScheduleSearchParams) {
   return schedules;
 }
 
-async function getPreviousScheduleForCopy(primaryCompany: string, status: ScheduleStatus, workDate: string) {
+export async function getPreviousScheduleForCopy(primaryCompany: string, status: ScheduleStatus, workDate: string) {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("schedule_groups")
@@ -161,6 +170,18 @@ async function getPreviousScheduleForCopy(primaryCompany: string, status: Schedu
     .maybeSingle();
 
   if (error) throwSupabaseError(error, "前回の予定取得に失敗しました。");
+  return data ? normalizeScheduleRow(data) : null;
+}
+
+export async function getWorkScheduleOnDate(primaryCompany: string, workDate: string) {
+  const { data, error } = await createServerClient()
+    .from("schedule_groups")
+    .select("*, schedule_subcompanies (*)")
+    .eq("primary_company", primaryCompany)
+    .eq("status", "work")
+    .eq("work_date", workDate)
+    .maybeSingle();
+  if (error) throwSupabaseError(error, "本日の予定取得に失敗しました。");
   return data ? normalizeScheduleRow(data) : null;
 }
 
@@ -292,7 +313,7 @@ function resolveSubcompanyInputs(
 
     const secondaryCompany = subcompany.secondaryCompany.trim();
     const previous = previousSubcompanies.find((row) => (row.secondary_company ?? "") === secondaryCompany);
-    if (!previous) {
+    if (!previous || previous.worker_count === null) {
       throw new Error(`${secondaryCompany}の前回人数が見つかりません。`);
     }
 
@@ -304,14 +325,19 @@ function resolveSubcompanyInputs(
 }
 
 function usesPreviousValue(input: ScheduleSubmitParsed) {
+  if (input.status === "work") {
+    return (
+      input.workArea === SAME_AS_PREVIOUS ||
+      input.workContent === SAME_AS_PREVIOUS ||
+      input.usePreviousPrimaryCount ||
+      input.currentSubcompanies.some((subcompany) => subcompany.usePreviousWorkerCount)
+    );
+  }
+
   return (
-    input.workArea === SAME_AS_PREVIOUS ||
-    input.workContent === SAME_AS_PREVIOUS ||
     input.nextWorkArea === SAME_AS_PREVIOUS ||
     input.nextWorkContent === SAME_AS_PREVIOUS ||
-    input.usePreviousPrimaryCount ||
     input.usePreviousNextPrimaryCount ||
-    input.currentSubcompanies.some((subcompany) => subcompany.usePreviousWorkerCount) ||
     input.nextSubcompanies.some((subcompany) => subcompany.usePreviousWorkerCount)
   );
 }

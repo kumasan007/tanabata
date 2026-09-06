@@ -62,40 +62,25 @@ export const scheduleSubmitSchema = z
         return sum + (row.secondaryCompany.trim() && !row.usePreviousWorkerCount ? row.workerCount ?? 0 : 0);
       }, 0);
 
-      if (!value.usePreviousPrimaryCount && value.primaryCount === 0 && secondaryTotal < 1) {
+      const hasPreviousSecondaryCount = value.currentSubcompanies.some(
+        (row) => row.secondaryCompany.trim() !== "" && row.usePreviousWorkerCount,
+      );
+
+      if (!value.usePreviousPrimaryCount && value.primaryCount === 0 && secondaryTotal < 1 && !hasPreviousSecondaryCount) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["currentSubcompanies"],
           message: "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。",
         });
       }
-    } else {
-      if (!value.usePreviousNextPrimaryCount && value.nextPrimaryCount === null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["nextPrimaryCount"],
-          message: "一次会社人数を入力してください。",
-        });
-      }
-
-      const nextSecondaryTotal = value.nextSubcompanies.reduce((sum, row) => {
-        return sum + (row.secondaryCompany.trim() && !row.usePreviousWorkerCount ? row.workerCount ?? 0 : 0);
-      }, 0);
-
-      if (!value.usePreviousNextPrimaryCount && value.nextPrimaryCount === 0 && nextSecondaryTotal < 1) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["nextSubcompanies"],
-          message: "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。",
-        });
-      }
     }
 
-    for (const [index, subcompany] of value.currentSubcompanies.entries()) {
-      if (subcompany.secondaryCompany.trim() !== "" && !subcompany.usePreviousWorkerCount && subcompany.workerCount === null) {
+    const subcompanyField = value.status === "work" ? "currentSubcompanies" : "nextSubcompanies";
+    for (const [index, subcompany] of value[subcompanyField].entries()) {
+      if (value.status === "work" && subcompany.secondaryCompany.trim() !== "" && !subcompany.usePreviousWorkerCount && subcompany.workerCount === null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["currentSubcompanies", index, "workerCount"],
+          path: [subcompanyField, index, "workerCount"],
           message: "二次会社人数を入力してください。",
         });
       }
@@ -103,25 +88,7 @@ export const scheduleSubmitSchema = z
       if (((subcompany.workerCount ?? 0) > 0 || subcompany.usePreviousWorkerCount) && subcompany.secondaryCompany.trim() === "") {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["currentSubcompanies", index, "secondaryCompany"],
-          message: "二次会社人数を入力する場合は、二次会社を選択してください。",
-        });
-      }
-    }
-
-    for (const [index, subcompany] of value.nextSubcompanies.entries()) {
-      if (subcompany.secondaryCompany.trim() !== "" && !subcompany.usePreviousWorkerCount && subcompany.workerCount === null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["nextSubcompanies", index, "workerCount"],
-          message: "二次会社人数を入力してください。",
-        });
-      }
-
-      if (((subcompany.workerCount ?? 0) > 0 || subcompany.usePreviousWorkerCount) && subcompany.secondaryCompany.trim() === "") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["nextSubcompanies", index, "secondaryCompany"],
+          path: [subcompanyField, index, "secondaryCompany"],
           message: "二次会社人数を入力する場合は、二次会社を選択してください。",
         });
       }
