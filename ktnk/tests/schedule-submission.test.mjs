@@ -184,6 +184,32 @@ test("コピー元取得は会社未選択でDBを呼ばない", async () => {
   assert.equal(calls.length, 0);
 });
 
+test("今日以前の作業がない場合は最も近い未来の予定を返す", async () => {
+  const previousCalls = [];
+  const futureCalls = [];
+  const get = copySourceRoute(null, previousCalls, false, {
+    work_date: "2026-09-10", primary_count: 5, work_area: "3階", work_content: "搬入",
+    subcompanies: [{ kind: "current", secondary_company: "B", worker_count: 2 }],
+  }, futureCalls);
+  const response = await get({ url: "http://localhost/api/schedules/copy-source?primaryCompany=A" });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.source.workDate, "2026-09-10");
+  assert.equal(response.body.source.primaryCount, 5);
+  assert.deepEqual(previousCalls, [["A", "work", "2026-09-07"]]);
+  assert.deepEqual(futureCalls, [["A", "work", "2026-09-07"]]);
+});
+
+test("今日以前の作業がある場合は未来の予定を検索しない", async () => {
+  const futureCalls = [];
+  const get = copySourceRoute({
+    work_date: "2026-09-05", primary_count: 3, subcompanies: [],
+  }, [], false, null, futureCalls);
+  const response = await get({ url: "http://localhost/api/schedules/copy-source?primaryCompany=A" });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.source.workDate, "2026-09-05");
+  assert.equal(futureCalls.length, 0);
+});
+
 test("コピー元がない場合と取得失敗を区別する", async () => {
   const request = { url: "http://localhost/api/schedules/copy-source?primaryCompany=A" };
   const missing = await copySourceRoute(null, [])(request);
@@ -378,32 +404,6 @@ test("company deletion requires admin and exactly one target", async () => {
     });
     assert.equal((await DELETE({ url: `http://localhost/api/admin/company-master${query}` })).status, status);
   }
-});
-
-test("今日以前の作業がない場合は最も近い未来の予定を返す", async () => {
-  const previousCalls = [];
-  const futureCalls = [];
-  const get = copySourceRoute(null, previousCalls, false, {
-    work_date: "2026-09-10", primary_count: 5, work_area: "3階", work_content: "搬入",
-    subcompanies: [{ kind: "current", secondary_company: "B", worker_count: 2 }],
-  }, futureCalls);
-  const response = await get({ url: "http://localhost/api/schedules/copy-source?primaryCompany=A" });
-  assert.equal(response.status, 200);
-  assert.equal(response.body.source.workDate, "2026-09-10");
-  assert.equal(response.body.source.primaryCount, 5);
-  assert.deepEqual(previousCalls, [["A", "work", "2026-09-07"]]);
-  assert.deepEqual(futureCalls, [["A", "work", "2026-09-07"]]);
-});
-
-test("今日以前の作業がある場合は未来の予定を検索しない", async () => {
-  const futureCalls = [];
-  const get = copySourceRoute({
-    work_date: "2026-09-05", primary_count: 3, subcompanies: [],
-  }, [], false, null, futureCalls);
-  const response = await get({ url: "http://localhost/api/schedules/copy-source?primaryCompany=A" });
-  assert.equal(response.status, 200);
-  assert.equal(response.body.source.workDate, "2026-09-05");
-  assert.equal(futureCalls.length, 0);
 });
 
 test("company deletion scopes a single database operation to the requested company or row", async () => {
