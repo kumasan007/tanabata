@@ -24,11 +24,11 @@ import {
 import Link from "next/link";
 import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { CompanyMaster, CompanyMasterRow, ExportRow, ScheduleWithSubcompanies } from "@/lib/types";
+import type { CompanyMaster, CompanyMasterRow, ScheduleListRow, ScheduleWithSubcompanies } from "@/lib/types";
 import { addDays, toDateString } from "@/lib/utils";
 
 type AdminResult = {
-  rows: ExportRow[];
+  rows: ScheduleListRow[];
   count: number;
   schedules: ScheduleWithSubcompanies[];
 };
@@ -1947,7 +1947,7 @@ function RoleBadges({ roles }: { roles: string[] }) {
 }
 
 function buildScheduleSummaryRows(
-  rows: ExportRow[],
+  rows: ScheduleListRow[],
   statusFilter: StatusFilter,
 ): ScheduleSummaryRow[] {
   const groups = new Map<string, ScheduleSummaryRow>();

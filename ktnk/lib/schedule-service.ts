@@ -1,6 +1,6 @@
 import { createServerClient } from "@/lib/supabase";
 import type {
-  ExportRow,
+  ScheduleListRow,
   ScheduleGroupRow,
   ScheduleStatus,
   ScheduleSummary,
@@ -257,8 +257,8 @@ export async function getScheduleSummariesByPrimaryCompany(primaryCompany: strin
   });
 }
 
-export function schedulesToExportRows(schedules: ScheduleWithSubcompanies[]): ExportRow[] {
-  const rows: ExportRow[] = [];
+export function schedulesToListRows(schedules: ScheduleWithSubcompanies[]): ScheduleListRow[] {
+  const rows: ScheduleListRow[] = [];
 
   for (const schedule of schedules) {
     const currentSubs = schedule.subcompanies

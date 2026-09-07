@@ -81,7 +81,7 @@ export type ScheduleWithSubcompanies = ScheduleGroupRow & {
   subcompanies: ScheduleSubcompanyRow[];
 };
 
-export type ExportRow = {
+export type ScheduleListRow = {
   workDate: string;
   status: string;
   primaryCompany: string;

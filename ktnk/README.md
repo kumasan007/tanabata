@@ -13,8 +13,6 @@
 - 会社マスタを含むすべての業務データはSupabase PostgreSQLを正とする
 - 同じ作業日・同じ一次会社の再送信は上書きする
 - 送信履歴は残さない
-- Excel出力は日付ごとにシートを分ける
-- CSV出力も残し、既存Excelへ手動で貼り付け・新規シート追加できるようにする
 
 業務データの流れは `ブラウザ → Next.js API routes → Supabase` に統一しています。Boxなどの外部ストレージからデータを取得・同期する処理はありません。
 
@@ -33,7 +31,6 @@ SUPABASE_ANON_KEY=
 SUPABASE_SECRET_KEY=
 ADMIN_PASSWORD=
 ADMIN_SESSION_SECRET=
-EXCEL_FEED_TOKEN=
 ```
 
 Supabase接続はサーバー側のNext.js API routesに集約し、`SUPABASE_URL` と `SUPABASE_ANON_KEY` を使用します。`supabase/migrations/20260904_allow_anon_app_access.sql` を実行して、必要なRLSポリシーを適用してください。
@@ -69,15 +66,6 @@ anonキー運用では公開キーを知る利用者がSupabase REST APIを直�
 ADMIN_SESSION_SECRET=change-this-to-a-long-random-string
 ```
 
-`EXCEL_FEED_TOKEN` はExcelの「Webから」でCSV同期するときのURL用パスワードです。Excel側のURLに付けます。
-
-例:
-
-```text
-EXCEL_FEED_TOKEN=change-this-too
-https://your-vercel-domain.example/api/excel-feed?token=change-this-too
-```
-
 ## Vercel
 
 VercelではRoot Directoryを `ktnk` にします。
@@ -90,7 +78,6 @@ SUPABASE_ANON_KEY
 SUPABASE_SECRET_KEY
 ADMIN_PASSWORD
 ADMIN_SESSION_SECRET
-EXCEL_FEED_TOKEN
 ```
 
 Build Command:
@@ -112,30 +99,6 @@ npm install
 会社名リストはSupabaseの `company_master` テーブルで管理します。管理画面の「協力会社一覧」タブから追加・編集・並び替え・削除でき、職人側フォームへ即時反映されます。追加時は一次会社を1回入力し、複数の二次会社を1行ずつまとめて登録できます。一覧の上下ボタンで並び替え、自動保存します。一次会社は配下の二次会社と一緒に移動し、二次会社は同じ一次会社内で並び替えられます。UUIDは行の内部識別にだけ使い、画面には表示しません。
 
 二次会社がない一次会社は、二次会社を空欄にして登録します。同じ一次会社・二次会社の組み合わせは重複登録できません。
-
-## ExcelのWeb同期
-
-Excelの「データ」タブから「Webから」を使う場合は、Supabase REST APIを直接読むのではなく、アプリ側のCSVフィードを使います。
-
-```text
-https://your-vercel-domain.example/api/excel-feed?token=EXCEL_FEED_TOKEN
-```
-
-日付範囲を指定する場合:
-
-```text
-https://your-vercel-domain.example/api/excel-feed?token=EXCEL_FEED_TOKEN&dateFrom=2026-09-04&dateTo=2026-09-10
-```
-
-未指定の場合は、日本時間の今日から14日分を返します。
-
-## Excel運用
-
-`excel/作業予定マスタ.xlsx` はSupabaseに保存された予定を閲覧・加工するための出力先です。Excelファイルを正データとしては扱いません。
-
-取込マクロは `excel/vba/ImportSchedules.bas` に分けて置いています。この環境ではExcel本体の自動操作が使えないため、直接 `.xlsm` にマクロを埋め込んだ状態では作成していません。
-
-詳細は [excel/README.md](excel/README.md) を参照してください。
 
 ## 設計メモ
 

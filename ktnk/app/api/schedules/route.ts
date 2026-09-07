@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertAdminFromRequest, createServerClient } from "@/lib/supabase";
-import { getSchedules, saveScheduleSubmission, ScheduleAlreadyExistsError, schedulesToExportRows } from "@/lib/schedule-service";
+import { getSchedules, saveScheduleSubmission, ScheduleAlreadyExistsError, schedulesToListRows } from "@/lib/schedule-service";
 import type { ScheduleStatus } from "@/lib/types";
 import { scheduleSubmitSchema } from "@/lib/validation";
 
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       schedules,
-      rows: schedulesToExportRows(schedules),
+      rows: schedulesToListRows(schedules),
       count: schedules.length,
     });
   } catch (error) {
