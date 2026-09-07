@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
@@ -65,7 +64,6 @@ export function WorkerCalendar({ initialDate }: { initialDate: string }) {
   }
 
   return <div className="min-h-screen pb-10">
-    <header className="border-b border-border bg-white"><div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4"><Link href="/" className="text-xl font-bold">作業カレンダー</Link><div className="flex gap-2"><Link href="/schedule" className="btn btn-secondary">作業入力</Link><Link href="/new-entrants" className="btn btn-secondary">新規入場</Link></div></div></header>
     <main className="mx-auto max-w-6xl px-3 py-5 sm:px-4">
       <div className="panel flex flex-wrap items-end gap-3 p-4">
         <button type="button" className="btn btn-secondary" onClick={() => selectMonth(shiftMonth(month, -1))}>前月</button>

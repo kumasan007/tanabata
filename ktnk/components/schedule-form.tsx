@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { CopyButton } from "@/components/copy-button";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { SubcompanyFields } from "@/components/subcompany-fields";
@@ -632,23 +631,6 @@ export function ScheduleForm({
 
   return (
     <div className="simple-schedule min-h-screen pb-32 sm:pb-8">
-      <header className="border-b border-border bg-white">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-4">
-          <h1 className="text-xl font-bold text-slate-900">
-            <Link
-              href="/"
-              prefetch={false}
-              className="rounded-md hover:text-primary"
-              aria-label="メニューに戻る"
-            >
-              作業予定入力
-            </Link>
-          </h1>
-          <Link href="/calendar" prefetch={false} className="btn btn-secondary">
-            カレンダー
-          </Link>
-        </div>
-      </header>
       <main className="mx-auto max-w-2xl px-3 py-5 sm:px-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           {!choosingCompany && (

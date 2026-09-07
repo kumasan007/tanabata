@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { CompanyMaster, NewEntrantRecord } from "@/lib/types";
 import { addDays, parseLocalDate, toDateString } from "@/lib/utils";
@@ -44,7 +43,6 @@ export function NewEntrantForm({ today }: { today: string }) {
   }
 
   return <div className="min-h-screen pb-10">
-    <header className="border-b border-border bg-white"><div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-4"><Link href="/" className="text-xl font-bold">新規入場入力</Link><Link href="/calendar" className="btn btn-secondary">カレンダー</Link></div></header>
     <main className="mx-auto max-w-2xl space-y-5 px-4 py-5">
       <form onSubmit={submit} className="panel grid gap-4 p-5">
         <label className="field"><span className="label">入場日 *</span><input className="input" type="date" required value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} /></label>

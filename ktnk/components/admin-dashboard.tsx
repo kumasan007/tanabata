@@ -4,7 +4,6 @@ import {
   GripVertical,
   ArrowDown,
   ArrowUp,
-  ArrowUpRight,
   Building2,
   CalendarDays,
   CalendarRange,
@@ -638,27 +637,6 @@ export function AdminDashboard() {
   if (!authenticated) {
     return (
       <main className="admin-dashboard min-h-screen bg-[#f6f7f5]">
-        <header className="border-b border-border bg-white/90">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-8">
-            <Link
-              href="/"
-              className="flex items-center gap-3 font-bold tracking-tight text-slate-900"
-            >
-              <span className="grid size-10 place-items-center rounded-md bg-emerald-800 text-white">
-                <CalendarDays size={20} aria-hidden="true" />
-              </span>
-              作業予定管理
-            </Link>
-            <Link
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 transition-colors hover:text-emerald-800"
-              href="/"
-            >
-              入力画面へ
-              <ArrowUpRight size={16} aria-hidden="true" />
-            </Link>
-          </div>
-        </header>
-
         <div className="mx-auto grid max-w-md px-5 py-14 sm:py-24">
           <h1 className="mb-6 text-xl font-bold text-slate-900">管理画面</h1>
           <form
@@ -729,40 +707,17 @@ export function AdminDashboard() {
 
   return (
     <main className="admin-dashboard min-h-screen bg-[#f6f7f5]">
-      <header className="border-b border-border bg-white/95">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-3 py-2 sm:px-6">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-md bg-emerald-800 text-white">
-              <CalendarDays size={20} aria-hidden="true" />
-            </span>
-            <div>
-              <p className="font-bold tracking-tight text-slate-950">
-                作業予定管理
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Link
-              className="btn btn-secondary px-3 text-xs sm:text-sm"
-              href="/"
-            >
-              入力画面へ
-              <ArrowUpRight size={15} aria-hidden="true" />
-            </Link>
-            <button
-              className="btn btn-secondary px-3"
-              type="button"
-              onClick={logout}
-              aria-label="ログアウト"
-            >
-              <LogOut size={17} aria-hidden="true" />
-              <span className="hidden sm:inline">ログアウト</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
       <div className="mx-auto grid max-w-6xl gap-3 px-4 py-3 sm:px-6 sm:py-4">
+        <div className="flex justify-end">
+          <button
+            className="btn btn-secondary px-3"
+            type="button"
+            onClick={logout}
+          >
+            <LogOut size={17} aria-hidden="true" />
+            ログアウト
+          </button>
+        </div>
         <nav
           className="flex gap-2 border-b border-slate-200"
           aria-label="管理画面メニュー"

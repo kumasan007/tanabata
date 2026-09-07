@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "作業予定入力",
+  title: "北仲ツール",
   description: "協力会社向けの作業予定入力画面。",
   robots: { index: false, follow: false },
 };
@@ -19,7 +20,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ja">
-      <body>{children}</body>
+      <body>
+        <SiteHeader />
+        {children}
+      </body>
     </html>
   );
 }

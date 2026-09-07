@@ -10,9 +10,6 @@ export default function HomePage() {
     { href: "/calendar", title: "カレンダー", description: "みんなの予定と作業を確認", icon: CalendarDays },
   ];
   return <div className="min-h-screen">
-    <header className="border-b border-border bg-white">
-      <div className="mx-auto max-w-2xl px-4 py-5"><h1 className="text-xl font-bold">作業予定管理</h1></div>
-    </header>
     <main className="mx-auto max-w-2xl px-4 py-8">
       <div className="grid gap-4 sm:grid-cols-3">
         {menus.map(({ href, title, description, icon: Icon }) => <Link key={href} href={href} className="panel flex min-h-40 flex-col p-5 transition hover:border-emerald-400 hover:bg-emerald-50/40">
