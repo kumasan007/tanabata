@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  GripVertical,
   ArrowDown,
   ArrowUp,
   ArrowUpRight,
@@ -97,6 +98,39 @@ export function AdminDashboard() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [companyLoading, setCompanyLoading] = useState(false);
+  const [draggedCompany, setDraggedCompany] = useState<{ primary: string; rowId?: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
+  function clearCompanyDrag() {
+    setDraggedCompany(null);
+    setDropTarget(null);
+  }
+
+  async function dropCompany(primary: string, rowId?: string) {
+    const source = draggedCompany;
+    clearCompanyDrag();
+    if (!source || companyLoading || editingCompanyId) return;
+    if (source.rowId) {
+      if (source.primary !== primary || !rowId || source.rowId === rowId) return;
+      const group = companyGroups.find((item) => item.primaryCompany === primary);
+      if (!group) return;
+      const rows = [...group.rows];
+      const from = rows.findIndex((row) => row.id === source.rowId);
+      const to = rows.findIndex((row) => row.id === rowId);
+      if (from < 0 || to < 0) return;
+      rows.splice(to, 0, rows.splice(from, 1)[0]);
+      await saveCompanyOrder(companyGroups.flatMap((item) => item === group ? rows : item.rows));
+    } else {
+      if (rowId || source.primary === primary) return;
+      const groups = [...companyGroups];
+      const from = groups.findIndex((item) => item.primaryCompany === source.primary);
+      const to = groups.findIndex((item) => item.primaryCompany === primary);
+      if (from < 0 || to < 0) return;
+      groups.splice(to, 0, groups.splice(from, 1)[0]);
+      await saveCompanyOrder(groups.flatMap((item) => item.rows));
+    }
+  }
+
   const [appliedFilters, setAppliedFilters] = useState({
     dateFrom,
     dateTo,
@@ -585,7 +619,7 @@ export function AdminDashboard() {
               href="/"
               className="flex items-center gap-3 font-bold tracking-tight text-slate-900"
             >
-              <span className="grid size-10 place-items-center rounded-sm bg-emerald-800 text-white">
+              <span className="grid size-10 place-items-center rounded-md bg-emerald-800 text-white">
                 <CalendarDays size={20} aria-hidden="true" />
               </span>
               作業予定管理
@@ -608,7 +642,7 @@ export function AdminDashboard() {
             aria-busy={loginLoading}
           >
             <div className="flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-sm bg-slate-100 text-slate-600">
+              <span className="grid size-10 place-items-center rounded-md bg-slate-100 text-slate-600">
                 <LogIn size={19} aria-hidden="true" />
               </span>
               <h2 className="text-lg font-bold tracking-tight text-slate-950">
@@ -618,7 +652,7 @@ export function AdminDashboard() {
             {message ? (
               <div
                 role="alert"
-                className="rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+                className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
               >
                 {message}
               </div>
@@ -673,7 +707,7 @@ export function AdminDashboard() {
       <header className="border-b border-border bg-white/95">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-3 py-2 sm:px-6">
           <div className="flex items-center gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-sm bg-emerald-800 text-white">
+            <span className="grid size-10 shrink-0 place-items-center rounded-md bg-emerald-800 text-white">
               <CalendarDays size={20} aria-hidden="true" />
             </span>
             <div>
@@ -737,7 +771,7 @@ export function AdminDashboard() {
         {message ? (
           <div
             role="alert"
-            className="rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+            className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
           >
             {message}
           </div>
@@ -974,12 +1008,12 @@ export function AdminDashboard() {
                 入力画面に表示する会社名と順番を管理します。
               </p>
             </div>
-            <span className="rounded-sm bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+            <span className="rounded-md bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
               一次 {companyGroups.length}社 / 登録 {companyRows.length}件
             </span>
           </div>
 
-          <div className="grid items-start gap-4 rounded-sm bg-slate-50 p-4 md:grid-cols-[1fr_1fr_1.5fr_auto]">
+          <div className="grid items-start gap-4 rounded-md bg-slate-50 p-4 md:grid-cols-[1fr_1fr_1.5fr_auto]">
             <label className="field">
               <span className="label">一次会社</span>
               <input
@@ -1022,7 +1056,7 @@ export function AdminDashboard() {
           </div>
 
           <p className="text-sm text-slate-600">
-            ↑・↓で並び替えできます。二次会社は同じ一次会社内で移動します。変更は自動保存されます。
+            つまみをドラッグして並び替えできます。スマートフォンでは↑・↓をご利用ください。二次会社は同じ一次会社内で移動でき、変更は自動保存されます。
           </p>
 
           <div className="grid gap-3">
@@ -1032,8 +1066,33 @@ export function AdminDashboard() {
               </p>
             )}
             {companyGroups.map((group, groupIndex) => (
-              <div key={group.primaryCompany} className="flex items-start gap-2">
-                <div className="flex gap-1 pt-3">
+              <div
+                key={group.primaryCompany}
+                className={`grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-md ${dropTarget === group.primaryCompany ? "ring-2 ring-emerald-500 bg-emerald-50" : ""}`}
+                onDragOver={(event) => {
+                  if (!draggedCompany || draggedCompany.rowId || companyLoading || editingCompanyId) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDropTarget(group.primaryCompany);
+                }}
+                onDrop={(event) => {
+                  if (!draggedCompany || draggedCompany.rowId) return;
+                  event.preventDefault();
+                  void dropCompany(group.primaryCompany);
+                }}
+              >
+                <div className="flex h-11 items-center gap-1">
+                  <span
+                    className="inline-flex h-9 w-5 items-center justify-center cursor-grab text-slate-400 active:cursor-grabbing"
+                    draggable={!companyLoading && !editingCompanyId}
+                    title="ドラッグして一次会社を並び替え"
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData("text/plain", group.primaryCompany);
+                      event.dataTransfer.effectAllowed = "move";
+                      setDraggedCompany({ primary: group.primaryCompany });
+                    }}
+                    onDragEnd={clearCompanyDrag}
+                  ><GripVertical size={18} aria-hidden="true" /></span>
                   <button
                     className="btn btn-secondary h-9 w-9 p-0"
                     type="button"
@@ -1053,8 +1112,8 @@ export function AdminDashboard() {
                     <ArrowDown size={16} aria-hidden="true" />
                   </button>
                 </div>
-              <details className="min-w-0 flex-1 rounded-sm border border-border bg-white">
-                <summary className="cursor-pointer rounded-sm px-3 py-2 font-semibold text-slate-900 marker:text-emerald-700">
+              <details className="min-w-0 flex-1 rounded-md border border-border bg-white">
+                <summary className="min-h-11 cursor-pointer rounded-md px-3 py-2.5 font-semibold text-slate-900 marker:text-emerald-700">
                   <span className="break-words">{group.primaryCompany}</span>
                   <span className="ml-3 text-sm font-normal text-slate-500">
                     二次会社{" "}
@@ -1076,7 +1135,20 @@ export function AdminDashboard() {
                   {group.rows.map((row, rowIndex) => (
                     <div
                       key={row.id}
-                      className="grid gap-3 rounded-sm bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+                      className={`grid items-center gap-3 rounded-md bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto] ${dropTarget === row.id ? "ring-2 ring-emerald-500" : ""}`}
+                      onDragOver={(event) => {
+                        if (!draggedCompany?.rowId || draggedCompany.primary !== group.primaryCompany || companyLoading || editingCompanyId) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        event.dataTransfer.dropEffect = "move";
+                        setDropTarget(row.id);
+                      }}
+                      onDrop={(event) => {
+                        if (!draggedCompany?.rowId) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void dropCompany(group.primaryCompany, row.id);
+                      }}
                     >
                       {editingCompanyId === row.id ? (
                         <div className="grid gap-3">
@@ -1124,9 +1196,21 @@ export function AdminDashboard() {
                           </div>
                         </div>
                       )}
-                      <div className="flex flex-wrap items-start gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {group.rows.length > 1 ? (
                           <>
+                            <span
+                              className="inline-flex h-9 w-5 items-center justify-center cursor-grab text-slate-400 active:cursor-grabbing"
+                              draggable={!companyLoading && !editingCompanyId}
+                              title="ドラッグして二次会社を並び替え"
+                              onDragStart={(event) => {
+                                event.stopPropagation();
+                                event.dataTransfer.setData("text/plain", row.id);
+                                event.dataTransfer.effectAllowed = "move";
+                                setDraggedCompany({ primary: group.primaryCompany, rowId: row.id });
+                              }}
+                              onDragEnd={clearCompanyDrag}
+                            ><GripVertical size={18} aria-hidden="true" /></span>
                             <button
                               className="btn btn-secondary h-9 w-9 p-0"
                               type="button"
@@ -1230,9 +1314,9 @@ export function AdminDashboard() {
               </select>
             </label>
             <div role="group" aria-label="表示形式">
-              <div className="inline-flex h-11 gap-1 rounded-sm border border-border bg-white p-1">
+              <div className="inline-flex h-11 gap-1 rounded-md border border-border bg-white p-1">
                 <button
-                  className={`inline-flex items-center gap-1.5 rounded-sm px-3 text-xs font-semibold transition-colors ${scheduleView === "summary" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors ${scheduleView === "summary" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
                   type="button"
                   aria-pressed={scheduleView === "summary"}
                   onClick={() => setScheduleView("summary")}
@@ -1241,7 +1325,7 @@ export function AdminDashboard() {
                   一覧
                 </button>
                 <button
-                  className={`inline-flex items-center gap-1.5 rounded-sm px-3 text-xs font-semibold transition-colors ${scheduleView === "calendar" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors ${scheduleView === "calendar" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
                   type="button"
                   aria-pressed={scheduleView === "calendar"}
                   onClick={() => setScheduleView("calendar")}
@@ -1255,7 +1339,7 @@ export function AdminDashboard() {
         </section>
 
         <section
-          className={`${activeTab === "schedules" && scheduleView === "summary" ? "block" : "hidden"} overflow-hidden rounded-sm border border-border bg-white`}
+          className={`${activeTab === "schedules" && scheduleView === "summary" ? "block" : "hidden"} overflow-hidden rounded-md border border-border bg-white`}
           aria-label="作業予定一覧"
           aria-busy={loading}
         >
@@ -1290,7 +1374,7 @@ export function AdminDashboard() {
                           />
                         </h3>
                       </div>
-                      <span className="shrink-0 rounded-sm bg-emerald-50 px-3 py-2 text-lg font-bold tabular-nums text-emerald-800">
+                      <span className="shrink-0 rounded-md bg-emerald-50 px-3 py-2 text-lg font-bold tabular-nums text-emerald-800">
                         <CopyValue value={row.totalCount} label="合計人数">
                           {row.totalCount}
                           <span className="ml-1 text-xs font-medium">人</span>
@@ -1431,7 +1515,7 @@ export function AdminDashboard() {
         <section
           className={`${activeTab === "schedules" && scheduleView === "calendar" ? "grid" : "hidden"} gap-3`}
         >
-          <div className="overflow-x-auto rounded-sm border border-border bg-white">
+          <div className="overflow-x-auto rounded-md border border-border bg-white">
             <div className="min-w-[630px]">
               <div className="grid grid-cols-7 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500">
                 {["月", "火", "水", "木", "金", "土", "日"].map((day) => (
@@ -1499,7 +1583,7 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          <div className="rounded-sm border border-border bg-white p-5">
+          <div className="rounded-md border border-border bg-white p-5">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-bold text-slate-950">
                 {selectedCalendarDate
@@ -1525,7 +1609,7 @@ export function AdminDashboard() {
                 {selectedCalendarRows.map((row) => (
                   <div
                     key={row.key}
-                    className="rounded-sm border border-border p-3 text-left"
+                    className="rounded-md border border-border p-3 text-left"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -1597,7 +1681,7 @@ function CopyValue({
       {notice && (
         <span
           role="status"
-          className="fixed bottom-5 left-1/2 z-50 w-max max-w-[90vw] -translate-x-1/2 rounded-sm bg-slate-800 px-4 py-3 text-sm font-medium text-white shadow-lg"
+          className="fixed bottom-5 left-1/2 z-50 w-max max-w-[90vw] -translate-x-1/2 rounded-md bg-slate-800 px-4 py-3 text-sm font-medium text-white shadow-lg"
         >
           {notice}
         </span>
@@ -1621,7 +1705,7 @@ function AdminStat({
 }) {
   return (
     <div
-      className={`rounded-sm border px-3 py-2 ${accent ? "border-emerald-200 bg-emerald-50/70" : "border-border bg-white"}`}
+      className={`rounded-md border px-3 py-2 ${accent ? "border-emerald-200 bg-emerald-50/70" : "border-border bg-white"}`}
     >
       <div className="flex items-center justify-between gap-2">
         <p
@@ -1653,7 +1737,7 @@ function ScheduleEmpty({ loading }: { loading: boolean }) {
       className="flex flex-col items-center px-5 py-14 text-center"
       role="status"
     >
-      <span className="grid size-12 place-items-center rounded-sm bg-slate-50 text-slate-400">
+      <span className="grid size-12 place-items-center rounded-md bg-slate-50 text-slate-400">
         {loading ? (
           <LoaderCircle size={22} className="animate-spin" aria-hidden="true" />
         ) : (
@@ -1674,8 +1758,8 @@ function ScheduleEmpty({ loading }: { loading: boolean }) {
 
 function ScheduleDetails({ row }: { row: ScheduleSummaryRow }) {
   return (
-    <div className="mt-2 grid min-w-40 gap-1 rounded-sm bg-slate-50 p-2 text-xs text-slate-600">
-      <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-sm bg-white px-3 py-2.5">
+    <div className="mt-2 grid min-w-40 gap-1 rounded-md bg-slate-50 p-2 text-xs text-slate-600">
+      <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-md bg-white px-3 py-2.5">
         <span className="font-semibold text-slate-900">
           <CopyValue value={row.primaryCompany} label="一次会社" />
         </span>
