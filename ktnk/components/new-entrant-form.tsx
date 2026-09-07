@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { CompanyMaster, NewEntrantRecord } from "@/lib/types";
+import type { CompanyMaster } from "@/lib/types";
 import { addDays, parseLocalDate, toDateString } from "@/lib/utils";
 
 type Step = "company" | "date" | "details" | "confirm" | "success";
@@ -18,14 +18,11 @@ function SectionHeading({ title }: { title: string }) {
 
 export function NewEntrantForm({ today }: { today: string }) {
   const [master, setMaster] = useState<CompanyMaster | null>(null);
-  const [records, setRecords] = useState<NewEntrantRecord[]>([]);
   const [form, setForm] = useState<EntrantForm>({ entryDate: today, primaryCompany: "", secondaryCompany: "", personCount: null, personNames: "", notes: "" });
   const [step, setStep] = useState<Step>("company");
   const [customDate, setCustomDate] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [summaryOpen, setSummaryOpen] = useState(false);
-  const to = toDateString(addDays(parseLocalDate(today)!, 30));
   const secondaryOptions = useMemo(() => master?.secondariesByPrimary[form.primaryCompany] ?? [], [master, form.primaryCompany]);
   const dateOptions = useMemo(() => [
     { label: "今日", date: today },
@@ -33,16 +30,9 @@ export function NewEntrantForm({ today }: { today: string }) {
     { label: "明後日", date: toDateString(addDays(parseLocalDate(today)!, 2)) },
   ], [today]);
 
-  async function refresh() {
-    const response = await fetch(`/api/new-entrants?from=${today}&to=${to}`, { cache: "no-store" });
-    const body = await response.json();
-    if (response.ok) setRecords(body.records ?? []);
-  }
-
-  useEffect(() => { void Promise.all([
-    fetch("/api/companies").then(async (response) => { const body = await response.json(); if (!response.ok) throw new Error(); setMaster(body); }),
-    refresh(),
-  ]).catch(() => setMessage("データを読み込めませんでした。")); }, []);
+  useEffect(() => { void fetch("/api/companies")
+    .then(async (response) => { const body = await response.json(); if (!response.ok) throw new Error(); setMaster(body); })
+    .catch(() => setMessage("データを読み込めませんでした。")); }, []);
 
   function chooseCompany(company: string) {
     setForm((current) => ({ ...current, primaryCompany: company, secondaryCompany: "" }));
@@ -75,7 +65,6 @@ export function NewEntrantForm({ today }: { today: string }) {
       const primary = form.primaryCompany;
       const secondary = form.secondaryCompany.trim();
       setMaster((current) => current ? { ...current, secondariesByPrimary: { ...current.secondariesByPrimary, [primary]: [...new Set([...(current.secondariesByPrimary[primary] ?? []), secondary])] } } : current);
-      await refresh();
       setStep("success");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) { setMessage(error instanceof Error ? error.message : "保存できませんでした。"); }
@@ -86,13 +75,6 @@ export function NewEntrantForm({ today }: { today: string }) {
     setForm({ entryDate: today, primaryCompany: keepCompany ? form.primaryCompany : "", secondaryCompany: "", personCount: null, personNames: "", notes: "" });
     setCustomDate(false); setMessage(""); setStep(keepCompany ? "date" : "company");
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  async function remove(id: string) {
-    if (!confirm("この新規入場予定を削除しますか？")) return;
-    const response = await fetch(`/api/new-entrants?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (!response.ok) { setMessage("削除できませんでした。"); return; }
-    await refresh();
   }
 
   function goBack() {
@@ -144,7 +126,6 @@ export function NewEntrantForm({ today }: { today: string }) {
 
         {step === "success" && <section role="status" className="panel border-emerald-200 bg-emerald-50 p-5"><h2 className="text-lg font-bold text-primary">新規入場予定を送信しました</h2><p className="mt-2 text-base">{displayDate(form.entryDate)}・{form.secondaryCompany}・{form.personCount}人</p><div className="mt-4 grid gap-2 sm:grid-cols-2"><button type="button" className="btn btn-primary" onClick={() => resetForm(true)}>同じ一次会社で続けて入力</button><button type="button" className="btn btn-secondary" onClick={() => resetForm(false)}>別の一次会社を入力</button></div></section>}
 
-        <details className="panel p-4" open={summaryOpen} onToggle={(event) => setSummaryOpen(event.currentTarget.open)}><summary className="cursor-pointer text-base font-semibold">記入済みの新規入場予定を見る</summary><div className="mt-3 divide-y divide-border text-sm leading-6">{records.length === 0 ? <p className="py-3 text-slate-500">今後30日間の登録はありません。</p> : records.map((record) => <div key={record.id} className="py-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold">{displayDate(record.entry_date)}・{record.person_count}人</p><p className="break-words">{record.primary_company} → {record.secondary_company}</p>{record.person_names && <p className="whitespace-pre-wrap text-slate-600">{record.person_names}</p>}{record.notes && <p className="break-words text-slate-500">備考：{record.notes}</p>}</div><button type="button" className="btn btn-secondary text-red-700" onClick={() => void remove(record.id)}>削除</button></div></div>)}</div></details>
         {step !== "details" && step !== "confirm" && message && <p role="alert" className="px-1 text-sm text-red-700">{message}</p>}
         {step !== "company" && step !== "success" && <p className="px-1 text-sm leading-6 text-slate-500">同じ日付・二次会社の再送信は上書きされます。</p>}
       </form>

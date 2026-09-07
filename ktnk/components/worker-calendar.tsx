@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
 import type { CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 
@@ -32,6 +32,7 @@ export function WorkerCalendar({ initialDate }: { initialDate: string }) {
   const [editing, setEditing] = useState<ScheduleWithSubcompanies | null>(null);
   const [message, setMessage] = useState("");
   const [version, setVersion] = useState(0);
+  const selectedDaySectionRef = useRef<HTMLElement>(null);
   const range = monthRange(month);
   useEffect(() => { fetch("/api/companies").then((r) => r.json()).then(setMaster).catch(() => setMessage("会社一覧を取得できませんでした。")); }, []);
   useEffect(() => {
@@ -55,6 +56,13 @@ export function WorkerCalendar({ initialDate }: { initialDate: string }) {
     if (!/^\d{4}-\d{2}$/.test(nextMonth)) return;
     setMonth(nextMonth);
     setSelectedDate(`${nextMonth}-01`);
+  }
+
+  function selectDate(date: string) {
+    setSelectedDate(date);
+    window.requestAnimationFrame(() => {
+      selectedDaySectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function totalWorkers(row: ScheduleWithSubcompanies) {
@@ -82,15 +90,15 @@ export function WorkerCalendar({ initialDate }: { initialDate: string }) {
             const daySchedules = scheduleMap[date] ?? [];
             const dayEntrants = entrantMap[date] ?? [];
             const total = daySchedules.reduce((sum, row) => sum + totalWorkers(row), 0);
-            return <div key={date} className={`${company ? "min-h-40 sm:min-h-48" : "min-h-20 sm:min-h-24"} min-w-0 bg-white p-1.5 text-left align-top transition hover:bg-emerald-50 sm:p-2 ${selectedDate === date ? "relative z-10 bg-emerald-50 ring-2 ring-inset ring-primary" : ""}`}>
-              <button type="button" onClick={() => setSelectedDate(date)} aria-pressed={selectedDate === date} className="block w-full text-left text-sm font-bold">{Number(date.slice(-2))}</button>
+            return <div key={date} onClick={() => selectDate(date)} className={`min-h-20 min-w-0 cursor-pointer bg-white p-1.5 text-left align-top transition hover:bg-emerald-50 sm:min-h-24 sm:p-2 ${selectedDate === date ? "relative z-10 bg-emerald-50 ring-2 ring-inset ring-primary" : ""}`}>
+              <button type="button" onClick={(event) => { event.stopPropagation(); selectDate(date); }} aria-pressed={selectedDate === date} className="block w-full text-left text-sm font-bold">{Number(date.slice(-2))}</button>
               {!company && daySchedules.length > 0 && <span className="mt-1 block rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-semibold leading-4 text-emerald-900 sm:text-xs">{daySchedules.length}社・{total}人</span>}
               {!company && dayEntrants.length > 0 && <span className="mt-1 block text-[10px] font-semibold leading-4 text-amber-700 sm:text-xs">新規 {dayEntrants.length}社</span>}
               {company && daySchedules.map((row) => {
                 const area = row.status === "work" ? row.work_area : row.next_work_area;
                 const content = row.status === "work" ? row.work_content : row.next_work_content;
                 return <div key={row.id} className="relative mt-1 min-w-0 rounded bg-emerald-100 p-1 pr-6 text-[10px] leading-4 text-emerald-950 sm:text-xs">
-                  <button type="button" className="absolute right-0.5 top-0.5 rounded p-0.5 hover:bg-white/70" onClick={() => { setSelectedDate(date); setEditing(row); }} aria-label={`${date}の予定を編集`} title="予定を編集"><Pencil size={12} aria-hidden="true" /></button>
+                  <button type="button" className="absolute right-0.5 top-0.5 rounded p-0.5 hover:bg-white/70" onClick={(event) => { event.stopPropagation(); setSelectedDate(date); setEditing(row); }} aria-label={`${date}の予定を編集`} title="予定を編集"><Pencil size={12} aria-hidden="true" /></button>
                   <p className="font-bold">{row.status === "work" ? `${totalWorkers(row)}人` : "作業なし"}</p>
                   {row.status === "no_work" && row.next_visit_date && <p className="truncate" title={`次回 ${row.next_visit_date}`}>次回 {row.next_visit_date.slice(5).replace("-", "/")}</p>}
                   <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
@@ -103,7 +111,7 @@ export function WorkerCalendar({ initialDate }: { initialDate: string }) {
         </div>
       </section>
 
-      <section className="mt-4">
+      <section ref={selectedDaySectionRef} className="mt-4 scroll-mt-4">
         <div className="mb-3 flex items-baseline justify-between gap-3">
           <h2 className="text-lg font-bold">{Number(selectedDate.slice(5, 7))}月{Number(selectedDate.slice(8, 10))}日の予定</h2>
           <span className="text-sm text-slate-500">{selectedSchedules.length}社</span>
