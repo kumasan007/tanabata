@@ -1437,7 +1437,7 @@ export function AdminDashboard() {
                         </>
                       ) : null}
                     </dl>
-                    {scheduleEditButton(row)}
+                    <div className="mt-3 flex justify-end">{scheduleEditButton(row)}</div>
                     {expanded ? <ScheduleDetails row={row} /> : null}
                   </article>
                 );
@@ -1458,6 +1458,7 @@ export function AdminDashboard() {
                     "作業エリア",
                     "作業内容",
                     "内訳",
+                    "編集",
                   ].map((header) => (
                     <th
                       key={header}
@@ -1472,7 +1473,7 @@ export function AdminDashboard() {
               <tbody>
                 {summaryRows.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <ScheduleEmpty loading={loading} />
                     </td>
                   </tr>
@@ -1510,7 +1511,6 @@ export function AdminDashboard() {
                           ) : null}
                         </td>
                         <td className="whitespace-nowrap px-3 py-3 font-semibold">
-                          <div>{scheduleEditButton(row)}</div>
                           <CopyValue
                             value={row.primaryCompany}
                             label="一次会社"
@@ -1538,6 +1538,9 @@ export function AdminDashboard() {
                               二次会社 {row.details.length}社
                             </span>
                           )}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right">
+                          {scheduleEditButton(row)}
                         </td>
                       </tr>
                     );
@@ -1638,17 +1641,17 @@ export function AdminDashboard() {
                       className="grid min-h-10 cursor-pointer list-none grid-cols-[minmax(0,1fr)_4rem_1rem] items-center gap-x-3 gap-y-0.5 px-2 py-1.5 text-sm hover:bg-slate-50 sm:grid-cols-[minmax(0,1.2fr)_4rem_minmax(0,0.8fr)_minmax(0,1.8fr)_1rem] [&::-webkit-details-marker]:hidden"
                       aria-label={`${row.primaryCompany}、合計${row.totalCount}人。詳細を開閉`}
                     >
-                      <span className="truncate font-semibold text-slate-950" title={row.primaryCompany}>
+                      <span className="col-start-1 row-start-1 min-w-0 break-words font-semibold text-slate-950" title={row.primaryCompany}>
                         {row.primaryCompany}
                       </span>
-                      <span className="text-right font-semibold tabular-nums">{row.totalCount}人</span>
-                      <span className="col-start-1 row-start-2 truncate text-xs text-slate-600 sm:col-start-auto sm:row-start-auto sm:text-sm" title={row.workArea}>
+                      <span className="col-start-2 row-start-1 text-right font-semibold tabular-nums">{row.totalCount}人</span>
+                      <span className="col-span-2 col-start-1 row-start-2 min-w-0 whitespace-pre-wrap break-words text-xs text-slate-600 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:text-sm" title={row.workArea}>
                         {row.workArea || "—"}
                       </span>
-                      <span className="col-span-2 col-start-1 row-start-3 truncate text-xs text-slate-600 sm:col-span-1 sm:col-start-auto sm:row-start-auto sm:text-sm" title={row.workContent}>
+                      <span className="col-span-2 col-start-1 row-start-3 min-w-0 whitespace-pre-wrap break-words text-xs text-slate-600 sm:col-span-1 sm:col-start-4 sm:row-start-1 sm:text-sm" title={row.workContent}>
                         {row.workContent || "—"}
                       </span>
-                      <ChevronRight size={15} aria-hidden="true" className="col-start-3 row-start-1 text-slate-400 group-open:rotate-90 sm:col-start-auto" />
+                      <ChevronRight size={15} aria-hidden="true" className="col-start-3 row-start-1 text-slate-400 group-open:rotate-90 sm:col-start-5" />
                     </summary>
                     <div className="border-t border-border bg-slate-50 px-3 py-2 text-sm">
                       <div className="grid gap-x-4 sm:grid-cols-2">
@@ -1659,7 +1662,7 @@ export function AdminDashboard() {
                       <ScheduleDetails row={row} />
                     </div>
                   </details>
-                  <div className="py-1">{scheduleEditButton(row)}</div>
+                  <div className="flex justify-end py-1">{scheduleEditButton(row)}</div>
                   </div>
                 ))}
               </div>
