@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     if (error) throw error;
     return NextResponse.json({ records: data ?? [] });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "新規入場予定を取得できませんでした。" }, { status: 500 });
+    return NextResponse.json({ error: databaseErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     if (error) throw error;
     return NextResponse.json({ record: data });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "新規入場予定を保存できませんでした。" }, { status: 500 });
+    return NextResponse.json({ error: databaseErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -57,4 +57,14 @@ export async function DELETE(request: Request) {
   const { error } = await createServerClient().from("new_entrant_records").delete().eq("id", id.data);
   if (error) return NextResponse.json({ error: "削除できませんでした。" }, { status: 500 });
   return NextResponse.json({ ok: true });
+}
+
+function databaseErrorMessage(error: unknown) {
+  const code = typeof error === "object" && error !== null && "code" in error
+    ? String(error.code)
+    : "";
+  if (code === "PGRST205" || code === "42P01") {
+    return "新規入場用の追加SQLがまだ実行されていません。";
+  }
+  return error instanceof Error ? error.message : "新規入場データを処理できませんでした。";
 }

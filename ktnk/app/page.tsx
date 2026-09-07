@@ -14,9 +14,7 @@ export default function HomePage() {
       <div className="mx-auto max-w-2xl px-4 py-5"><h1 className="text-xl font-bold">作業予定管理</h1></div>
     </header>
     <main className="mx-auto max-w-2xl px-4 py-8">
-      <h2 className="text-2xl font-bold">メニュー</h2>
-      <p className="mt-2 text-slate-600">行う作業を選んでください。</p>
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3">
         {menus.map(({ href, title, description, icon: Icon }) => <Link key={href} href={href} className="panel flex min-h-40 flex-col p-5 transition hover:border-emerald-400 hover:bg-emerald-50/40">
           <Icon className="h-8 w-8 text-primary" aria-hidden="true" />
           <span className="mt-4 text-lg font-bold">{title}</span>

@@ -39,7 +39,7 @@ export function WorkerCalendar({ initialMonth }: { initialMonth: string }) {
     setMessage("");
     fetch(`/api/calendar?${params}`, { cache: "no-store" }).then(async (response) => {
       const body = await response.json(); if (!response.ok) throw new Error(body.error);
-      setSchedules(body.schedules ?? []); setEntrants(body.entrants ?? []);
+      setSchedules(body.schedules ?? []); setEntrants(body.entrants ?? []); setMessage(body.warning ?? "");
     }).catch((error) => setMessage(error instanceof Error ? error.message : "取得できませんでした。"));
   }, [month, company, version]);
   const days = useMemo(() => datesInMonth(month), [month]);

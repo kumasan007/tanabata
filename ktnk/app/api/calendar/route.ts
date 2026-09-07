@@ -16,8 +16,13 @@ export async function GET(request: Request) {
     if (dateTo) entrantsQuery = entrantsQuery.lte("entry_date", dateTo);
     if (primaryCompany) entrantsQuery = entrantsQuery.eq("primary_company", primaryCompany);
     const { data: entrants, error } = await entrantsQuery;
-    if (error) throw error;
-    return NextResponse.json({ schedules, entrants: entrants ?? [] });
+    return NextResponse.json({
+      schedules,
+      entrants: error ? [] : entrants ?? [],
+      warning: error
+        ? "新規入場データは準備中です。追加SQLを実行すると表示されます。"
+        : "",
+    });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "カレンダーを取得できませんでした。" }, { status: 500 });
   }
