@@ -39,6 +39,8 @@ export const scheduleSubmitSchema = z
     nextSubcompanies: z.array(subcompanySchema).default([]),
     nextWorkArea: z.string().default(""),
     nextWorkContent: z.string().default(""),
+    aerialWorkVehicleCount: countSchema.default(null),
+    aerialWorkVehicleDetails: z.string().max(500, "高所作業車の内容は500文字以内で入力してください。").default(""),
     notes: z.string().max(2000, "備考は2000文字以内で入力してください。").default(""),
     overwriteExisting: z.boolean().optional().default(false),
   })

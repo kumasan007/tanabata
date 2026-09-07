@@ -82,6 +82,8 @@ create table public.schedule_groups (
   next_primary_count integer check (next_primary_count is null or next_primary_count >= 0),
   next_work_area text,
   next_work_content text,
+  aerial_work_vehicle_count integer check (aerial_work_vehicle_count is null or aerial_work_vehicle_count >= 0),
+  aerial_work_vehicle_details text,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

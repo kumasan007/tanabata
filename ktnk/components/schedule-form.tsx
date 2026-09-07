@@ -34,6 +34,8 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   nextSubcompanies: [],
   nextWorkArea: "",
   nextWorkContent: "",
+  aerialWorkVehicleCount: 0,
+  aerialWorkVehicleDetails: "",
   notes: "",
 });
 
@@ -1139,6 +1141,15 @@ export function ScheduleForm({
                         </dl>
                       </div>
                     )}
+                    {isWork && (form.aerialWorkVehicleCount ?? 0) > 0 && (
+                      <div className="mt-4 rounded-xl bg-sky-50 p-4 text-sm">
+                        <span className="font-semibold">高所作業車：</span>
+                        <span>{form.aerialWorkVehicleCount}台</span>
+                        {form.aerialWorkVehicleDetails && (
+                          <span className="ml-2 whitespace-pre-wrap">{form.aerialWorkVehicleDetails}</span>
+                        )}
+                      </div>
+                    )}
                     {form.notes && (
                       <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm">
                         <span className="font-semibold">備考：</span>
@@ -1336,6 +1347,40 @@ export function ScheduleForm({
                           )
                         }
                       />
+                      {isWork && (
+                        <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+                          <p className="font-semibold text-slate-900">高所作業車</p>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-[9rem_1fr]">
+                            <label className="field">
+                              <span className="label">使用台数</span>
+                              <div className="relative">
+                                <input
+                                  className="input pr-10 tabular-nums"
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={0}
+                                  step={1}
+                                  value={form.aerialWorkVehicleCount ?? ""}
+                                  onChange={(event) => patch({
+                                    aerialWorkVehicleCount: event.target.value === "" ? null : Number(event.target.value),
+                                  })}
+                                />
+                                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">台</span>
+                              </div>
+                            </label>
+                            <label className="field">
+                              <span className="label">内容 <span className="ml-2 text-sm font-normal text-slate-600">任意</span></span>
+                              <input
+                                className="input"
+                                value={form.aerialWorkVehicleDetails}
+                                maxLength={500}
+                                placeholder="例：12m、スカイマスター"
+                                onChange={(event) => patch({ aerialWorkVehicleDetails: event.target.value })}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      )}
                       <WorkField
                         key={`${previousKey}-${copyVersion}-notes`}
                         label="備考"
@@ -1515,6 +1560,9 @@ export function ScheduleForm({
                         </p>
                         {summary.nextVisitDate && (
                           <p>次回来場 {summary.nextVisitDate}</p>
+                        )}
+                        {summary.aerialWorkVehicleCount > 0 && (
+                          <p>高所作業車：{summary.aerialWorkVehicleCount}台{summary.aerialWorkVehicleDetails ? `（${summary.aerialWorkVehicleDetails}）` : ""}</p>
                         )}
                         {summary.notes && <p>備考：{summary.notes}</p>}
                       </div>

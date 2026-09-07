@@ -47,6 +47,8 @@ export type ScheduleSubmitInput = {
   nextSubcompanies: SubcompanyInput[];
   nextWorkArea: string;
   nextWorkContent: string;
+  aerialWorkVehicleCount: number | null;
+  aerialWorkVehicleDetails: string;
   notes: string;
   overwriteExisting?: boolean;
 };
@@ -63,6 +65,8 @@ export type ScheduleGroupRow = {
   next_primary_count: number | null;
   next_work_area: string | null;
   next_work_content: string | null;
+  aerial_work_vehicle_count: number | null;
+  aerial_work_vehicle_details: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -96,6 +100,8 @@ export type ScheduleListRow = {
   nextSecondaryCount: number | "";
   nextWorkArea: string;
   nextWorkContent: string;
+  aerialWorkVehicleCount: number | "";
+  aerialWorkVehicleDetails: string;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -110,6 +116,8 @@ export type ScheduleSummary = {
   nextVisitDate: string;
   nextWorkArea: string;
   nextWorkContent: string;
+  aerialWorkVehicleCount: number;
+  aerialWorkVehicleDetails: string;
   companyText: string;
   notes: string;
 };

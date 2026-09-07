@@ -79,6 +79,8 @@ create table if not exists public.schedule_groups (
   next_primary_count integer check (next_primary_count is null or next_primary_count >= 0),
   next_work_area text,
   next_work_content text,
+  aerial_work_vehicle_count integer check (aerial_work_vehicle_count is null or aerial_work_vehicle_count >= 0),
+  aerial_work_vehicle_details text,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -95,6 +97,9 @@ create table if not exists public.schedule_subcompanies (
 );
 
 alter table public.schedule_groups add column if not exists notes text;
+alter table public.schedule_groups add column if not exists aerial_work_vehicle_count integer
+  check (aerial_work_vehicle_count is null or aerial_work_vehicle_count >= 0);
+alter table public.schedule_groups add column if not exists aerial_work_vehicle_details text;
 
 create table if not exists public.new_entrant_records (
   id uuid primary key default gen_random_uuid(),
