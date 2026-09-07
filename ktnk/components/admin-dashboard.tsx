@@ -111,7 +111,6 @@ export function AdminDashboard() {
   const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
   const [editPrimaryCompany, setEditPrimaryCompany] = useState("");
   const [editSecondaryCompany, setEditSecondaryCompany] = useState("");
-  const [editPrimaryRoles, setEditPrimaryRoles] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [companyLoading, setCompanyLoading] = useState(false);
@@ -237,6 +236,9 @@ export function AdminDashboard() {
       rows,
     }));
   }, [companyRows]);
+  const addingToExistingPrimary = companyGroups.some(
+    (group) => group.primaryCompany === newPrimaryCompany.trim(),
+  );
 
   useEffect(() => {
     fetch("/api/admin/session")
@@ -363,7 +365,7 @@ export function AdminDashboard() {
   async function addCompanyMaster() {
     if (!authenticated) return;
     const primaryCompany = newPrimaryCompany.trim();
-    const primaryTradeRoles = parseRoleText(newPrimaryRoles);
+    const primaryTradeRoles = addingToExistingPrimary ? [] : parseRoleText(newPrimaryRoles);
     const secondaryCompanies = [
       ...new Set(
         newSecondaryCompanies
@@ -464,7 +466,6 @@ export function AdminDashboard() {
     setEditingCompanyId(row.id);
     setEditPrimaryCompany(row.primary_company);
     setEditSecondaryCompany(row.secondary_company ?? "");
-    setEditPrimaryRoles(formatRoles(row.primary_trade_roles));
     setMessage("");
   }
 
@@ -484,7 +485,6 @@ export function AdminDashboard() {
           id: editingCompanyId,
           primaryCompany: editPrimaryCompany,
           secondaryCompany: editSecondaryCompany,
-          primaryTradeRoles: parseRoleText(editPrimaryRoles),
         }),
       });
       const body = await response.json();
@@ -1038,7 +1038,7 @@ export function AdminDashboard() {
             </span>
           </div>
 
-          <div className="grid items-start gap-4 rounded-md bg-slate-50 p-4 md:grid-cols-[1fr_1fr_1.5fr_auto]">
+          <div className={`grid items-start gap-4 rounded-md bg-slate-50 p-4 ${addingToExistingPrimary ? "md:grid-cols-[1fr_1.5fr_auto]" : "md:grid-cols-[1fr_1fr_1.5fr_auto]"}`}>
             <label className="field">
               <span className="label">一次会社</span>
               <input
@@ -1049,7 +1049,7 @@ export function AdminDashboard() {
                 placeholder="例: 山田設備"
               />
             </label>
-            <label className="field">
+            {!addingToExistingPrimary && <label className="field">
               <span className="label">職種</span>
               <input
                 className="input"
@@ -1057,7 +1057,7 @@ export function AdminDashboard() {
                 onChange={(event) => setNewPrimaryRoles(event.target.value)}
                 placeholder="例: 多能工、配管工"
               />
-            </label>
+            </label>}
             <label className="field">
               <span className="label">二次会社（複数入力可・1行に1社）</span>
               <textarea
@@ -1146,12 +1146,17 @@ export function AdminDashboard() {
                   </span>
                 </summary>
                 <div className="grid gap-3 border-t border-border p-3 sm:p-4">
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="font-semibold text-slate-600">職種</span>
+                    <RoleBadges roles={group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []} />
+                  </div>
                   <button
                     type="button"
                     className="btn btn-secondary justify-self-start"
                     onClick={() => {
                       setNewPrimaryCompany(group.primaryCompany);
                       setNewSecondaryCompanies("");
+                      setNewPrimaryRoles("");
                       document.getElementById("add-company-primary")?.focus();
                     }}
                   >
@@ -1208,26 +1213,12 @@ export function AdminDashboard() {
                               aria-label="二次会社を編集"
                             />
                           </label>
-                          <label className="field">
-                            <span className="label">職種</span>
-                            <input
-                              className="input"
-                              value={editPrimaryRoles}
-                              onChange={(event) =>
-                                setEditPrimaryRoles(event.target.value)
-                              }
-                              aria-label="職種を編集"
-                            />
-                          </label>
                         </div>
                       ) : (
                         <div className="min-w-0">
                           <p className="break-words font-semibold">
                             {row.secondary_company || "一次会社のみ"}
                           </p>
-                          <div className="mt-2">
-                            <RoleBadges roles={row.primary_trade_roles ?? []} />
-                          </div>
                         </div>
                       )}
                       <div className="flex flex-wrap items-center gap-2">
@@ -1634,37 +1625,55 @@ export function AdminDashboard() {
                 </div>
                 <span aria-hidden="true" />
                 </div>
-                {selectedCalendarRows.map((row) => (
-                  <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_4rem] items-start gap-2">
-                  <details className="group min-w-0 flex-1">
-                    <summary
-                      className="grid min-h-10 cursor-pointer list-none grid-cols-[minmax(0,1fr)_4rem_1rem] items-center gap-x-3 gap-y-0.5 px-2 py-1.5 text-sm hover:bg-slate-50 sm:grid-cols-[minmax(0,1.2fr)_4rem_minmax(0,0.8fr)_minmax(0,1.8fr)_1rem] [&::-webkit-details-marker]:hidden"
-                      aria-label={`${row.primaryCompany}、合計${row.totalCount}人。詳細を開閉`}
-                    >
-                      <span className="col-start-1 row-start-1 min-w-0 break-words font-semibold text-slate-950" title={row.primaryCompany}>
-                        {row.primaryCompany}
-                      </span>
-                      <span className="col-start-2 row-start-1 text-right font-semibold tabular-nums">{row.totalCount}人</span>
-                      <span className="col-span-2 col-start-1 row-start-2 min-w-0 whitespace-pre-wrap break-words text-xs text-slate-600 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:text-sm" title={row.workArea}>
-                        {row.workArea || "—"}
-                      </span>
-                      <span className="col-span-2 col-start-1 row-start-3 min-w-0 whitespace-pre-wrap break-words text-xs text-slate-600 sm:col-span-1 sm:col-start-4 sm:row-start-1 sm:text-sm" title={row.workContent}>
-                        {row.workContent || "—"}
-                      </span>
-                      <ChevronRight size={15} aria-hidden="true" className="col-start-3 row-start-1 text-slate-400 group-open:rotate-90 sm:col-start-5" />
-                    </summary>
-                    <div className="border-t border-border bg-slate-50 px-3 py-2 text-sm">
-                      <div className="grid gap-x-4 sm:grid-cols-2">
-                        <div><span className="text-xs text-slate-500">一次会社：</span><CopyValue value={row.primaryCompany} label="一次会社" /></div>
-                        <div><span className="text-xs text-slate-500">作業エリア：</span><CopyValue value={row.workArea} label="作業エリア" /></div>
+                {selectedCalendarRows.map((row) => {
+                  const expanded = expandedScheduleKeys.includes(row.key);
+                  return (
+                    <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_4rem] items-start gap-2">
+                      <div className="min-w-0">
+                        <div className="grid min-h-10 grid-cols-[minmax(0,1fr)_4rem_2rem] items-center gap-x-3 gap-y-0.5 px-2 py-1.5 text-sm hover:bg-slate-50 sm:grid-cols-[minmax(0,1.2fr)_4rem_minmax(0,0.8fr)_minmax(0,1.8fr)_2rem]">
+                          <div className="col-start-1 row-start-1 min-w-0 font-semibold text-slate-950" title={row.primaryCompany}>
+                            <CopyValue value={row.primaryCompany} label="一次会社" />
+                          </div>
+                          <div className="col-start-2 row-start-1 text-right font-semibold tabular-nums">
+                            <CopyValue value={row.totalCount} label="合計人数">
+                              {row.totalCount}人
+                            </CopyValue>
+                          </div>
+                          <div className="col-span-2 col-start-1 row-start-2 min-w-0 text-xs text-slate-600 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:text-sm" title={row.workArea}>
+                            <CopyValue value={row.workArea} label="作業エリア" />
+                          </div>
+                          <div className="col-span-2 col-start-1 row-start-3 min-w-0 text-xs text-slate-600 sm:col-span-1 sm:col-start-4 sm:row-start-1 sm:text-sm" title={row.workContent}>
+                            <CopyValue value={row.workContent} label="作業内容" />
+                          </div>
+                          <button
+                            type="button"
+                            className="col-start-3 row-start-1 inline-flex size-8 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 sm:col-start-5"
+                            aria-expanded={expanded}
+                            aria-label={`${row.primaryCompany}の詳細を${expanded ? "閉じる" : "開く"}`}
+                            onClick={() => toggleScheduleRow(row.key)}
+                          >
+                            {expanded ? (
+                              <ChevronDown size={17} aria-hidden="true" />
+                            ) : (
+                              <ChevronRight size={17} aria-hidden="true" />
+                            )}
+                          </button>
+                        </div>
+                        {expanded ? (
+                          <div className="border-t border-border bg-slate-50 px-3 py-2 text-sm">
+                            <div className="grid gap-x-4 sm:grid-cols-2">
+                              <div><span className="text-xs text-slate-500">一次会社：</span><CopyValue value={row.primaryCompany} label="一次会社" /></div>
+                              <div><span className="text-xs text-slate-500">作業エリア：</span><CopyValue value={row.workArea} label="作業エリア" /></div>
+                            </div>
+                            <div><span className="text-xs text-slate-500">作業内容：</span><CopyValue value={row.workContent} label="作業内容" /></div>
+                            <ScheduleDetails row={row} />
+                          </div>
+                        ) : null}
                       </div>
-                      <div><span className="text-xs text-slate-500">作業内容：</span><CopyValue value={row.workContent} label="作業内容" /></div>
-                      <ScheduleDetails row={row} />
+                      <div className="flex justify-end py-1">{scheduleEditButton(row)}</div>
                     </div>
-                  </details>
-                  <div className="flex justify-end py-1">{scheduleEditButton(row)}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1953,6 +1962,3 @@ function parseRoleText(value: string) {
   ];
 }
 
-function formatRoles(roles: string[] | null | undefined) {
-  return (roles ?? []).join("、");
-}

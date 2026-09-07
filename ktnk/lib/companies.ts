@@ -39,6 +39,11 @@ function buildCompanyMaster(rows: CompanyMasterRecord[]): CompanyMaster {
       primaryCompanies.push(primary);
       secondariesByPrimary[primary] = [];
       primaryTradeRolesByPrimary[primary] = row.primary_trade_roles ?? [];
+    } else if (
+      primaryTradeRolesByPrimary[primary].length === 0 &&
+      (row.primary_trade_roles?.length ?? 0) > 0
+    ) {
+      primaryTradeRolesByPrimary[primary] = row.primary_trade_roles ?? [];
     }
 
     if (secondary && !secondariesByPrimary[primary].includes(secondary)) {

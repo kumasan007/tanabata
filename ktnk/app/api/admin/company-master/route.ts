@@ -103,7 +103,7 @@ export async function POST(request: Request) {
 
     const { data: existingRows, error: findError } = await supabase
       .from("company_master")
-      .select("secondary_company")
+      .select("secondary_company, primary_trade_roles")
       .eq("primary_company", primaryCompany);
     if (findError) throw findError;
 
@@ -132,24 +132,19 @@ export async function POST(request: Request) {
     }
 
     const startOrder = (lastRow?.sort_order ?? -1) + 1;
+    const rolesForPrimary = existingRows?.find(
+      (row) => (row.primary_trade_roles?.length ?? 0) > 0,
+    )?.primary_trade_roles ?? primaryTradeRoles;
     const { error } = await supabase.from("company_master").insert(
       newValues.map((secondaryCompany, index) => ({
         primary_company: primaryCompany,
         secondary_company: secondaryCompany,
-        primary_trade_roles: primaryTradeRoles,
+        primary_trade_roles: rolesForPrimary,
         sort_order: startOrder + index,
       })),
     );
 
     if (error) throw error;
-
-    if (primaryTradeRoles.length > 0 && (existingRows ?? []).length > 0) {
-      const { error: roleUpdateError } = await supabase
-        .from("company_master")
-        .update({ primary_trade_roles: primaryTradeRoles })
-        .eq("primary_company", primaryCompany);
-      if (roleUpdateError) throw roleUpdateError;
-    }
 
     return NextResponse.json({
       ok: true,
@@ -183,7 +178,6 @@ export async function PATCH(request: Request) {
       id?: string;
       primaryCompany?: string;
       secondaryCompany?: string;
-      primaryTradeRoles?: string[];
       orderedIds?: string[];
     };
     const supabase = createServerClient();
@@ -234,9 +228,6 @@ export async function PATCH(request: Request) {
     const id = body.id?.trim();
     const primaryCompany = body.primaryCompany?.trim() ?? "";
     const secondaryCompany = body.secondaryCompany?.trim() ?? "";
-    const primaryTradeRoles = Array.isArray(body.primaryTradeRoles)
-      ? normalizeTradeRoles(body.primaryTradeRoles)
-      : null;
 
     if (!id || !primaryCompany) {
       return NextResponse.json(
@@ -269,9 +260,6 @@ export async function PATCH(request: Request) {
       .update({
         primary_company: primaryCompany,
         secondary_company: secondaryCompany || null,
-        ...(primaryTradeRoles === null
-          ? {}
-          : { primary_trade_roles: primaryTradeRoles }),
       })
       .eq("id", id)
       .select("id")
@@ -282,14 +270,6 @@ export async function PATCH(request: Request) {
         { error: "更新対象の会社マスタが見つかりません。" },
         { status: 404 },
       );
-    }
-
-    if (primaryTradeRoles !== null) {
-      const { error: roleUpdateError } = await supabase
-        .from("company_master")
-        .update({ primary_trade_roles: primaryTradeRoles })
-        .eq("primary_company", primaryCompany);
-      if (roleUpdateError) throw roleUpdateError;
     }
 
     return NextResponse.json({ ok: true });
