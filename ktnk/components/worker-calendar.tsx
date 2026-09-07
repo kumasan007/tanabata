@@ -46,8 +46,16 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
   const days = useMemo(() => datesInMonth(month), [month]);
   const scheduleMap = useMemo(() => Object.groupBy(schedules, (row) => row.work_date), [schedules]);
   const entrantMap = useMemo(() => Object.groupBy(entrants, (row) => row.entry_date), [entrants]);
-  const selectedSchedules = scheduleMap[selectedDate] ?? [];
-  const selectedEntrants = entrantMap[selectedDate] ?? [];
+  const companyPriority = useMemo(
+    () => new Map(master.primaryCompanies.map((primaryCompany, index) => [primaryCompany, index])),
+    [master],
+  );
+  const compareCompanyPriority = <T extends { primary_company: string }>(left: T, right: T) =>
+    (companyPriority.get(left.primary_company) ?? Number.MAX_SAFE_INTEGER) -
+      (companyPriority.get(right.primary_company) ?? Number.MAX_SAFE_INTEGER) ||
+    left.primary_company.localeCompare(right.primary_company, "ja");
+  const selectedSchedules = [...(scheduleMap[selectedDate] ?? [])].sort(compareCompanyPriority);
+  const selectedEntrants = [...(entrantMap[selectedDate] ?? [])].sort(compareCompanyPriority);
   const firstDayOffset = new Date(`${month}-01T00:00:00`).getDay();
   const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -139,8 +147,24 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
               </div>
               <p className="mt-0.5 font-semibold text-primary">
                 {row.status === "work" ? <CopyValue value={totalWorkers(row)} label="合計人数">{totalWorkers(row)}人</CopyValue> : "作業なし"}
-                <span className="ml-2 font-normal text-slate-500">二次 {subs.length}社</span>
               </p>
+              {subs.length > 0 ? (
+                <details className="mt-2 rounded-md border border-border bg-slate-50">
+                  <summary className="cursor-pointer px-2.5 py-2 font-semibold text-slate-700 marker:text-emerald-700">
+                    二次会社 {subs.length}社
+                  </summary>
+                  <div className="grid gap-1.5 border-t border-border p-2.5">
+                    {subs.map((sub) => (
+                      <div key={sub.id} className="flex min-w-0 items-baseline justify-between gap-3">
+                        <span className="min-w-0 break-words">{sub.secondary_company || "会社名未入力"}</span>
+                        <span className="shrink-0 font-semibold text-primary">{sub.worker_count ?? 0}人</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ) : (
+                <p className="mt-1 text-xs text-slate-400">二次会社 0社</p>
+              )}
               <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label={row.status === "work" ? "作業エリア" : "次回来場"} /> : "エリア未入力"}</p>
               <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" /> : "作業内容未入力"}</p>
               {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" /></p>}

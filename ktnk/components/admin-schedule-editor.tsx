@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CompanyMaster, ScheduleSubmitInput, ScheduleWithSubcompanies } from "@/lib/types";
 import { SubcompanyFields } from "@/components/subcompany-fields";
@@ -52,9 +53,25 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
     finally { setBusy(false); }
   }
 
-  return <dialog ref={dialog} onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }} className="admin-dashboard m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-md border border-border p-4 backdrop:bg-black/40">
+  return <dialog
+    ref={dialog}
+    onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
+    onClick={(event) => {
+      if (busy || event.target !== event.currentTarget) return;
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const clickedOutside = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+      if (clickedOutside) onClose();
+    }}
+    className="admin-dashboard m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-md border border-border p-4 backdrop:bg-black/40"
+  >
     <form onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <h2 className="text-lg font-bold">予定を編集</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold">予定を編集</h2>
+        <button type="button" className="btn btn-secondary h-9 min-h-9 px-3" disabled={busy} onClick={onClose}>
+          <X size={16} aria-hidden="true" />
+          閉じる
+        </button>
+      </div>
       <p className="mb-4 text-sm text-slate-600">{schedule.work_date} / {schedule.primary_company}</p>
       <fieldset disabled={busy} className="grid gap-3">
         <label className="field"><span className="label">作業予定</span><select className="input" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as ScheduleSubmitInput["status"] })}><option value="work">作業あり</option><option value="no_work">作業なし</option></select></label>
@@ -68,7 +85,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
       {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "処理中…" : "保存"}</button>
-        <button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>キャンセル</button>
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>閉じる</button>
         <button type="button" className="btn btn-secondary ml-auto text-red-700" disabled={busy} onClick={() => void submit(true)}>この予定を削除</button>
       </div>
     </form>
