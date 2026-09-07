@@ -1150,8 +1150,8 @@ export function AdminDashboard() {
             </button>
           </div>
 
-          <p className="text-sm text-slate-600">
-            つまみをドラッグして並び替えできます。スマートフォンでは↑・↓をご利用ください。二次会社は同じ一次会社内で移動でき、変更は自動保存されます。
+          <p className="hidden text-sm text-slate-600 sm:block">
+            つまみをドラッグするか、↑・↓で並び替えできます。二次会社は同じ一次会社内で移動でき、変更は自動保存されます。
           </p>
 
           <div className="grid gap-3">
@@ -1164,7 +1164,7 @@ export function AdminDashboard() {
             {companyGroups.map((group, groupIndex) => (
               <div
                 key={group.primaryCompany}
-                className={`grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-md ${dropTarget === group.primaryCompany ? "ring-2 ring-emerald-500 bg-emerald-50" : ""}`}
+                className={`grid grid-cols-1 items-start gap-2 rounded-md sm:grid-cols-[auto_minmax(0,1fr)] ${dropTarget === group.primaryCompany ? "ring-2 ring-emerald-500 bg-emerald-50" : ""}`}
                 onDragOver={(event) => {
                   if (!draggedCompany || draggedCompany.rowId || companyLoading || editingCompanyId) return;
                   event.preventDefault();
@@ -1177,7 +1177,7 @@ export function AdminDashboard() {
                   void dropCompany(group.primaryCompany);
                 }}
               >
-                <div className="flex h-11 items-center gap-1">
+                <div className="hidden h-11 items-center gap-1 sm:flex">
                   <span
                     className="inline-flex h-9 w-5 items-center justify-center cursor-grab text-slate-400 active:cursor-grabbing"
                     draggable={!companyLoading && !editingCompanyId}
@@ -1300,7 +1300,7 @@ export function AdminDashboard() {
                       )}
                       <div className="flex flex-wrap items-center gap-2">
                         {group.rows.length > 1 ? (
-                          <>
+                          <div className="hidden items-center gap-2 sm:flex">
                             <span
                               className="inline-flex h-9 w-5 items-center justify-center cursor-grab text-slate-400 active:cursor-grabbing"
                               draggable={!companyLoading && !editingCompanyId}
@@ -1331,7 +1331,7 @@ export function AdminDashboard() {
                             >
                               <ArrowDown size={16} aria-hidden="true" />
                             </button>
-                          </>
+                          </div>
                         ) : null}
                         {editingCompanyId === row.id ? (
                           <>
