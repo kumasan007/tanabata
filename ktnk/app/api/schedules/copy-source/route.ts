@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getPreviousScheduleForCopy } from "@/lib/schedule-service";
+import {
+  getNextScheduleForCopy,
+  getPreviousScheduleForCopy,
+} from "@/lib/schedule-service";
 import {
   addDays,
   parseLocalDate,
@@ -19,9 +22,11 @@ export async function GET(request: Request) {
     );
   try {
     const today = todayInTokyoString();
-    // The latest work day up to today: today's work takes precedence; future plans are excluded.
+    // Prefer the latest work day up to today, then fall back to the nearest future plan.
     const tomorrow = toDateString(addDays(parseLocalDate(today)!, 1));
-    const row = await getPreviousScheduleForCopy(company, "work", tomorrow);
+    const previous = await getPreviousScheduleForCopy(company, "work", tomorrow);
+    const row =
+      previous ?? await getNextScheduleForCopy(company, "work", tomorrow);
     const source: PreviousSchedule | null = row
       ? {
           workDate: row.work_date,

@@ -311,6 +311,9 @@ export function ScheduleForm({
   const sourceError =
     sourceResult?.company === form.primaryCompany ? sourceResult.error : "";
   const sourceIsToday = source?.workDate === sourceResult?.today;
+  const sourceIsFuture = Boolean(
+    source?.workDate && sourceResult?.today && source.workDate > sourceResult.today,
+  );
   const validDate = Boolean(parseLocalDate(form.startDate));
   const ready = Boolean(
     form.primaryCompany &&
@@ -882,6 +885,8 @@ export function ScheduleForm({
                             title={
                               sourceIsToday
                                 ? "今日と同じ人員ですか？"
+                                : sourceIsFuture
+                                  ? `${displayDate(source.workDate)}と同じ人員ですか？`
                                 : "前回と同じ人員ですか？"
                             }
                           />
@@ -994,6 +999,8 @@ export function ScheduleForm({
                       title={
                         sourceIsToday
                           ? "今日と同じ作業内容ですか？"
+                          : sourceIsFuture
+                            ? `${displayDate(source.workDate)}と同じ作業内容ですか？`
                           : "前回と同じ作業内容ですか？"
                       }
                     />

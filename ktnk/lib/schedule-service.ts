@@ -228,6 +228,41 @@ export async function getPreviousScheduleForCopy(primaryCompany: string, status:
   return getCachedPreviousSchedule(primaryCompany, status, workDate);
 }
 
+async function queryNextScheduleForCopy(primaryCompany: string, status: ScheduleStatus, workDate: string) {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from("schedule_groups")
+    .select(
+      `
+      id, work_date, status, primary_company, primary_count, work_area,
+      work_content, next_visit_date, next_primary_count, next_work_area,
+      next_work_content, notes, created_at, updated_at,
+      schedule_subcompanies (
+        id, schedule_group_id, kind, secondary_company, worker_count, sort_order
+      )
+    `,
+    )
+    .eq("primary_company", primaryCompany)
+    .eq("status", status)
+    .gte("work_date", workDate)
+    .order("work_date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throwSupabaseError(error, "次回の予定取得に失敗しました。");
+  return data ? normalizeScheduleRow(data) : null;
+}
+
+const getCachedNextSchedule = unstable_cache(
+  queryNextScheduleForCopy,
+  ["next-schedule-v1"],
+  { tags: [DATA_CACHE_TAGS.schedules], revalidate: 5 * 60 },
+);
+
+export async function getNextScheduleForCopy(primaryCompany: string, status: ScheduleStatus, workDate: string) {
+  return getCachedNextSchedule(primaryCompany, status, workDate);
+}
+
 async function queryWorkScheduleOnDate(primaryCompany: string, workDate: string) {
   const { data, error } = await createServerClient()
     .from("schedule_groups")

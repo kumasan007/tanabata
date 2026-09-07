@@ -75,10 +75,10 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
       <div className="panel flex flex-wrap items-end gap-3 p-4">
         <div className="w-full sm:w-auto">
           <label className="label" htmlFor="calendar-month">表示月</label>
-          <div className="mt-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-stretch gap-2 sm:grid-cols-[auto_11rem_auto]">
-            <button type="button" className="btn btn-secondary h-14 px-2 sm:px-4" onClick={() => selectMonth(shiftMonth(month, -1))}>前月</button>
-            <input id="calendar-month" className="input max-w-full px-2 sm:px-3.5" type="month" value={month} onChange={(e) => selectMonth(e.target.value)} />
-            <button type="button" className="btn btn-secondary h-14 px-2 sm:px-4" onClick={() => selectMonth(shiftMonth(month, 1))}>次月</button>
+          <div className="mt-2 grid min-w-0 grid-cols-2 items-stretch gap-2 sm:grid-cols-[auto_11rem_auto]">
+            <button type="button" className="btn btn-secondary col-start-1 row-start-2 h-12 w-full px-3 sm:row-start-1 sm:h-14 sm:w-auto sm:px-4" onClick={() => selectMonth(shiftMonth(month, -1))}>前月</button>
+            <input id="calendar-month" className="input col-span-2 col-start-1 row-start-1 h-12 max-w-full px-3 sm:col-span-1 sm:col-start-2 sm:h-14 sm:px-3.5" type="month" value={month} onChange={(e) => selectMonth(e.target.value)} />
+            <button type="button" className="btn btn-secondary col-start-2 row-start-2 h-12 w-full px-3 sm:col-start-3 sm:row-start-1 sm:h-14 sm:w-auto sm:px-4" onClick={() => selectMonth(shiftMonth(month, 1))}>次月</button>
           </div>
         </div>
         <label className="field w-full sm:ml-auto sm:w-56"><span className="label">一次会社</span><select className="input" value={company} onChange={(e) => setCompany(e.target.value)}><option value="">すべて</option>{master?.primaryCompanies.map((item) => <option key={item}>{item}</option>)}</select></label>

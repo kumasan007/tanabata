@@ -133,7 +133,7 @@ test("本日以前・作業なし・本日コピー未要求では余分な本�
   assert.equal(todayCalls.length, 0);
 });
 
-function copySourceRoute(source, calls, fail = false) {
+function copySourceRoute(source, calls, fail = false, future = null, futureCalls = []) {
   return loadModule("app/api/schedules/copy-source/route.ts", {
     "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
     "@/lib/utils": { ...loadModule("lib/utils.ts"), todayInTokyoString: () => "2026-09-06" },
@@ -142,6 +142,10 @@ function copySourceRoute(source, calls, fail = false) {
         calls.push(args);
         if (fail) throw new Error("Database unavailable");
         return source;
+      },
+      getNextScheduleForCopy: async (...args) => {
+        futureCalls.push(args);
+        return future;
       },
     },
   }).GET;
@@ -374,6 +378,32 @@ test("company deletion requires admin and exactly one target", async () => {
     });
     assert.equal((await DELETE({ url: `http://localhost/api/admin/company-master${query}` })).status, status);
   }
+});
+
+test("今日以前の作業がない場合は最も近い未来の予定を返す", async () => {
+  const previousCalls = [];
+  const futureCalls = [];
+  const get = copySourceRoute(null, previousCalls, false, {
+    work_date: "2026-09-10", primary_count: 5, work_area: "3階", work_content: "搬入",
+    subcompanies: [{ kind: "current", secondary_company: "B", worker_count: 2 }],
+  }, futureCalls);
+  const response = await get({ url: "http://localhost/api/schedules/copy-source?primaryCompany=A" });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.source.workDate, "2026-09-10");
+  assert.equal(response.body.source.primaryCount, 5);
+  assert.deepEqual(previousCalls, [["A", "work", "2026-09-07"]]);
+  assert.deepEqual(futureCalls, [["A", "work", "2026-09-07"]]);
+});
+
+test("今日以前の作業がある場合は未来の予定を検索しない", async () => {
+  const futureCalls = [];
+  const get = copySourceRoute({
+    work_date: "2026-09-05", primary_count: 3, subcompanies: [],
+  }, [], false, null, futureCalls);
+  const response = await get({ url: "http://localhost/api/schedules/copy-source?primaryCompany=A" });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.source.workDate, "2026-09-05");
+  assert.equal(futureCalls.length, 0);
 });
 
 test("company deletion scopes a single database operation to the requested company or row", async () => {
