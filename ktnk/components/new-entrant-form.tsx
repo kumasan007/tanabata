@@ -1,10 +1,11 @@
 "use client";
 
+import { ExistingEntryCheck } from "@/components/existing-entry-check";
 import { useMemo, useState } from "react";
 import type { CompanyMaster } from "@/lib/types";
-import { addDays, parseLocalDate, toDateString } from "@/lib/utils";
+import { isWorkingDate, workingDateOptions, shortDateWithWeekday, parseLocalDate } from "@/lib/utils";
 
-type Step = "company" | "date" | "details" | "confirm" | "success";
+type Step = "existing" | "company" | "date" | "details" | "confirm" | "success";
 type EntrantForm = { entryDate: string; primaryCompany: string; secondaryCompany: string; personCount: number | null; personNames: string; notes: string };
 
 function displayDate(value: string) {
@@ -23,12 +24,9 @@ export function NewEntrantForm({ today, initialMaster }: { today: string; initia
   const [customDate, setCustomDate] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [acknowledged, setAcknowledged] = useState("");
   const secondaryOptions = useMemo(() => master?.secondariesByPrimary[form.primaryCompany] ?? [], [master, form.primaryCompany]);
-  const dateOptions = useMemo(() => [
-    { label: "今日", date: today },
-    { label: "明日", date: toDateString(addDays(parseLocalDate(today)!, 1)) },
-    { label: "明後日", date: toDateString(addDays(parseLocalDate(today)!, 2)) },
-  ], [today]);
+  const dateOptions = useMemo(() => workingDateOptions(today), [today]);
 
   function chooseCompany(company: string) {
     setForm((current) => ({ ...current, primaryCompany: company, secondaryCompany: "" }));
@@ -37,16 +35,30 @@ export function NewEntrantForm({ today, initialMaster }: { today: string; initia
   }
 
   function chooseDate(date: string) {
+    setAcknowledged("");
     setForm((current) => ({ ...current, entryDate: date }));
     setMessage("");
-    if (date) setStep("details");
+    if (isWorkingDate(date)) setStep("existing");
+    else if (date) setMessage("日曜日は入力できません。月曜〜土曜を選択してください。");
   }
 
-  function showConfirmation() {
+  async function showConfirmation() {
+    if (busy) return;
     if (!form.secondaryCompany.trim()) { setMessage("新規入場する二次会社を入力してください。"); return; }
     if (form.personCount == null || form.personCount < 1) { setMessage("新規入場者を1人以上入力してください。"); return; }
-    setMessage("");
-    setStep("confirm");
+    setBusy(true); setMessage("");
+    try {
+      const response = await fetch(`/api/new-entrants?${new URLSearchParams({ from: form.entryDate, to: form.entryDate })}`, { cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "入力済みの内容を確認できませんでした。");
+      const key = JSON.stringify([form.entryDate, form.primaryCompany, form.secondaryCompany.trim()]);
+      if (body.records.some((row: { primary_company: string; secondary_company: string }) => row.primary_company === form.primaryCompany && row.secondary_company === form.secondaryCompany.trim()) && acknowledged !== key) {
+        setMessage("この二次会社は既に入力されています。内容を確認し、「変更する」を選択してください。");
+        setStep("existing"); return;
+      }
+      setStep("confirm");
+    } catch (cause) { setMessage(cause instanceof Error ? cause.message : "確認できませんでした。"); }
+    finally { setBusy(false); }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -76,7 +88,7 @@ export function NewEntrantForm({ today, initialMaster }: { today: string; initia
   function goBack() {
     setMessage("");
     if (step === "date") setStep("company");
-    if (step === "details") setStep("date");
+    if (step === "details" || step === "existing") setStep("date");
     if (step === "confirm") setStep("details");
   }
 
@@ -94,11 +106,12 @@ export function NewEntrantForm({ today, initialMaster }: { today: string; initia
           {message && <p role="alert" className="mt-3 text-red-700">{message}</p>}
         </section>}
 
+        {step === "existing" && <ExistingEntryCheck key={`${form.primaryCompany}-${form.entryDate}`} date={form.entryDate} company={form.primaryCompany} kind="entrant" onOtherDate={() => setStep("date")} onNew={() => { setForm((current) => ({ ...current, secondaryCompany: "", personCount: null, personNames: "", notes: "" })); setStep("details"); }} onEntrant={(row) => { setAcknowledged(JSON.stringify([row.entry_date, row.primary_company, row.secondary_company])); setForm({ entryDate: row.entry_date, primaryCompany: row.primary_company, secondaryCompany: row.secondary_company, personCount: row.person_count, personNames: row.person_names ?? "", notes: row.notes ?? "" }); setStep("details"); }} />}
         {step === "date" && <section className="panel p-5 sm:p-6">
           <SectionHeading title="入場日を選んでください" />
-          <div className="grid grid-cols-3 gap-2">{dateOptions.map((option) => <button key={option.label} type="button" className="status-option flex-col gap-1 px-2" aria-pressed={!customDate && form.entryDate === option.date} onClick={() => { setCustomDate(false); chooseDate(option.date); }}><span>{option.label}</span><span className="text-sm font-normal">{option.date.slice(5).replace("-", "/")}</span></button>)}</div>
+          <div className="grid grid-cols-3 gap-2">{dateOptions.map((option) => <button key={option.label} type="button" className="status-option flex-col gap-1 px-2" aria-pressed={!customDate && form.entryDate === option.date} onClick={() => { setCustomDate(false); chooseDate(option.date); }}><span>{option.label}</span><span className="text-sm font-normal">{shortDateWithWeekday(option.date)}</span></button>)}</div>
           <button type="button" className="btn btn-secondary mt-3 w-full" aria-expanded={customDate} onClick={() => setCustomDate(true)}>任意の日付を選ぶ</button>
-          {customDate && <div className="mt-3 space-y-3"><label className="field"><span className="label">入場日</span><input autoFocus className="input" type="date" value={form.entryDate} onChange={(event) => setForm({ ...form, entryDate: event.target.value })} /></label><button type="button" className="btn btn-primary w-full" disabled={!parseLocalDate(form.entryDate)} onClick={() => chooseDate(form.entryDate)}>次へ</button></div>}
+          {customDate && <div className="mt-3 space-y-3"><label className="field"><span className="label">入場日（月曜〜土曜）</span><input autoFocus className="input" type="date" value={form.entryDate} onChange={(event) => setForm({ ...form, entryDate: event.target.value })} /></label><button type="button" className="btn btn-primary w-full" disabled={!isWorkingDate(form.entryDate)} onClick={() => chooseDate(form.entryDate)}>次へ</button></div>}
         </section>}
 
         {step === "details" && <section className="panel p-5 sm:p-6">
@@ -110,7 +123,7 @@ export function NewEntrantForm({ today, initialMaster }: { today: string; initia
             <label className="field"><span className="label">備考<span className="ml-2 text-sm font-normal text-slate-600">任意</span></span><textarea className="textarea" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="連絡事項や注意点など" /></label>
           </div>
           {message && <p role="alert" className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-red-700">{message}</p>}
-          <button type="button" className="btn btn-primary mt-5 w-full" onClick={showConfirmation}>次へ</button>
+          <button type="button" className="btn btn-primary mt-5 w-full" disabled={busy} onClick={showConfirmation}>{busy ? "入力済みの内容を確認中…" : "次へ"}</button>
         </section>}
 
         {step === "confirm" && <><section className="panel p-5 sm:p-6">

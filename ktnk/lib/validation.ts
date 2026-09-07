@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isWorkingDate } from "@/lib/utils";
 
 const nullableDate = z
   .string()
@@ -45,6 +46,9 @@ export const scheduleSubmitSchema = z
     overwriteExisting: z.boolean().optional().default(false),
   })
   .superRefine((value, ctx) => {
+    for (const field of ["startDate", "endDate", "nextVisitDate"] as const) {
+      if (value[field] && !isWorkingDate(value[field])) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: "日曜日は入力できません。月曜〜土曜を選択してください。" });
+    }
     if (value.startDate > value.endDate) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

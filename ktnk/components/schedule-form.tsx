@@ -1,5 +1,9 @@
 "use client";
 
+import { ExistingEntryCheck } from "@/components/existing-entry-check";
+import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
+import { LoadingIndicator } from "@/components/loading-indicator";
+import type { ScheduleWithSubcompanies } from "@/lib/types";
 import { CopyButton } from "@/components/copy-button";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { SubcompanyFields } from "@/components/subcompany-fields";
@@ -10,7 +14,7 @@ import type {
   ScheduleSubmitInput,
   ScheduleSummary,
 } from "@/lib/types";
-import { addDays, parseLocalDate, toDateString } from "@/lib/utils";
+import { isWorkingDate, workingDateOptions, shortDateWithWeekday, parseLocalDate } from "@/lib/utils";
 
 type SubmitState =
   | { status: "idle" }
@@ -253,7 +257,6 @@ function SchedulePreview({
 }
 
 export function ScheduleForm({
-  initialDate,
   today,
   initialCompanyMaster,
 }: {
@@ -270,10 +273,11 @@ export function ScheduleForm({
   const [choosingCompany, setChoosingCompany] = useState(true);
   const [choice, setChoice] = useState<"same" | "new" | null>(null);
   const [statusChosen, setStatusChosen] = useState(false);
+  const [editingExisting, setEditingExisting] = useState<ScheduleWithSubcompanies | null>(null);
   const [customDate, setCustomDate] = useState(false);
   const [continuingInput, setContinuingInput] = useState(false);
   const [step, setStep] = useState<
-    "date" | "status" | "copy" | "visit" | "edit" | "confirm" | "copyContent"
+    "existing" | "date" | "status" | "copy" | "visit" | "edit" | "confirm" | "copyContent"
   >("date");
   const [visitChoice, setVisitChoice] = useState<"date" | "unknown" | null>(
     null,
@@ -316,7 +320,7 @@ export function ScheduleForm({
   const sourceIsFuture = Boolean(
     source?.workDate && sourceResult?.today && source.workDate > sourceResult.today,
   );
-  const validDate = Boolean(parseLocalDate(form.startDate));
+  const validDate = isWorkingDate(form.startDate);
   const ready = Boolean(
     form.primaryCompany &&
     choice &&
@@ -352,14 +356,7 @@ export function ScheduleForm({
       row.workerCount,
     ]) ?? [],
   );
-  const dateOptions = [
-    { label: "今日", date: today },
-    { label: "明日", date: initialDate },
-    {
-      label: "明後日",
-      date: toDateString(addDays(parseLocalDate(initialDate)!, 1)),
-    },
-  ];
+  const dateOptions = workingDateOptions(today);
 
   useEffect(() => {
     if (companyRetry === 0) return;
@@ -480,6 +477,10 @@ export function ScheduleForm({
   }, [submitState]);
 
   function patch(value: Partial<ScheduleSubmitInput>) {
+    if (value.nextVisitDate && !isWorkingDate(value.nextVisitDate)) {
+      setSubmitState({ status: "error", message: "日曜日は入力できません。月曜〜土曜を選択してください。" });
+      return;
+    }
     setSubmitState({ status: "idle" });
     setForm((current) => {
       const next = { ...current, ...value };
@@ -544,10 +545,8 @@ export function ScheduleForm({
   }
   function selectDate(date: string) {
     patch({ startDate: date, endDate: date });
-    if (parseLocalDate(date)) {
-      setStep(continuingInput ? "confirm" : "status");
-      setContinuingInput(false);
-    }
+    if (isWorkingDate(date)) setStep("existing");
+    else if (date) setSubmitState({ status: "error", message: "日曜日は入力できません。月曜〜土曜を選択してください。" });
   }
   function resetForm() {
     setForm(emptyForm(""));
@@ -674,7 +673,7 @@ export function ScheduleForm({
                 onClick={() => {
                   setSubmitState({ status: "idle" });
                   if (step === "date") setChoosingCompany(true);
-                  else if (step === "status") setStep("date");
+                  else if (step === "status" || step === "existing") setStep("date");
                   else if (step === "copyContent") {
                     setEditorPart("people");
                     setStep("edit");
@@ -776,6 +775,7 @@ export function ScheduleForm({
 
             {form.primaryCompany && !choosingCompany && (
               <>
+                {step === "existing" && <ExistingEntryCheck key={`${form.primaryCompany}-${form.startDate}`} date={form.startDate} company={form.primaryCompany} kind="schedule" onNew={() => { setStep(continuingInput ? "confirm" : "status"); setContinuingInput(false); }} onOtherDate={() => setStep("date")} onSchedule={setEditingExisting} />}
                 {step === "date" && (
                   <section className="panel p-5 sm:p-6">
                     <SectionHeading title="入力する日付を選んでください" />
@@ -795,7 +795,7 @@ export function ScheduleForm({
                         >
                           <span>{option.label}</span>
                           <span className="text-sm font-normal">
-                            {option.date.slice(5).replace("-", "/")}
+                            {shortDateWithWeekday(option.date)}
                           </span>
                         </button>
                       ))}
@@ -816,7 +816,7 @@ export function ScheduleForm({
                     </button>
                     {customDate && (
                       <label className="field mt-3" id="custom-work-date">
-                        <span className="label">作業日</span>
+                        <span className="label">作業日（月曜〜土曜）</span>
                         <input
                           className="input"
                           type="date"
@@ -834,8 +834,7 @@ export function ScheduleForm({
                           className="btn btn-primary mt-3 w-full"
                           disabled={!validDate}
                           onClick={() => {
-                            setStep(continuingInput ? "confirm" : "status");
-                            setContinuingInput(false);
+                            selectDate(form.startDate);
                           }}
                         >
                           次へ
@@ -850,7 +849,7 @@ export function ScheduleForm({
                     {choice === null ? (
                       sourceLoading ? (
                         <div role="status" className="text-base text-slate-600">
-                          前回の作業を確認しています…
+                          <LoadingIndicator label="前回の作業を確認しています…" />
                           <button
                             type="button"
                             className="btn btn-secondary mt-4 w-full"
@@ -1088,7 +1087,7 @@ export function ScheduleForm({
                           type="button"
                           className="btn btn-primary w-full"
                           disabled={
-                            !parseLocalDate(form.nextVisitDate ?? "") ||
+                            !isWorkingDate(form.nextVisitDate ?? "") ||
                             (form.nextVisitDate ?? "") < form.startDate
                           }
                           onClick={() => {
@@ -1238,6 +1237,7 @@ export function ScheduleForm({
                         }}
                       />
                     </div>
+                    {previousResult?.key !== previousKey && <LoadingIndicator label="前回の値を読み込み中…" />}
                     {previousResult?.key === previousKey &&
                       previousResult.error && (
                         <div role="alert" className="mt-3 text-sm text-red-700">
@@ -1438,6 +1438,7 @@ export function ScheduleForm({
               </>
             )}
           </fieldset>
+          {!ready && submitState.status === "error" && <p role="alert" className="text-red-700">{submitState.message}</p>}
 
           {ready &&
             (submitState.status === "success" ? (
@@ -1536,7 +1537,7 @@ export function ScheduleForm({
                       </button>
                     </>
                   ) : summaries === null ? (
-                    "読み込み中…"
+                    <LoadingIndicator />
                   ) : summaries.length === 0 ? (
                     "今日から7日分の記入済み予定はありません。"
                   ) : (
@@ -1574,6 +1575,7 @@ export function ScheduleForm({
           )}
         </form>
       </main>
+      {editingExisting && <AdminScheduleEditor schedule={editingExisting} master={companyMaster} workerMode onClose={() => setEditingExisting(null)} onSaved={() => { setEditingExisting(null); setStep("date"); setSummaryVersion((v) => v + 1); setSubmitState({ status: "idle" }); }} />}
     </div>
   );
 }

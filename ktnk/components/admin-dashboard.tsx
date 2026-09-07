@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingIndicator } from "@/components/loading-indicator";
+
 import {
   GripVertical,
   ArrowDown,
@@ -125,6 +127,7 @@ export function AdminDashboard() {
   const [editSecondaryCompany, setEditSecondaryCompany] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [companyFetching, setCompanyFetching] = useState(true);
   const [companyLoading, setCompanyLoading] = useState(false);
   const [draggedCompany, setDraggedCompany] = useState<{ primary: string; rowId?: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -263,6 +266,7 @@ export function AdminDashboard() {
   useEffect(() => {
     if (!authenticated) return;
 
+    setCompanyFetching(true);
     void Promise.all([refreshCompanyOptions(), refreshCompanyMaster()]).catch(
       (error) => {
         setCompanyMaster(null);
@@ -272,7 +276,7 @@ export function AdminDashboard() {
             : "会社マスタの取得に失敗しました。",
         );
       },
-    );
+    ).finally(() => setCompanyFetching(false));
   }, [authenticated]);
 
   useEffect(() => {
@@ -1151,7 +1155,8 @@ export function AdminDashboard() {
           </p>
 
           <div className="grid gap-3">
-            {companyGroups.length === 0 && (
+            {companyFetching && <LoadingIndicator label="協力会社一覧を読み込み中…" />}
+            {!companyFetching && companyGroups.length === 0 && (
               <p className="py-6 text-center text-slate-500">
                 協力会社がまだ登録されていません
               </p>
@@ -1206,6 +1211,7 @@ export function AdminDashboard() {
               <details className="min-w-0 flex-1 rounded-md border border-border bg-white">
                 <summary className="min-h-11 cursor-pointer rounded-md px-3 py-2.5 font-semibold text-slate-900 marker:text-emerald-700">
                   <span className="break-words">{group.primaryCompany}</span>
+                  <span className="ml-3 text-sm font-normal text-slate-500">{(group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []).join("・")}</span>
                   <span className="ml-3 text-sm font-normal text-slate-500">
                     二次会社{" "}
                     {group.rows.filter((row) => row.secondary_company).length}社
@@ -1672,14 +1678,14 @@ export function AdminDashboard() {
         >
           <div className="overflow-x-auto rounded-md border border-border bg-white">
             <div className="min-w-[630px]">
-              <div className="grid grid-cols-7 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500">
-                {["月", "火", "水", "木", "金", "土", "日"].map((day) => (
+              <div className="grid grid-cols-6 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500">
+                {["月", "火", "水", "木", "金", "土"].map((day) => (
                   <div key={day} className="px-2 py-2">
                     {day}
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 bg-border gap-px">
+              <div className="grid grid-cols-6 bg-border gap-px">
                 {calendarDays.leadingBlanks.map((blank) => (
                   <div key={blank} className="min-h-28 bg-slate-50" />
                 ))}
@@ -2052,11 +2058,11 @@ function buildCalendarDays(dateFrom: string, dateTo: string) {
   const days: string[] = [];
   let cursor = start;
   while (cursor <= end) {
-    days.push(toDateString(cursor));
+    if (cursor.getDay() !== 0) days.push(toDateString(cursor));
     cursor = addDays(cursor, 1);
   }
 
-  const mondayBasedIndex = (start.getDay() + 6) % 7;
+  const mondayBasedIndex = (start.getDay() + 6) % 7 % 6;
   return {
     days,
     leadingBlanks: Array.from(

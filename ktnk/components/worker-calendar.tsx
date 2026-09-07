@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingIndicator } from "@/components/loading-indicator";
+import { isWorkingDate } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
@@ -19,12 +21,12 @@ function datesInMonth(month: string) {
   const range = monthRange(month);
   const result: string[] = [];
   for (let day = 1; day <= Number(range.to.slice(-2)); day++) result.push(`${month}-${String(day).padStart(2, "0")}`);
-  return result;
+  return result.filter(isWorkingDate);
 }
 
 export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: string; initialMaster: CompanyMaster }) {
   const [month, setMonth] = useState(initialDate.slice(0, 7));
-  const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [selectedDate, setSelectedDate] = useState(isWorkingDate(initialDate) ? initialDate : datesInMonth(initialDate.slice(0, 7)).find((date) => date > initialDate) ?? datesInMonth(initialDate.slice(0, 7))[0]);
   const [company, setCompany] = useState("");
   const [master] = useState<CompanyMaster>(initialMaster);
   const [schedules, setSchedules] = useState<ScheduleWithSubcompanies[]>([]);
@@ -34,18 +36,26 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
   const [version, setVersion] = useState(0);
   const selectedDaySectionRef = useRef<HTMLElement>(null);
   const range = monthRange(month);
+  const requestKey = JSON.stringify([month, company, version]);
+  const [loadedKey, setLoadedKey] = useState("");
+  const loading = loadedKey !== requestKey;
   useEffect(() => {
+    const controller = new AbortController();
     const params = new URLSearchParams({ from: range.from, to: range.to });
     if (company) params.set("primaryCompany", company);
     setMessage("");
-    fetch(`/api/calendar?${params}`, { cache: "no-store" }).then(async (response) => {
+    fetch(`/api/calendar?${params}`, { cache: "no-store", signal: controller.signal }).then(async (response) => {
       const body = await response.json(); if (!response.ok) throw new Error(body.error);
+      if (controller.signal.aborted) return;
       setSchedules(body.schedules ?? []); setEntrants(body.entrants ?? []); setMessage(body.warning ?? "");
-    }).catch((error) => setMessage(error instanceof Error ? error.message : "取得できませんでした。"));
-  }, [month, company, version]);
+    }).catch((error) => {
+      if (!controller.signal.aborted) { setSchedules([]); setEntrants([]); setMessage(error instanceof Error ? error.message : "取得できませんでした。"); }
+    }).finally(() => { if (!controller.signal.aborted) setLoadedKey(requestKey); });
+    return () => controller.abort();
+  }, [month, company, version, range.from, range.to, requestKey]);
   const days = useMemo(() => datesInMonth(month), [month]);
-  const scheduleMap = useMemo(() => Object.groupBy(schedules, (row) => row.work_date), [schedules]);
-  const entrantMap = useMemo(() => Object.groupBy(entrants, (row) => row.entry_date), [entrants]);
+  const scheduleMap = useMemo(() => Object.groupBy(loading ? [] : schedules.filter((row) => !company || row.primary_company === company), (row) => row.work_date), [schedules, company, loading]);
+  const entrantMap = useMemo(() => Object.groupBy(loading ? [] : entrants.filter((row) => !company || row.primary_company === company), (row) => row.entry_date), [entrants, company, loading]);
   const companyPriority = useMemo(
     () => new Map(master.primaryCompanies.map((primaryCompany, index) => [primaryCompany, index])),
     [master],
@@ -56,13 +66,13 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
     left.primary_company.localeCompare(right.primary_company, "ja");
   const selectedSchedules = [...(scheduleMap[selectedDate] ?? [])].sort(compareCompanyPriority);
   const selectedEntrants = [...(entrantMap[selectedDate] ?? [])].sort(compareCompanyPriority);
-  const firstDayOffset = new Date(`${month}-01T00:00:00`).getDay();
-  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+  const firstDayOffset = (new Date(`${month}-01T00:00:00`).getDay() + 6) % 7 % 6;
+  const weekdays = ["月", "火", "水", "木", "金", "土"];
 
   function selectMonth(nextMonth: string) {
     if (!/^\d{4}-\d{2}$/.test(nextMonth)) return;
     setMonth(nextMonth);
-    setSelectedDate(`${nextMonth}-01`);
+    setSelectedDate(datesInMonth(nextMonth)[0]);
   }
 
   function selectDate(date: string) {
@@ -82,21 +92,24 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
     <main className="mx-auto max-w-6xl px-3 py-5 sm:px-4">
       <div className="panel flex flex-wrap items-end gap-3 p-4">
         <div className="w-full sm:w-auto">
-          <label className="label" htmlFor="calendar-month">表示月</label>
-          <div className="mt-2 grid min-w-0 grid-cols-2 items-stretch gap-2 sm:grid-cols-[auto_11rem_auto]">
+          <label className="sr-only" htmlFor="calendar-month">表示月</label>
+          <div className="grid min-w-0 grid-cols-2 items-stretch gap-2 sm:grid-cols-[auto_11rem_auto]">
             <button type="button" className="btn btn-secondary col-start-1 row-start-2 h-12 w-full px-3 sm:row-start-1 sm:h-14 sm:w-auto sm:px-4" onClick={() => selectMonth(shiftMonth(month, -1))}>前月</button>
-            <input id="calendar-month" className="input col-span-2 col-start-1 row-start-1 h-12 max-w-full px-3 sm:col-span-1 sm:col-start-2 sm:h-14 sm:px-3.5" type="month" value={month} onChange={(e) => selectMonth(e.target.value)} />
+            <div className="relative col-span-2 col-start-1 row-start-1 min-w-0 sm:col-span-1 sm:col-start-2">
+              <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center text-base">{Number(month.slice(0, 4))}年{Number(month.slice(5))}月</span>
+              <input id="calendar-month" aria-label="表示する月" className="input calendar-month h-12 w-full sm:h-14" type="month" value={month} onChange={(e) => selectMonth(e.target.value)} />
+            </div>
             <button type="button" className="btn btn-secondary col-start-2 row-start-2 h-12 w-full px-3 sm:col-start-3 sm:row-start-1 sm:h-14 sm:w-auto sm:px-4" onClick={() => selectMonth(shiftMonth(month, 1))}>次月</button>
           </div>
         </div>
         <label className="field w-full sm:ml-auto sm:w-56"><span className="label">一次会社</span><select className="input" value={company} onChange={(e) => setCompany(e.target.value)}><option value="">すべて</option>{master?.primaryCompanies.map((item) => <option key={item}>{item}</option>)}</select></label>
       </div>
       {message && <p role="alert" className="mt-4 text-red-700">{message}</p>}
-      <section className="panel mt-4 overflow-x-auto">
-        <div className={`grid grid-cols-7 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500 ${company ? "min-w-[56rem]" : ""}`}>
-          {weekdays.map((weekday, index) => <div key={weekday} className={`py-2 ${index === 0 ? "text-red-600" : index === 6 ? "text-blue-600" : ""}`}>{weekday}</div>)}
+      {loading ? <div className="panel mt-4"><LoadingIndicator label="カレンダーを読み込み中…" /></div> : <section className="panel mt-4 overflow-x-auto">
+        <div className={`grid grid-cols-6 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500 ${company ? "min-w-[56rem]" : ""}`}>
+          {weekdays.map((weekday, index) => <div key={weekday} className={`py-2 ${index === 5 ? "text-blue-600" : ""}`}>{weekday}</div>)}
         </div>
-        <div className={`grid grid-cols-7 bg-border/70 gap-px ${company ? "min-w-[56rem]" : ""}`}>
+        <div className={`grid grid-cols-6 bg-border/70 gap-px ${company ? "min-w-[56rem]" : ""}`}>
           {Array.from({ length: firstDayOffset }, (_, index) => <div key={`blank-${index}`} className="min-h-20 bg-slate-50" />)}
           {days.map((date) => {
             const daySchedules = scheduleMap[date] ?? [];
@@ -121,14 +134,14 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
             </div>;
           })}
         </div>
-      </section>
+      </section>}
 
       <section ref={selectedDaySectionRef} className="mt-4 scroll-mt-4">
         <div className="mb-3 flex items-baseline justify-between gap-3">
           <h2 className="text-lg font-bold">{Number(selectedDate.slice(5, 7))}月{Number(selectedDate.slice(8, 10))}日の予定</h2>
           <span className="text-sm text-slate-500">{selectedSchedules.length}社</span>
         </div>
-        {selectedSchedules.length === 0 && selectedEntrants.length === 0 ? <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {loading ? <LoadingIndicator label="予定を読み込み中…" /> : selectedSchedules.length === 0 && selectedEntrants.length === 0 ? <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {selectedSchedules.map((row) => {
             const subs = row.subcompanies.filter((sub) => sub.kind === (row.status === "work" ? "current" : "next_visit"));
             const area = row.status === "work" ? row.work_area : `次回 ${row.next_visit_date ?? "未定"}`;

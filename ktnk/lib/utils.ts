@@ -54,7 +54,7 @@ export function expandDateRange(startDate: string, endDate: string, excludeWeeke
   const cursor = new Date(start);
 
   while (cursor <= end) {
-    if (!excludeWeekends || !isWeekend(cursor)) {
+    if (cursor.getDay() !== 0 && (!excludeWeekends || !isWeekend(cursor))) {
       dates.push(toDateString(cursor));
     }
     cursor.setDate(cursor.getDate() + 1);
@@ -82,4 +82,24 @@ export function formatDateTime(value: string | null | undefined) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return `${toDateString(date)} ${`${date.getHours()}`.padStart(2, "0")}:${`${date.getMinutes()}`.padStart(2, "0")}`;
+}
+
+export function isWorkingDate(value: string) {
+  const date = parseLocalDate(value);
+  return Boolean(date && date.getDay() !== 0);
+}
+
+export function workingDateOptions(today: string) {
+  const start = parseLocalDate(today)!;
+  const options: { label: string; date: string }[] = [];
+  for (let offset = 0; options.length < 3; offset++) {
+    const date = toDateString(addDays(start, offset));
+    if (isWorkingDate(date)) options.push({ date, label: ["今日", "明日", "明後日"][offset] ?? `${offset}日後` });
+  }
+  return options;
+}
+
+export function shortDateWithWeekday(value: string) {
+  const date = parseLocalDate(value);
+  return date ? `${value.slice(5).replace("-", "/")}（${"日月火水木金土"[date.getDay()]}）` : "";
 }

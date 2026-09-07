@@ -188,3 +188,7 @@ textarea {
   border-radius: 6px;
   box-shadow: none;
 }
+
+.calendar-month { min-width: 0; color: transparent; background: transparent; }
+.calendar-month::-webkit-date-and-time-value { color: transparent; }
+.calendar-month::-webkit-datetime-edit { color: transparent; }

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isWorkingDate } from "@/lib/utils";
 import { ensureSecondaryCompany } from "@/lib/companies";
 import { createServerClient } from "@/lib/supabase";
 import { getNewEntrants } from "@/lib/new-entrants";
 import { invalidateEntrantData } from "@/lib/data-cache";
 
 const inputSchema = z.object({
-  entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  entryDate: z.string().refine(isWorkingDate, "日曜日は入力できません。月曜〜土曜を選択してください。"),
   primaryCompany: z.string().trim().min(1, "一次会社を選択してください。"),
   secondaryCompany: z.string().trim().min(1, "新規入場する会社を選択してください。"),
   personCount: z.number().int().min(1, "新規入場者を1人以上入力してください。"),

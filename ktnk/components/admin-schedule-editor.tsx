@@ -1,5 +1,6 @@
 "use client";
 
+import { isWorkingDate } from "@/lib/utils";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CompanyMaster, ScheduleSubmitInput, ScheduleWithSubcompanies } from "@/lib/types";
@@ -77,7 +78,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
       <p className="mb-4 text-sm text-slate-600">{schedule.work_date} / {schedule.primary_company}</p>
       <fieldset disabled={busy} className="grid gap-3">
         <label className="field"><span className="label">作業予定</span><select className="input" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as ScheduleSubmitInput["status"] })}><option value="work">作業あり</option><option value="no_work">作業なし</option></select></label>
-        {!work && <label className="field"><span className="label">次回来場予定日（任意）</span><input className="input" type="date" value={form.nextVisitDate ?? ""} onChange={(event) => setForm({ ...form, nextVisitDate: event.target.value || null })} /></label>}
+        {!work && <label className="field"><span className="label">次回来場予定日（任意）</span><input className="input" type="date" value={form.nextVisitDate ?? ""} onChange={(event) => { if (event.target.value && !isWorkingDate(event.target.value)) { setError("日曜日は入力できません。月曜〜土曜を選択してください。"); return; } setError(""); setForm({ ...form, nextVisitDate: event.target.value || null }); }} /></label>}
         <label className="field"><span className="label">一次会社人数{work ? "（必須）" : "（任意）"}</span><input className="input" type="number" min={0} step={1} required={work} value={form[countField] ?? ""} onChange={(event) => setForm({ ...form, [countField]: event.target.value === "" ? null : Number(event.target.value) })} /></label>
         <SubcompanyFields title="二次会社" rows={form[rowsField]} options={options} countRequired={work} onChange={(rows) => setForm({ ...form, [rowsField]: rows })} />
         <label className="field"><span className="label">作業エリア{work ? "（必須）" : "（任意）"}</span><input className="input" required={work} value={form[areaField]} onChange={(event) => setForm({ ...form, [areaField]: event.target.value })} /></label>
