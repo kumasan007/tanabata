@@ -1,18 +1,13 @@
 import { createServerClient } from "@/lib/supabase";
-import type { CompanyMaster } from "@/lib/types";
+import type { CompanyMaster, CompanyMasterRow } from "@/lib/types";
+import { unstable_cache } from "next/cache";
+import { DATA_CACHE_TAGS, invalidateCompanyData } from "@/lib/data-cache";
 
-type CompanyMasterRecord = {
-  primary_company: string;
-  secondary_company: string | null;
-  primary_trade_roles: string[] | null;
-  sort_order: number;
-};
-
-export async function getCompanyMaster(): Promise<CompanyMaster> {
+const getCachedCompanyMasterRows = unstable_cache(async (): Promise<CompanyMasterRow[]> => {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("company_master")
-    .select("primary_company, secondary_company, primary_trade_roles, sort_order")
+    .select("id, primary_company, secondary_company, primary_trade_roles, sort_order")
     .order("sort_order", { ascending: true })
     .order("primary_company", { ascending: true })
     .order("secondary_company", { ascending: true, nullsFirst: true });
@@ -21,7 +16,18 @@ export async function getCompanyMaster(): Promise<CompanyMaster> {
     throw new Error(`Supabaseから会社マスタを取得できませんでした: ${error.message}`);
   }
 
-  return buildCompanyMaster(data ?? []);
+  return data ?? [];
+}, ["company-master-rows-v1"], {
+  tags: [DATA_CACHE_TAGS.companies],
+  revalidate: 60 * 60,
+});
+
+export async function getCompanyMasterRows(): Promise<CompanyMasterRow[]> {
+  return getCachedCompanyMasterRows();
+}
+
+export async function getCompanyMaster(): Promise<CompanyMaster> {
+  return buildCompanyMaster(await getCachedCompanyMasterRows());
 }
 
 export async function ensureSecondaryCompany(primaryCompany: string, secondaryCompany: string) {
@@ -43,11 +49,12 @@ export async function ensureSecondaryCompany(primaryCompany: string, secondaryCo
     });
     // 同時登録は会社ペアのユニーク制約に任せる。
     if (insertError && insertError.code !== "23505") throw insertError;
+    invalidateCompanyData();
   }
   return true;
 }
 
-function buildCompanyMaster(rows: CompanyMasterRecord[]): CompanyMaster {
+function buildCompanyMaster(rows: CompanyMasterRow[]): CompanyMaster {
   const primaryCompanies: string[] = [];
   const secondariesByPrimary: Record<string, string[]> = {};
   const primaryTradeRolesByPrimary: Record<string, string[]> = {};

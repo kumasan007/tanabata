@@ -331,12 +331,18 @@ create index if not exists schedule_groups_primary_company_idx
   on public.schedule_groups (primary_company);
 create index if not exists schedule_groups_status_idx
   on public.schedule_groups (status);
+create index if not exists schedule_groups_primary_date_idx
+  on public.schedule_groups (primary_company, work_date);
+create index if not exists schedule_groups_status_date_idx
+  on public.schedule_groups (status, work_date);
 create index if not exists schedule_subcompanies_group_id_idx
   on public.schedule_subcompanies (schedule_group_id);
 create index if not exists schedule_subcompanies_secondary_company_idx
   on public.schedule_subcompanies (secondary_company);
 create index if not exists new_entrant_records_entry_date_idx
   on public.new_entrant_records (entry_date);
+create index if not exists new_entrant_records_primary_date_idx
+  on public.new_entrant_records (primary_company, entry_date);
 
 create or replace function public.set_updated_at()
 returns trigger

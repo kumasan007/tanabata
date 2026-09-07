@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertAdminFromRequest, createAdminServerClient } from "@/lib/supabase";
+import { invalidateAllOperationalData } from "@/lib/data-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,6 +88,7 @@ export async function PATCH(request: Request) {
     if (safetyBackupError) throw safetyBackupError;
     const { data, error } = await db.rpc("restore_data_backup", { p_backup_id: id.data });
     if (error) throw error;
+    invalidateAllOperationalData();
     return NextResponse.json({ restored: data });
   } catch (error) {
     return errorResponse(error);

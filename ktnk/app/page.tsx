@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { CalendarDays, ClipboardList, ShieldCheck, UserPlus } from "lucide-react";
 
-export const dynamic = "force-dynamic";
-
 export default function HomePage() {
   const menus = [
     { href: "/schedule", title: "作業入力", description: "日程・人数・作業内容を入力、修正", icon: ClipboardList },

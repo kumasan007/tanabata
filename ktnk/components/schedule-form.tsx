@@ -253,13 +253,15 @@ function SchedulePreview({
 export function ScheduleForm({
   initialDate,
   today,
+  initialCompanyMaster,
 }: {
   initialDate: string;
   today: string;
+  initialCompanyMaster: CompanyMaster;
 }) {
   const [form, setForm] = useState<ScheduleSubmitInput>(() => emptyForm(""));
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(
-    null,
+    initialCompanyMaster,
   );
   const [companyError, setCompanyError] = useState("");
   const [companyRetry, setCompanyRetry] = useState(0);
@@ -355,6 +357,7 @@ export function ScheduleForm({
   ];
 
   useEffect(() => {
+    if (companyRetry === 0) return;
     const controller = new AbortController();
     setCompanyError("");
     fetch("/api/companies", { signal: controller.signal })

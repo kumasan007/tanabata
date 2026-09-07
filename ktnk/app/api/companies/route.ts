@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const master = await getCompanyMaster();
     return NextResponse.json(master, {
-      headers: { "Cache-Control": "no-store" },
+      headers: { "Cache-Control": "private, max-age=300, stale-while-revalidate=3600" },
     });
   } catch (error) {
     return NextResponse.json(

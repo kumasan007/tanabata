@@ -4,6 +4,7 @@ import { assertAdminFromRequest, createServerClient } from "@/lib/supabase";
 import { getSchedules, saveScheduleSubmission, ScheduleAlreadyExistsError, schedulesToListRows } from "@/lib/schedule-service";
 import type { ScheduleStatus } from "@/lib/types";
 import { scheduleSubmitSchema } from "@/lib/validation";
+import { invalidateScheduleData } from "@/lib/data-cache";
 
 export const runtime = "nodejs";
 
@@ -82,6 +83,7 @@ export async function DELETE(request: Request) {
     const { data, error } = await createServerClient().from("schedule_groups").delete().eq("id", id.data).select("id");
     if (error) throw error;
     if (!data?.length) return NextResponse.json({ error: "予定は既に削除されています。カレンダーを更新してください。" }, { status: 404 });
+    invalidateScheduleData();
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "予定の削除に失敗しました。" }, { status: 500 });

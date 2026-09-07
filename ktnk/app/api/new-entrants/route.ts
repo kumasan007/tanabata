@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ensureSecondaryCompany } from "@/lib/companies";
 import { createServerClient } from "@/lib/supabase";
+import { getNewEntrants } from "@/lib/new-entrants";
+import { invalidateEntrantData } from "@/lib/data-cache";
 
 const inputSchema = z.object({
   entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -17,12 +19,8 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
-    let query = createServerClient().from("new_entrant_records").select("*").order("entry_date").order("primary_company");
-    if (from) query = query.gte("entry_date", from);
-    if (to) query = query.lte("entry_date", to);
-    const { data, error } = await query;
-    if (error) throw error;
-    return NextResponse.json({ records: data ?? [] });
+    const records = await getNewEntrants(from, to);
+    return NextResponse.json({ records });
   } catch (error) {
     return NextResponse.json({ error: databaseErrorMessage(error) }, { status: 500 });
   }
@@ -44,6 +42,7 @@ export async function POST(request: Request) {
       notes: value.notes || null,
     }, { onConflict: "entry_date,primary_company,secondary_company" }).select("*").single();
     if (error) throw error;
+    invalidateEntrantData();
     return NextResponse.json({ record: data });
   } catch (error) {
     return NextResponse.json({ error: databaseErrorMessage(error) }, { status: 500 });
@@ -55,6 +54,7 @@ export async function DELETE(request: Request) {
   if (!id.success) return NextResponse.json({ error: "削除対象が正しくありません。" }, { status: 400 });
   const { error } = await createServerClient().from("new_entrant_records").delete().eq("id", id.data);
   if (error) return NextResponse.json({ error: "削除できませんでした。" }, { status: 500 });
+  invalidateEntrantData();
   return NextResponse.json({ ok: true });
 }
 

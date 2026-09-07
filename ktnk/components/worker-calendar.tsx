@@ -22,11 +22,11 @@ function datesInMonth(month: string) {
   return result;
 }
 
-export function WorkerCalendar({ initialDate }: { initialDate: string }) {
+export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: string; initialMaster: CompanyMaster }) {
   const [month, setMonth] = useState(initialDate.slice(0, 7));
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [company, setCompany] = useState("");
-  const [master, setMaster] = useState<CompanyMaster | null>(null);
+  const [master] = useState<CompanyMaster>(initialMaster);
   const [schedules, setSchedules] = useState<ScheduleWithSubcompanies[]>([]);
   const [entrants, setEntrants] = useState<NewEntrantRecord[]>([]);
   const [editing, setEditing] = useState<ScheduleWithSubcompanies | null>(null);
@@ -34,7 +34,6 @@ export function WorkerCalendar({ initialDate }: { initialDate: string }) {
   const [version, setVersion] = useState(0);
   const selectedDaySectionRef = useRef<HTMLElement>(null);
   const range = monthRange(month);
-  useEffect(() => { fetch("/api/companies").then((r) => r.json()).then(setMaster).catch(() => setMessage("会社一覧を取得できませんでした。")); }, []);
   useEffect(() => {
     const params = new URLSearchParams({ from: range.from, to: range.to });
     if (company) params.set("primaryCompany", company);

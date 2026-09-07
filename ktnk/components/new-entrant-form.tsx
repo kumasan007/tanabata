@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { CompanyMaster } from "@/lib/types";
 import { addDays, parseLocalDate, toDateString } from "@/lib/utils";
 
@@ -16,8 +16,8 @@ function SectionHeading({ title }: { title: string }) {
   return <h2 className="mb-5 text-lg font-bold text-slate-900">{title}</h2>;
 }
 
-export function NewEntrantForm({ today }: { today: string }) {
-  const [master, setMaster] = useState<CompanyMaster | null>(null);
+export function NewEntrantForm({ today, initialMaster }: { today: string; initialMaster: CompanyMaster }) {
+  const [master, setMaster] = useState<CompanyMaster>(initialMaster);
   const [form, setForm] = useState<EntrantForm>({ entryDate: today, primaryCompany: "", secondaryCompany: "", personCount: null, personNames: "", notes: "" });
   const [step, setStep] = useState<Step>("company");
   const [customDate, setCustomDate] = useState(false);
@@ -29,10 +29,6 @@ export function NewEntrantForm({ today }: { today: string }) {
     { label: "明日", date: toDateString(addDays(parseLocalDate(today)!, 1)) },
     { label: "明後日", date: toDateString(addDays(parseLocalDate(today)!, 2)) },
   ], [today]);
-
-  useEffect(() => { void fetch("/api/companies")
-    .then(async (response) => { const body = await response.json(); if (!response.ok) throw new Error(); setMaster(body); })
-    .catch(() => setMessage("データを読み込めませんでした。")); }, []);
 
   function chooseCompany(company: string) {
     setForm((current) => ({ ...current, primaryCompany: company, secondaryCompany: "" }));

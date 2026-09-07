@@ -10,6 +10,8 @@ import type {
 } from "@/lib/types";
 import { addDays, expandDateRange, formatDateTime, parseLocalDate, todayInTokyoString, toDateString } from "@/lib/utils";
 import type { ScheduleSubmitParsed } from "@/lib/validation";
+import { unstable_cache } from "next/cache";
+import { DATA_CACHE_TAGS, invalidateScheduleData } from "@/lib/data-cache";
 
 const SAME_AS_PREVIOUS = "前回と同じ";
 
@@ -27,46 +29,30 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
   }
 
   const supabase = createServerClient();
-  const savedIds: string[] = [];
-
-  if (!input.overwriteExisting) {
-    const { data: existingSchedules, error: existingError } = await supabase
-      .from("schedule_groups")
-      .select("work_date")
-      .eq("primary_company", input.primaryCompany)
-      .in("work_date", dates);
-
-    if (existingError) {
-      throwSupabaseError(existingError, "既存予定の確認に失敗しました。");
-    }
-    if (existingSchedules?.length) {
-      throw new ScheduleAlreadyExistsError(
-        existingSchedules.map((row) => row.work_date),
-      );
-    }
+  const { data: existingSchedules, error: existingError } = await supabase
+    .from("schedule_groups")
+    .select("work_date")
+    .eq("primary_company", input.primaryCompany)
+    .in("work_date", dates);
+  if (existingError) {
+    throwSupabaseError(existingError, "既存予定の確認に失敗しました。");
+  }
+  if (!input.overwriteExisting && existingSchedules?.length) {
+    throw new ScheduleAlreadyExistsError(
+      existingSchedules.map((row) => row.work_date),
+    );
   }
 
-  for (const workDate of dates) {
-    const previous = usesPreviousValue(input)
-      ? await getPreviousScheduleForCopy(input.primaryCompany, input.status, workDate)
-      : null;
+  const previous = usesPreviousValue(input)
+    ? await getPreviousScheduleForCopy(input.primaryCompany, input.status, dates[0])
+    : null;
+  const resolvedSubcompanies = resolveSubcompanyInputs(
+    input.status === "work" ? input.currentSubcompanies : input.nextSubcompanies,
+    previous?.subcompanies.filter((sub) => sub.kind === (input.status === "work" ? "current" : "next_visit")) ?? [],
+  );
 
-    const { data: existing, error: findError } = await supabase
-      .from("schedule_groups")
-      .select("id")
-      .eq("work_date", workDate)
-      .eq("primary_company", input.primaryCompany)
-      .maybeSingle();
-
-    if (findError) throwSupabaseError(findError, "既存予定の確認に失敗しました。");
-
-    // Resolve every copied value before replacing any existing data.
-    const resolvedSubcompanies = resolveSubcompanyInputs(
-      input.status === "work" ? input.currentSubcompanies : input.nextSubcompanies,
-      previous?.subcompanies.filter((sub) => sub.kind === (input.status === "work" ? "current" : "next_visit")) ?? [],
-    );
+  const payloads = dates.map((workDate) => {
     const payload = {
-      id: existing?.id,
       work_date: workDate,
       status: input.status,
       primary_company: input.primaryCompany,
@@ -86,38 +72,42 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
         throw new Error("一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。");
       }
     }
+    return payload;
+  });
 
-    if (existing?.id) {
-      const { error: deleteError } = await supabase
-        .from("schedule_subcompanies")
-        .delete()
-        .eq("schedule_group_id", existing.id);
+  const { data: groups, error: upsertError } = await supabase
+    .from("schedule_groups")
+    .upsert(payloads, { onConflict: "work_date,primary_company" })
+    .select("id,work_date");
 
-      if (deleteError) throwSupabaseError(deleteError, "二次会社予定の削除に失敗しました。");
-    }
-
-    const { data: group, error: upsertError } = await supabase
-      .from("schedule_groups")
-      .upsert(payload, { onConflict: "work_date,primary_company" })
-      .select("id")
-      .single();
-
-    if (upsertError) throwSupabaseError(upsertError, "予定の保存に失敗しました。");
-
-    const subcompanyRows = buildSubcompanyRows(
-      group.id,
-      resolvedSubcompanies,
-      input.status === "work" ? "current" : "next_visit",
-    );
-
-    if (subcompanyRows.length > 0) {
-      const { error: insertError } = await supabase.from("schedule_subcompanies").insert(subcompanyRows);
-      if (insertError) throwSupabaseError(insertError, "二次会社予定の保存に失敗しました。");
-    }
-
-    savedIds.push(group.id);
+  if (upsertError) throwSupabaseError(upsertError, "予定の保存に失敗しました。");
+  const savedByDate = new Map((groups ?? []).map((group) => [group.work_date, group.id]));
+  const savedIds = dates.map((date) => savedByDate.get(date)).filter((id): id is string => Boolean(id));
+  if (savedIds.length !== dates.length) {
+    throw new Error("保存した予定の確認に失敗しました。");
   }
 
+  if (savedIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from("schedule_subcompanies")
+      .delete()
+      .in("schedule_group_id", savedIds);
+    if (deleteError) throwSupabaseError(deleteError, "二次会社予定の削除に失敗しました。");
+  }
+
+  const subcompanyRows = savedIds.flatMap((id) =>
+    buildSubcompanyRows(
+      id,
+      resolvedSubcompanies,
+      input.status === "work" ? "current" : "next_visit",
+    ),
+  );
+  if (subcompanyRows.length > 0) {
+    const { error: insertError } = await supabase.from("schedule_subcompanies").insert(subcompanyRows);
+    if (insertError) throwSupabaseError(insertError, "二次会社予定の保存に失敗しました。");
+  }
+
+  invalidateScheduleData();
   return {
     dates,
     savedIds,
@@ -132,15 +122,19 @@ export type ScheduleSearchParams = {
   secondaryCompany?: string | null;
 };
 
-export async function getSchedules(params: ScheduleSearchParams) {
+async function querySchedules(params: ScheduleSearchParams) {
   const supabase = createServerClient();
 
   let query = supabase
     .from("schedule_groups")
     .select(
       `
-      *,
-      schedule_subcompanies (*)
+      id, work_date, status, primary_company, primary_count, work_area,
+      work_content, next_visit_date, next_primary_count, next_work_area,
+      next_work_content, notes, created_at, updated_at,
+      schedule_subcompanies (
+        id, schedule_group_id, kind, secondary_company, worker_count, sort_order
+      )
     `,
     )
     .order("work_date", { ascending: true })
@@ -177,14 +171,40 @@ export async function getSchedules(params: ScheduleSearchParams) {
   return schedules;
 }
 
-export async function getPreviousScheduleForCopy(primaryCompany: string, status: ScheduleStatus, workDate: string) {
+const getCachedSchedules = unstable_cache(
+  async (
+    dateFrom: string,
+    dateTo: string,
+    status: ScheduleStatus | "",
+    primaryCompany: string,
+    secondaryCompany: string,
+  ) => querySchedules({ dateFrom, dateTo, status: status || null, primaryCompany, secondaryCompany }),
+  ["schedules-v1"],
+  { tags: [DATA_CACHE_TAGS.schedules], revalidate: 5 * 60 },
+);
+
+export async function getSchedules(params: ScheduleSearchParams) {
+  return getCachedSchedules(
+    params.dateFrom ?? "",
+    params.dateTo ?? "",
+    params.status ?? "",
+    params.primaryCompany?.trim() ?? "",
+    params.secondaryCompany?.trim() ?? "",
+  );
+}
+
+async function queryPreviousScheduleForCopy(primaryCompany: string, status: ScheduleStatus, workDate: string) {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("schedule_groups")
     .select(
       `
-      *,
-      schedule_subcompanies (*)
+      id, work_date, status, primary_company, primary_count, work_area,
+      work_content, next_visit_date, next_primary_count, next_work_area,
+      next_work_content, notes, created_at, updated_at,
+      schedule_subcompanies (
+        id, schedule_group_id, kind, secondary_company, worker_count, sort_order
+      )
     `,
     )
     .eq("primary_company", primaryCompany)
@@ -198,10 +218,27 @@ export async function getPreviousScheduleForCopy(primaryCompany: string, status:
   return data ? normalizeScheduleRow(data) : null;
 }
 
-export async function getWorkScheduleOnDate(primaryCompany: string, workDate: string) {
+const getCachedPreviousSchedule = unstable_cache(
+  queryPreviousScheduleForCopy,
+  ["previous-schedule-v1"],
+  { tags: [DATA_CACHE_TAGS.schedules], revalidate: 5 * 60 },
+);
+
+export async function getPreviousScheduleForCopy(primaryCompany: string, status: ScheduleStatus, workDate: string) {
+  return getCachedPreviousSchedule(primaryCompany, status, workDate);
+}
+
+async function queryWorkScheduleOnDate(primaryCompany: string, workDate: string) {
   const { data, error } = await createServerClient()
     .from("schedule_groups")
-    .select("*, schedule_subcompanies (*)")
+    .select(`
+      id, work_date, status, primary_company, primary_count, work_area,
+      work_content, next_visit_date, next_primary_count, next_work_area,
+      next_work_content, notes, created_at, updated_at,
+      schedule_subcompanies (
+        id, schedule_group_id, kind, secondary_company, worker_count, sort_order
+      )
+    `)
     .eq("primary_company", primaryCompany)
     .eq("status", "work")
     .eq("work_date", workDate)
@@ -210,7 +247,17 @@ export async function getWorkScheduleOnDate(primaryCompany: string, workDate: st
   return data ? normalizeScheduleRow(data) : null;
 }
 
-export async function getScheduleSummariesByPrimaryCompany(primaryCompany: string): Promise<ScheduleSummary[]> {
+const getCachedWorkScheduleOnDate = unstable_cache(
+  queryWorkScheduleOnDate,
+  ["work-schedule-on-date-v1"],
+  { tags: [DATA_CACHE_TAGS.schedules], revalidate: 5 * 60 },
+);
+
+export async function getWorkScheduleOnDate(primaryCompany: string, workDate: string) {
+  return getCachedWorkScheduleOnDate(primaryCompany, workDate);
+}
+
+async function queryScheduleSummariesByPrimaryCompany(primaryCompany: string): Promise<ScheduleSummary[]> {
   const supabase = createServerClient();
   const dateFrom = todayInTokyoString();
   const startDate = parseLocalDate(dateFrom);
@@ -220,8 +267,12 @@ export async function getScheduleSummariesByPrimaryCompany(primaryCompany: strin
     .from("schedule_groups")
     .select(
       `
-      *,
-      schedule_subcompanies (*)
+      id, work_date, status, primary_company, primary_count, work_area,
+      work_content, next_visit_date, next_primary_count, next_work_area,
+      next_work_content, notes, created_at, updated_at,
+      schedule_subcompanies (
+        id, schedule_group_id, kind, secondary_company, worker_count, sort_order
+      )
     `,
     )
     .eq("primary_company", primaryCompany)
@@ -255,6 +306,16 @@ export async function getScheduleSummariesByPrimaryCompany(primaryCompany: strin
       notes: schedule.notes ?? "",
     };
   });
+}
+
+const getCachedScheduleSummaries = unstable_cache(
+  queryScheduleSummariesByPrimaryCompany,
+  ["schedule-summaries-v1"],
+  { tags: [DATA_CACHE_TAGS.schedules], revalidate: 5 * 60 },
+);
+
+export async function getScheduleSummariesByPrimaryCompany(primaryCompany: string): Promise<ScheduleSummary[]> {
+  return getCachedScheduleSummaries(primaryCompany);
 }
 
 export function schedulesToListRows(schedules: ScheduleWithSubcompanies[]): ScheduleListRow[] {

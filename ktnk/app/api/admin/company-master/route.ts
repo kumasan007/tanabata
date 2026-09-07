@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { assertAdminFromRequest } from "@/lib/supabase";
 import { createServerClient } from "@/lib/supabase";
+import { invalidateCompanyData } from "@/lib/data-cache";
+import { getCompanyMasterRows } from "@/lib/companies";
 
 export const runtime = "nodejs";
 
@@ -14,18 +16,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = createServerClient();
-    const { data, error } = await supabase
-      .from("company_master")
-      .select(
-        "id, primary_company, secondary_company, primary_trade_roles, sort_order",
-      )
-      .order("sort_order", { ascending: true })
-      .order("primary_company", { ascending: true })
-      .order("secondary_company", { ascending: true, nullsFirst: true });
-
-    if (error) throw error;
-    return NextResponse.json({ rows: data ?? [] });
+    return NextResponse.json({ rows: await getCompanyMasterRows() });
   } catch (error) {
     return NextResponse.json(
       {
@@ -146,6 +137,8 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
+    invalidateCompanyData();
+
     return NextResponse.json({
       ok: true,
       addedCount: newValues.length,
@@ -197,7 +190,7 @@ export async function PATCH(request: Request) {
 
       const { data: rows, error: rowsError } = await supabase
         .from("company_master")
-        .select("id");
+        .select("id,primary_company,secondary_company,primary_trade_roles");
       if (rowsError) throw rowsError;
 
       const existingIds = new Set((rows ?? []).map((row) => row.id));
@@ -211,17 +204,21 @@ export async function PATCH(request: Request) {
         );
       }
 
-      const results = await Promise.all(
-        orderedIds.map((id, sortOrder) =>
-          supabase
-            .from("company_master")
-            .update({ sort_order: sortOrder })
-            .eq("id", id),
-        ),
+      const rowsById = new Map((rows ?? []).map((row) => [row.id, row]));
+      const { error: updateError } = await supabase.from("company_master").upsert(
+        orderedIds.map((id, sortOrder) => {
+          const row = rowsById.get(id)!;
+          return {
+            ...row,
+            primary_trade_roles: row.primary_trade_roles ?? [],
+            sort_order: sortOrder,
+          };
+        }),
+        { onConflict: "id" },
       );
-      const updateError = results.find((result) => result.error)?.error;
       if (updateError) throw updateError;
 
+      invalidateCompanyData();
       return NextResponse.json({ ok: true });
     }
 
@@ -272,6 +269,7 @@ export async function PATCH(request: Request) {
       );
     }
 
+    invalidateCompanyData();
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(
@@ -329,6 +327,7 @@ export async function DELETE(request: Request) {
       );
     }
 
+    invalidateCompanyData();
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(
