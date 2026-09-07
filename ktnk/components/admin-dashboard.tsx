@@ -1621,15 +1621,18 @@ export function AdminDashboard() {
               </p>
             ) : (
               <div className="divide-y divide-border border-t border-border">
-                <div className="hidden grid-cols-[minmax(0,1.2fr)_4rem_minmax(0,0.8fr)_minmax(0,1.8fr)_1rem] gap-3 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-500 sm:grid">
+                <div className="hidden grid-cols-[minmax(0,1fr)_4rem] gap-2 bg-slate-50 sm:grid">
+                <div className="grid grid-cols-[minmax(0,1.2fr)_4rem_minmax(0,0.8fr)_minmax(0,1.8fr)_1rem] gap-3 px-2 py-1.5 text-xs font-semibold text-slate-500">
                   <span>一次会社</span>
                   <span className="text-right">合計人数</span>
                   <span>作業エリア</span>
                   <span>作業内容</span>
                   <span />
                 </div>
+                <span aria-hidden="true" />
+                </div>
                 {selectedCalendarRows.map((row) => (
-                  <div key={row.key} className="flex items-start gap-2">
+                  <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_4rem] items-start gap-2">
                   <details className="group min-w-0 flex-1">
                     <summary
                       className="grid min-h-10 cursor-pointer list-none grid-cols-[minmax(0,1fr)_4rem_1rem] items-center gap-x-3 gap-y-0.5 px-2 py-1.5 text-sm hover:bg-slate-50 sm:grid-cols-[minmax(0,1.2fr)_4rem_minmax(0,0.8fr)_minmax(0,1.8fr)_1rem] [&::-webkit-details-marker]:hidden"
