@@ -113,6 +113,7 @@ function WorkField({
   value,
   placeholder,
   multiline = false,
+  required = false,
   previousValue,
   onChange,
 }: {
@@ -120,6 +121,7 @@ function WorkField({
   value: string;
   placeholder: string;
   multiline?: boolean;
+  required?: boolean;
   previousValue: string | null | undefined;
   onChange: (value: string) => void;
 }) {
@@ -129,6 +131,7 @@ function WorkField({
     id,
     value,
     placeholder,
+    "aria-required": required,
     onChange: (
       event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
     ) => {
@@ -141,7 +144,11 @@ function WorkField({
       <div className="flex flex-wrap items-center justify-between gap-x-3">
         <label className="label" htmlFor={id}>
           {label}
-          <span className="ml-2 text-sm font-normal text-slate-600">任意</span>
+          {required ? (
+            <span className="required-mark">必須</span>
+          ) : (
+            <span className="ml-2 text-sm font-normal text-slate-600">任意・未定可</span>
+          )}
         </label>
         <CopyButton
           label={`${label}を前回からコピー`}
@@ -542,6 +549,17 @@ export function ScheduleForm({
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!ready || submitting.current) return;
+    if (isWork && (!form.workArea.trim() || !form.workContent.trim())) {
+      setStep("edit");
+      setEditorPart("content");
+      setSubmitState({
+        status: "error",
+        message: !form.workArea.trim()
+          ? "作業エリアを入力してください。"
+          : "作業内容を入力してください。",
+      });
+      return;
+    }
     if (isWork && totalCount < 1) {
       setStep("edit");
       setSubmitState({
@@ -1230,6 +1248,7 @@ export function ScheduleForm({
                         key={`${previousKey}-${copyVersion}-area`}
                         label="作業エリア"
                         value={area}
+                        required={isWork}
                         previousValue={previous?.workArea}
                         placeholder="例：10階、12階"
                         onChange={(value) =>
@@ -1244,6 +1263,7 @@ export function ScheduleForm({
                         key={`${previousKey}-${copyVersion}-content`}
                         label="作業内容"
                         value={content}
+                        required={isWork}
                         previousValue={previous?.workContent}
                         placeholder="例：配管つり込み作業"
                         multiline
@@ -1277,6 +1297,15 @@ export function ScheduleForm({
                             status: "error",
                             message:
                               "会社を選択し、合計人数を1人以上にしてください。",
+                          });
+                          return;
+                        }
+                        if (editorPart === "content" && isWork && (!area.trim() || !content.trim())) {
+                          setSubmitState({
+                            status: "error",
+                            message: !area.trim()
+                              ? "作業エリアを入力してください。"
+                              : "作業内容を入力してください。",
                           });
                           return;
                         }

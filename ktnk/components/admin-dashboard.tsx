@@ -560,7 +560,7 @@ export function AdminDashboard() {
 
   if (checkingSession) {
     return (
-      <main className="mx-auto grid min-h-screen max-w-xl place-items-center px-4">
+      <main className="admin-dashboard mx-auto grid min-h-screen max-w-xl place-items-center px-4">
         <div
           className="flex items-center gap-3 text-sm text-slate-500"
           role="status"
@@ -578,14 +578,14 @@ export function AdminDashboard() {
 
   if (!authenticated) {
     return (
-      <main className="min-h-screen bg-[#f6f7f5]">
+      <main className="admin-dashboard min-h-screen bg-[#f6f7f5]">
         <header className="border-b border-border bg-white/90">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-5 sm:px-8">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-8">
             <Link
               href="/"
               className="flex items-center gap-3 font-bold tracking-tight text-slate-900"
             >
-              <span className="grid size-10 place-items-center rounded-xl bg-emerald-800 text-white">
+              <span className="grid size-10 place-items-center rounded-sm bg-emerald-800 text-white">
                 <CalendarDays size={20} aria-hidden="true" />
               </span>
               作業予定管理
@@ -601,14 +601,14 @@ export function AdminDashboard() {
         </header>
 
         <div className="mx-auto grid max-w-md px-5 py-14 sm:py-24">
-          <h1 className="mb-6 text-2xl font-bold text-slate-900">管理画面</h1>
+          <h1 className="mb-6 text-xl font-bold text-slate-900">管理画面</h1>
           <form
             onSubmit={login}
-            className="compact-panel grid w-full gap-6 p-6 sm:p-8"
+            className="compact-panel grid w-full gap-3 p-4 sm:p-4"
             aria-busy={loginLoading}
           >
             <div className="flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-xl bg-slate-100 text-slate-600">
+              <span className="grid size-10 place-items-center rounded-sm bg-slate-100 text-slate-600">
                 <LogIn size={19} aria-hidden="true" />
               </span>
               <h2 className="text-lg font-bold tracking-tight text-slate-950">
@@ -618,7 +618,7 @@ export function AdminDashboard() {
             {message ? (
               <div
                 role="alert"
-                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+                className="rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
               >
                 {message}
               </div>
@@ -669,11 +669,11 @@ export function AdminDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f7f5]">
+    <main className="admin-dashboard min-h-screen bg-[#f6f7f5]">
       <header className="border-b border-border bg-white/95">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-3 py-2 sm:px-6">
           <div className="flex items-center gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-800 text-white">
+            <span className="grid size-10 shrink-0 place-items-center rounded-sm bg-emerald-800 text-white">
               <CalendarDays size={20} aria-hidden="true" />
             </span>
             <div>
@@ -703,7 +703,7 @@ export function AdminDashboard() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-6xl gap-5 px-4 py-7 sm:px-6 sm:py-9">
+      <div className="mx-auto grid max-w-6xl gap-3 px-4 py-3 sm:px-6 sm:py-4">
         <nav
           className="flex gap-2 border-b border-slate-200"
           aria-label="管理画面メニュー"
@@ -737,7 +737,7 @@ export function AdminDashboard() {
         {message ? (
           <div
             role="alert"
-            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+            className="rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
           >
             {message}
           </div>
@@ -766,7 +766,7 @@ export function AdminDashboard() {
             event.preventDefault();
             void search();
           }}
-          className={`${activeTab === "schedules" ? "grid" : "hidden"} panel gap-5 p-4 sm:p-6`}
+          className={`${activeTab === "schedules" ? "grid" : "hidden"} panel gap-3 p-4 sm:p-4`}
           aria-label="作業予定を検索"
         >
           <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -965,7 +965,7 @@ export function AdminDashboard() {
         </form>
 
         <section
-          className={`${activeTab === "companies" ? "grid" : "hidden"} panel gap-5 p-4 sm:p-6`}
+          className={`${activeTab === "companies" ? "grid" : "hidden"} panel gap-3 p-4 sm:p-4`}
         >
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -974,12 +974,12 @@ export function AdminDashboard() {
                 入力画面に表示する会社名と順番を管理します。
               </p>
             </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+            <span className="rounded-sm bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
               一次 {companyGroups.length}社 / 登録 {companyRows.length}件
             </span>
           </div>
 
-          <div className="grid items-start gap-4 rounded-xl bg-slate-50 p-4 md:grid-cols-[1fr_1fr_1.5fr_auto]">
+          <div className="grid items-start gap-4 rounded-sm bg-slate-50 p-4 md:grid-cols-[1fr_1fr_1.5fr_auto]">
             <label className="field">
               <span className="label">一次会社</span>
               <input
@@ -1053,8 +1053,8 @@ export function AdminDashboard() {
                     <ArrowDown size={16} aria-hidden="true" />
                   </button>
                 </div>
-              <details className="min-w-0 flex-1 rounded-xl border border-border bg-white">
-                <summary className="cursor-pointer rounded-xl px-4 py-4 font-semibold text-slate-900 marker:text-emerald-700">
+              <details className="min-w-0 flex-1 rounded-sm border border-border bg-white">
+                <summary className="cursor-pointer rounded-sm px-3 py-2 font-semibold text-slate-900 marker:text-emerald-700">
                   <span className="break-words">{group.primaryCompany}</span>
                   <span className="ml-3 text-sm font-normal text-slate-500">
                     二次会社{" "}
@@ -1076,7 +1076,7 @@ export function AdminDashboard() {
                   {group.rows.map((row, rowIndex) => (
                     <div
                       key={row.id}
-                      className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+                      className="grid gap-3 rounded-sm bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
                     >
                       {editingCompanyId === row.id ? (
                         <div className="grid gap-3">
@@ -1230,9 +1230,9 @@ export function AdminDashboard() {
               </select>
             </label>
             <div role="group" aria-label="表示形式">
-              <div className="inline-flex h-11 gap-1 rounded-xl border border-border bg-white p-1">
+              <div className="inline-flex h-11 gap-1 rounded-sm border border-border bg-white p-1">
                 <button
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors ${scheduleView === "summary" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                  className={`inline-flex items-center gap-1.5 rounded-sm px-3 text-xs font-semibold transition-colors ${scheduleView === "summary" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
                   type="button"
                   aria-pressed={scheduleView === "summary"}
                   onClick={() => setScheduleView("summary")}
@@ -1241,7 +1241,7 @@ export function AdminDashboard() {
                   一覧
                 </button>
                 <button
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors ${scheduleView === "calendar" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                  className={`inline-flex items-center gap-1.5 rounded-sm px-3 text-xs font-semibold transition-colors ${scheduleView === "calendar" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
                   type="button"
                   aria-pressed={scheduleView === "calendar"}
                   onClick={() => setScheduleView("calendar")}
@@ -1255,7 +1255,7 @@ export function AdminDashboard() {
         </section>
 
         <section
-          className={`${activeTab === "schedules" && scheduleView === "summary" ? "block" : "hidden"} overflow-hidden rounded-2xl border border-border bg-white`}
+          className={`${activeTab === "schedules" && scheduleView === "summary" ? "block" : "hidden"} overflow-hidden rounded-sm border border-border bg-white`}
           aria-label="作業予定一覧"
           aria-busy={loading}
         >
@@ -1290,7 +1290,7 @@ export function AdminDashboard() {
                           />
                         </h3>
                       </div>
-                      <span className="shrink-0 rounded-xl bg-emerald-50 px-3 py-2 text-lg font-bold tabular-nums text-emerald-800">
+                      <span className="shrink-0 rounded-sm bg-emerald-50 px-3 py-2 text-lg font-bold tabular-nums text-emerald-800">
                         <CopyValue value={row.totalCount} label="合計人数">
                           {row.totalCount}
                           <span className="ml-1 text-xs font-medium">人</span>
@@ -1343,7 +1343,7 @@ export function AdminDashboard() {
                     <th
                       key={header}
                       scope="col"
-                      className="whitespace-nowrap px-4 py-4 text-left font-semibold"
+                      className="whitespace-nowrap px-3 py-2 text-left font-semibold"
                     >
                       {header}
                     </th>
@@ -1431,7 +1431,7 @@ export function AdminDashboard() {
         <section
           className={`${activeTab === "schedules" && scheduleView === "calendar" ? "grid" : "hidden"} gap-3`}
         >
-          <div className="overflow-x-auto rounded-2xl border border-border bg-white">
+          <div className="overflow-x-auto rounded-sm border border-border bg-white">
             <div className="min-w-[630px]">
               <div className="grid grid-cols-7 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500">
                 {["月", "火", "水", "木", "金", "土", "日"].map((day) => (
@@ -1499,7 +1499,7 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-border bg-white p-5">
+          <div className="rounded-sm border border-border bg-white p-5">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-bold text-slate-950">
                 {selectedCalendarDate
@@ -1525,7 +1525,7 @@ export function AdminDashboard() {
                 {selectedCalendarRows.map((row) => (
                   <div
                     key={row.key}
-                    className="rounded-xl border border-border p-3 text-left"
+                    className="rounded-sm border border-border p-3 text-left"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -1597,7 +1597,7 @@ function CopyValue({
       {notice && (
         <span
           role="status"
-          className="fixed bottom-5 left-1/2 z-50 w-max max-w-[90vw] -translate-x-1/2 rounded-xl bg-slate-800 px-4 py-3 text-sm font-medium text-white shadow-lg"
+          className="fixed bottom-5 left-1/2 z-50 w-max max-w-[90vw] -translate-x-1/2 rounded-sm bg-slate-800 px-4 py-3 text-sm font-medium text-white shadow-lg"
         >
           {notice}
         </span>
@@ -1621,7 +1621,7 @@ function AdminStat({
 }) {
   return (
     <div
-      className={`rounded-2xl border p-3 sm:p-5 ${accent ? "border-emerald-200 bg-emerald-50/70" : "border-border bg-white"}`}
+      className={`rounded-sm border px-3 py-2 ${accent ? "border-emerald-200 bg-emerald-50/70" : "border-border bg-white"}`}
     >
       <div className="flex items-center justify-between gap-2">
         <p
@@ -1636,7 +1636,7 @@ function AdminStat({
         </span>
       </div>
       <p
-        className={`mt-3 text-2xl font-bold tracking-tight tabular-nums sm:text-3xl ${accent ? "text-emerald-900" : "text-slate-900"}`}
+        className={`mt-1 text-xl font-bold tracking-tight tabular-nums ${accent ? "text-emerald-900" : "text-slate-900"}`}
       >
         {value.toLocaleString("ja-JP")}
         <span className="ml-1.5 text-xs font-medium text-slate-500">
@@ -1653,7 +1653,7 @@ function ScheduleEmpty({ loading }: { loading: boolean }) {
       className="flex flex-col items-center px-5 py-14 text-center"
       role="status"
     >
-      <span className="grid size-12 place-items-center rounded-2xl bg-slate-50 text-slate-400">
+      <span className="grid size-12 place-items-center rounded-sm bg-slate-50 text-slate-400">
         {loading ? (
           <LoaderCircle size={22} className="animate-spin" aria-hidden="true" />
         ) : (
@@ -1674,8 +1674,8 @@ function ScheduleEmpty({ loading }: { loading: boolean }) {
 
 function ScheduleDetails({ row }: { row: ScheduleSummaryRow }) {
   return (
-    <div className="mt-2 grid min-w-40 gap-1 rounded-xl bg-slate-50 p-2 text-xs text-slate-600">
-      <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg bg-white px-3 py-2.5">
+    <div className="mt-2 grid min-w-40 gap-1 rounded-sm bg-slate-50 p-2 text-xs text-slate-600">
+      <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-sm bg-white px-3 py-2.5">
         <span className="font-semibold text-slate-900">
           <CopyValue value={row.primaryCompany} label="一次会社" />
         </span>

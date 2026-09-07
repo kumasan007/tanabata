@@ -50,6 +50,19 @@ export const scheduleSubmitSchema = z
     }
 
     if (value.status === "work") {
+      for (const [field, label] of [
+        ["workArea", "作業エリア"],
+        ["workContent", "作業内容"],
+      ] as const) {
+        if (!value[field].trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [field],
+            message: `${label}を入力してください。`,
+          });
+        }
+      }
+
       if (!value.usePreviousPrimaryCount && value.primaryCount === null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

@@ -200,6 +200,8 @@ function submission(patch = {}) {
     status: "work",
     primaryCompany: "テスト一次会社",
     primaryCount: 1,
+    workArea: "10階",
+    workContent: "配管作業",
     currentSubcompanies: [],
     nextVisitDate: null,
     nextPrimaryCount: null,
@@ -332,4 +334,34 @@ test("前回二次会社の人数が未定なら、既存データを変更せ�
   });
   await assert.rejects(service.saveScheduleSubmission(input), /前回人数/);
   assert.equal(service.mutations.length, 0);
+});
+
+
+test("通常の作業予定はエリア・内容の未入力や空白だけを拒否する", () => {
+  for (const field of ["workArea", "workContent"]) {
+    for (const value of ["", " 　\n", undefined]) {
+      const result = scheduleSubmitSchema.safeParse(submission({ [field]: value }));
+      assert.equal(result.success, false);
+      assert.ok(result.error.issues.some((issue) => issue.path[0] === field));
+    }
+  }
+  assert.equal(scheduleSubmitSchema.safeParse(submission()).success, true);
+});
+
+test("次回来場予定はエリア・内容が未入力や未定でも保存できる", async () => {
+  for (const value of ["", "未定"]) {
+    const input = scheduleSubmitSchema.parse(submission({
+      status: "no_work",
+      workArea: "",
+      workContent: "",
+      nextVisitDate: "2026-09-10",
+      nextWorkArea: value,
+      nextWorkContent: value,
+    }));
+    const service = serviceWithDatabase();
+    await service.saveScheduleSubmission(input);
+    const saved = service.mutations.find((mutation) => mutation.operation === "upsert").data;
+    assert.equal(saved.next_work_area, value || null);
+    assert.equal(saved.next_work_content, value || null);
+  }
 });

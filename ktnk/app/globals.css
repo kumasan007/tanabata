@@ -150,3 +150,38 @@ textarea {
     display: none !important;
   }
 }
+
+/* Dense controls for the administrative screens. */
+.admin-dashboard .field {
+  gap: 0.25rem;
+}
+.admin-dashboard .label {
+  font-size: 0.8125rem;
+}
+.admin-dashboard .input {
+  height: 2.25rem;
+  border-radius: 2px;
+  padding-inline: 0.625rem;
+  font-size: 0.875rem;
+}
+.admin-dashboard .textarea {
+  min-height: 5rem;
+  border-radius: 2px;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.875rem;
+}
+.admin-dashboard .btn {
+  min-height: 2.25rem;
+  border-radius: 2px;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+  box-shadow: none;
+}
+.admin-dashboard .btn.w-9 {
+  padding-inline: 0;
+}
+.admin-dashboard .panel,
+.admin-dashboard .compact-panel {
+  border-radius: 2px;
+  box-shadow: none;
+}
