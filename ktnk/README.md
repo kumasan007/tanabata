@@ -30,12 +30,15 @@ npm run dev
 ```text
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
+SUPABASE_SECRET_KEY=
 ADMIN_PASSWORD=
 ADMIN_SESSION_SECRET=
 EXCEL_FEED_TOKEN=
 ```
 
 Supabase接続はサーバー側のNext.js API routesに集約し、`SUPABASE_URL` と `SUPABASE_ANON_KEY` を使用します。`supabase/migrations/20260904_allow_anon_app_access.sql` を実行して、必要なRLSポリシーを適用してください。
+
+管理画面のバックアップ機能だけは、非公開の `SUPABASE_SECRET_KEY`（`sb_secret_...`）を使用します。この値はブラウザへ公開せず、ローカルの `.env.local` とVercelの環境変数だけに設定してください。
 
 anonキー運用では公開キーを知る利用者がSupabase REST APIを直接操作できるため、管理画面のログインはアプリ画面とAPIに対する制御になります。DBへの直接操作も防止したい場合はservice role運用を使用してください。
 
@@ -46,6 +49,8 @@ anonキー運用では公開キーを知る利用者がSupabase REST APIを直�
 旧版の `schema.sql` を実行済みの場合は、`supabase/migrations/20260904_supabase_only_company_master.sql` を1回実行してください。会社マスタの既存データを保ったまま、行ID・表示順・重複防止・DB権限を更新します。この移行SQLをすでに実行済みの場合は、追加で `supabase/migrations/20260904_add_company_master_order.sql` を実行します。現在の `schema.sql` は再実行でも同じ更新を適用できます。
 
 `new row violates row-level security policy` が出る場合は、既存データを残したまま `supabase/fix-rls-policies.sql` をSupabase SQL Editorで実行します。
+
+バックアップ機能を追加する場合は、Supabase DashboardのCronを有効にしてから `supabase/migrations/20260907_add_daily_backups.sql` をSQL Editorで1回実行します。毎日14:59 UTC（日本時間23:59）に業務データを `data_backups` へ保存します。
 
 登録時にDB列・制約のズレで失敗する場合は、既存データを削除してよければ `supabase/reset-schema.sql` をSupabase SQL Editorで実行します。`schedule_groups` と `schedule_subcompanies` を作り直します。
 
@@ -82,6 +87,7 @@ VercelではRoot Directoryを `ktnk` にします。
 ```text
 SUPABASE_URL
 SUPABASE_ANON_KEY
+SUPABASE_SECRET_KEY
 ADMIN_PASSWORD
 ADMIN_SESSION_SECRET
 EXCEL_FEED_TOKEN

@@ -74,10 +74,15 @@ export function WorkerCalendar({ initialDate }: { initialDate: string }) {
   return <div className="min-h-screen pb-10">
     <main className="mx-auto max-w-6xl px-3 py-5 sm:px-4">
       <div className="panel flex flex-wrap items-end gap-3 p-4">
-        <button type="button" className="btn btn-secondary" onClick={() => selectMonth(shiftMonth(month, -1))}>前月</button>
-        <label className="field"><span className="label">表示月</span><input className="input" type="month" value={month} onChange={(e) => selectMonth(e.target.value)} /></label>
-        <button type="button" className="btn btn-secondary" onClick={() => selectMonth(shiftMonth(month, 1))}>次月</button>
-        <label className="field min-w-56 sm:ml-auto"><span className="label">一次会社</span><select className="input" value={company} onChange={(e) => setCompany(e.target.value)}><option value="">すべて</option>{master?.primaryCompanies.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <div className="w-full sm:w-auto">
+          <label className="label" htmlFor="calendar-month">表示月</label>
+          <div className="mt-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-stretch gap-2 sm:grid-cols-[auto_11rem_auto]">
+            <button type="button" className="btn btn-secondary h-14" onClick={() => selectMonth(shiftMonth(month, -1))}>前月</button>
+            <input id="calendar-month" className="input" type="month" value={month} onChange={(e) => selectMonth(e.target.value)} />
+            <button type="button" className="btn btn-secondary h-14" onClick={() => selectMonth(shiftMonth(month, 1))}>次月</button>
+          </div>
+        </div>
+        <label className="field w-full sm:ml-auto sm:w-56"><span className="label">一次会社</span><select className="input" value={company} onChange={(e) => setCompany(e.target.value)}><option value="">すべて</option>{master?.primaryCompanies.map((item) => <option key={item}>{item}</option>)}</select></label>
       </div>
       {message && <p role="alert" className="mt-4 text-red-700">{message}</p>}
       <section className="panel mt-4 overflow-x-auto">

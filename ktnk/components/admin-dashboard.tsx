@@ -10,10 +10,13 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  DatabaseBackup,
+  Download,
   LogIn,
   LogOut,
   LoaderCircle,
   Plus,
+  RotateCcw,
   Search,
   Trash2,
   Users,
@@ -40,7 +43,15 @@ type RangePreset =
   | "custom";
 type StatusFilter = "work" | "no_work";
 type SortBy = "dateAsc" | "dateDesc" | "primaryAsc";
-type AdminTab = "schedules" | "companies";
+type AdminTab = "schedules" | "companies" | "backups";
+type BackupRow = {
+  id: string;
+  created_at: string;
+  backup_date: string;
+  source: "automatic" | "manual";
+  schema_version: number;
+  row_counts: Record<string, number>;
+};
 type CompanyGroup = {
   primaryCompany: string;
   rows: CompanyMasterRow[];
@@ -75,7 +86,7 @@ export function AdminDashboard() {
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [loginLoading, setLoginLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<AdminTab>("schedules");
+  const [activeTab, setActiveTab] = useState<AdminTab>("companies");
   const [initialWeek] = useState(currentWeek);
   const [rangePreset, setRangePreset] = useState<RangePreset>("week");
   const [dateFrom, setDateFrom] = useState(initialWeek.from);
@@ -95,6 +106,10 @@ export function AdminDashboard() {
   );
   const [result, setResult] = useState<AdminResult>({ rows: [], count: 0, schedules: [] });
   const [editingSchedule, setEditingSchedule] = useState<ScheduleWithSubcompanies | null>(null);
+  const [backups, setBackups] = useState<BackupRow[]>([]);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupMessage, setBackupMessage] = useState("");
+  const [backupError, setBackupError] = useState(false);
 
   function scheduleEditButton(row: ScheduleSummaryRow) {
     const schedule = result.schedules.find((item) => item.work_date === row.workDate && item.primary_company === row.primaryCompany);
@@ -260,9 +275,9 @@ export function AdminDashboard() {
   }, [authenticated]);
 
   useEffect(() => {
-    if (!authenticated) return;
-    void search();
-  }, [authenticated]);
+    if (!authenticated || activeTab !== "backups") return;
+    void refreshBackups();
+  }, [authenticated, activeTab]);
 
   useEffect(() => {
     setExpandedScheduleKeys([]);
@@ -356,6 +371,83 @@ export function AdminDashboard() {
     if (!response.ok)
       throw new Error(body.error ?? "会社一覧を取得できませんでした。");
     setCompanyMaster(body);
+  }
+
+  async function refreshBackups() {
+    setBackupLoading(true);
+    setBackupMessage("");
+    setBackupError(false);
+    try {
+      const response = await fetch("/api/admin/backups", { cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "バックアップ履歴を取得できませんでした。");
+      setBackups(body.backups ?? []);
+    } catch (error) {
+      setBackupError(true);
+      setBackupMessage(error instanceof Error ? error.message : "バックアップ履歴を取得できませんでした。");
+    } finally {
+      setBackupLoading(false);
+    }
+  }
+
+  async function createBackup() {
+    setBackupLoading(true);
+    setBackupMessage("");
+    setBackupError(false);
+    try {
+      const response = await fetch("/api/admin/backups", { method: "POST" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "バックアップを作成できませんでした。");
+      await refreshBackups();
+      setBackupMessage("バックアップを作成しました。");
+    } catch (error) {
+      setBackupError(true);
+      setBackupMessage(error instanceof Error ? error.message : "バックアップを作成できませんでした。");
+    } finally {
+      setBackupLoading(false);
+    }
+  }
+
+  async function restoreBackup(backup: BackupRow) {
+    if (!window.confirm(`${formatBackupTime(backup.created_at)} の状態に全データを戻します。現在のデータは置き換わります。よろしいですか？`)) return;
+    setBackupLoading(true);
+    setBackupMessage("");
+    setBackupError(false);
+    try {
+      const response = await fetch("/api/admin/backups", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: backup.id }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "バックアップを復元できませんでした。");
+      await Promise.all([refreshBackups(), refreshCompanyMaster(), refreshCompanyOptions(), search()]);
+      setBackupMessage("バックアップを復元しました。");
+    } catch (error) {
+      setBackupError(true);
+      setBackupMessage(error instanceof Error ? error.message : "バックアップを復元できませんでした。");
+    } finally {
+      setBackupLoading(false);
+    }
+  }
+
+  async function deleteBackup(backup: BackupRow) {
+    if (!window.confirm(`${formatBackupTime(backup.created_at)} のバックアップを削除しますか？`)) return;
+    setBackupLoading(true);
+    setBackupMessage("");
+    setBackupError(false);
+    try {
+      const response = await fetch(`/api/admin/backups?id=${encodeURIComponent(backup.id)}`, { method: "DELETE" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "バックアップを削除できませんでした。");
+      await refreshBackups();
+      setBackupMessage("バックアップを削除しました。");
+    } catch (error) {
+      setBackupError(true);
+      setBackupMessage(error instanceof Error ? error.message : "バックアップを削除できませんでした。");
+    } finally {
+      setBackupLoading(false);
+    }
   }
 
   async function addCompanyMaster() {
@@ -720,18 +812,6 @@ export function AdminDashboard() {
           aria-label="管理画面メニュー"
         >
           <button
-            className={`flex min-h-12 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors sm:px-4 ${activeTab === "schedules" ? "border-emerald-700 text-emerald-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-            type="button"
-            aria-pressed={activeTab === "schedules"}
-            onClick={() => {
-              setActiveTab("schedules");
-              setMessage("");
-            }}
-          >
-            <CalendarDays size={18} aria-hidden="true" />
-            作業予定確認
-          </button>
-          <button
             className={`flex min-h-12 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors sm:px-4 ${activeTab === "companies" ? "border-emerald-700 text-emerald-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
             type="button"
             aria-pressed={activeTab === "companies"}
@@ -742,6 +822,18 @@ export function AdminDashboard() {
           >
             <Building2 size={18} aria-hidden="true" />
             協力会社一覧
+          </button>
+          <button
+            className={`flex min-h-12 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors sm:px-4 ${activeTab === "backups" ? "border-emerald-700 text-emerald-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+            type="button"
+            aria-pressed={activeTab === "backups"}
+            onClick={() => {
+              setActiveTab("backups");
+              setMessage("");
+            }}
+          >
+            <DatabaseBackup size={18} aria-hidden="true" />
+            バックアップ
           </button>
         </nav>
 
@@ -1295,6 +1387,67 @@ export function AdminDashboard() {
                 <option value="primaryAsc">一次会社順</option>
               </select>
             </label>
+          </div>
+        </section>
+
+        <section className={`${activeTab === "backups" ? "grid" : "hidden"} panel gap-4 p-4 sm:p-5`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-950">バックアップ</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                毎日23:59（日本時間）に自動保存します。必要な時は手動でも保存できます。
+              </p>
+            </div>
+            <button className="btn btn-primary" type="button" disabled={backupLoading} onClick={() => void createBackup()}>
+              {backupLoading ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : <DatabaseBackup size={17} aria-hidden="true" />}
+              今すぐバックアップ
+            </button>
+          </div>
+
+          {backupMessage ? (
+            <p className={`rounded-md border px-4 py-3 text-sm ${backupError ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`} role={backupError ? "alert" : "status"}>
+              {backupMessage}
+            </p>
+          ) : null}
+
+          <div className="overflow-hidden rounded-md border border-border bg-white">
+            {backups.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-slate-500">
+                {backupLoading ? "取得中…" : "バックアップはまだありません。"}
+              </p>
+            ) : (
+              <div className="divide-y divide-slate-200">
+                {backups.map((backup) => (
+                  <div key={backup.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-slate-900">{formatBackupTime(backup.created_at)}</p>
+                        <span className={`rounded px-2 py-0.5 text-xs font-bold ${backup.source === "automatic" ? "bg-emerald-100 text-emerald-800" : "bg-sky-100 text-sky-800"}`}>
+                          {backup.source === "automatic" ? "自動" : "手動"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        予定 {backup.row_counts.schedule_groups ?? 0}件・新規入場者 {backup.row_counts.new_entrant_records ?? 0}件・会社マスタ {backup.row_counts.company_master ?? 0}件
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <a className="btn btn-secondary" href={`/api/admin/backups?id=${encodeURIComponent(backup.id)}`} download>
+                        <Download size={16} aria-hidden="true" />
+                        保存
+                      </a>
+                      <button className="btn btn-secondary" type="button" disabled={backupLoading} onClick={() => void restoreBackup(backup)}>
+                        <RotateCcw size={16} aria-hidden="true" />
+                        復元
+                      </button>
+                      <button className="btn btn-secondary text-red-700" type="button" disabled={backupLoading} onClick={() => void deleteBackup(backup)}>
+                        <Trash2 size={16} aria-hidden="true" />
+                        削除
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
@@ -1884,6 +2037,18 @@ function localDate(value: string) {
 
 function numberValue(value: number | "") {
   return typeof value === "number" ? value : 0;
+}
+
+function formatBackupTime(value: string) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(value));
 }
 
 function parseRoleText(value: string) {
