@@ -365,3 +365,124 @@ test("次回来場予定はエリア・内容が未入力や未定でも保存�
     assert.equal(saved.next_work_content, value || null);
   }
 });
+
+test("company deletion requires admin and exactly one target", async () => {
+  for (const [authorized, query, status] of [[false, "?primaryCompany=A", 401], [true, "", 400], [true, "?id=1&primaryCompany=A", 400]]) {
+    const { DELETE } = loadModule("app/api/admin/company-master/route.ts", {
+      "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
+      "@/lib/supabase": { assertAdminFromRequest: () => authorized, createServerClient: () => { throw new Error("DB must not be called"); } },
+    });
+    assert.equal((await DELETE({ url: `http://localhost/api/admin/company-master${query}` })).status, status);
+  }
+});
+
+test("company deletion scopes a single database operation to the requested company or row", async () => {
+  for (const [params, column, value, rows, expected] of [
+    ["primaryCompany=A", "primary_company", "A", [{ id: "1" }, { id: "2" }], 200],
+    ["id=1", "id", "1", [{ id: "1" }], 200],
+    ["primaryCompany=missing", "primary_company", "missing", [], 404],
+  ]) {
+    const calls = [];
+    const { DELETE } = loadModule("app/api/admin/company-master/route.ts", {
+      "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
+      "@/lib/supabase": {
+        assertAdminFromRequest: () => true,
+        createServerClient: () => ({ from(table) {
+          assert.equal(table, "company_master");
+          return { delete() { return { eq(key, target) {
+            calls.push([key, target]);
+            return { select: async () => ({ data: rows, error: null }) };
+          } }; } };
+        } }),
+      },
+    });
+    assert.equal((await DELETE({ url: `http://localhost/api/admin/company-master?${params}` })).status, expected);
+    assert.deepEqual(calls, [[column, value]]);
+  }
+});
+
+test("admin schedule mutations reject unauthenticated requests without DB access", async () => {
+  const route = loadModule("app/api/admin/schedules/route.ts", {
+    "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
+    "@/lib/supabase": { assertAdminFromRequest: () => false, createServerClient: () => { throw new Error("unexpected DB access"); } },
+    "@/lib/schedule-service": { saveScheduleSubmission: () => { throw new Error("unexpected save"); } },
+    "@/lib/validation": { scheduleSubmitSchema },
+  });
+  for (const method of ["PATCH", "DELETE"]) assert.equal((await route[method]({ url: "http://localhost/api/admin/schedules" })).status, 401);
+});
+
+test("admin schedule editing pins the date and company to the existing ID and validates input", async () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  const saved = [];
+  const calls = [];
+  const route = loadModule("app/api/admin/schedules/route.ts", {
+    "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
+    "@/lib/supabase": { assertAdminFromRequest: () => true, createServerClient: () => ({ from(table) {
+      assert.equal(table, "schedule_groups");
+      return { select: () => ({ eq: (key, value) => { calls.push([key, value]); return { maybeSingle: async () => ({ data: { id, work_date: "2026-09-07", primary_company: "A" }, error: null }) }; } }) };
+    } }) },
+    "@/lib/schedule-service": { saveScheduleSubmission: async (input) => saved.push(input) },
+    "@/lib/validation": { scheduleSubmitSchema },
+  });
+  assert.equal((await route.PATCH({ json: async () => ({ ...submission(), id, startDate: "2026-10-01", endDate: "2026-10-31", primaryCompany: "B" }) })).status, 200);
+  assert.equal(saved[0].startDate, "2026-09-07");
+  assert.equal(saved[0].endDate, "2026-09-07");
+  assert.equal(saved[0].primaryCompany, "A");
+  assert.deepEqual(calls[0], ["id", id]);
+  assert.equal((await route.PATCH({ json: async () => ({ ...submission(), id, workArea: "" }) })).status, 400);
+  assert.equal(saved.length, 1);
+});
+
+test("admin schedule deletion is limited to one ID and reports missing schedules", async () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  for (const found of [true, false]) {
+    const calls = [];
+    const route = loadModule("app/api/admin/schedules/route.ts", {
+      "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
+      "@/lib/supabase": { assertAdminFromRequest: () => true, createServerClient: () => ({ from(table) {
+        assert.equal(table, "schedule_groups");
+        return { delete: () => ({ eq: (key, value) => { calls.push([key, value]); return { select: async () => ({ data: found ? [{ id }] : [], error: null }) }; } }) };
+      } }) },
+      "@/lib/schedule-service": {}, "@/lib/validation": { scheduleSubmitSchema },
+    });
+    assert.equal((await route.DELETE({ url: `http://localhost/api/admin/schedules?id=${id}` })).status, found ? 200 : 404);
+    assert.deepEqual(calls, [["id", id]]);
+    assert.equal((await route.DELETE({ url: "http://localhost/api/admin/schedules?id=invalid" })).status, 400);
+    assert.equal(calls.length, 1);
+  }
+});
+
+test("worker secondary registration validates input and only adds under an existing primary", async () => {
+  for (const [body, existing, expected, insertedCount] of [
+    [{ primaryCompany: "A", secondaryCompany: "  B  " }, [{ secondary_company: null, sort_order: 4, primary_trade_roles: ["role"] }], 200, 1],
+    [{ primaryCompany: "A", secondaryCompany: "B" }, [{ secondary_company: "B", sort_order: 4 }], 200, 0],
+    [{ primaryCompany: "missing", secondaryCompany: "B" }, [], 404, 0],
+    [{ primaryCompany: "A", secondaryCompany: "   " }, [], 400, 0],
+    [{ primaryCompany: "A", secondaryCompany: 123 }, [], 400, 0],
+    [{ primaryCompany: "A", secondaryCompany: "x".repeat(201) }, [], 400, 0],
+  ]) {
+    const inserted = [];
+    const { POST } = loadModule("app/api/companies/secondary/route.ts", {
+      "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
+      "@/lib/supabase": { createServerClient: () => ({ from(table) {
+        assert.equal(table, "company_master");
+        return {
+          select: () => ({ eq: (column, value) => {
+            assert.equal(column, "primary_company"); assert.equal(value, body.primaryCompany);
+            return { order: async () => ({ data: existing, error: null }) };
+          } }),
+          insert: async (row) => { inserted.push(row); return { error: null }; },
+        };
+      } }) },
+    });
+    const response = await POST({ json: async () => body });
+    assert.equal(response.status, expected);
+    assert.equal(inserted.length, insertedCount);
+    if (insertedCount) {
+      assert.equal(inserted[0].secondary_company, "B");
+      assert.equal(inserted[0].primary_company, "A");
+      assert.equal(inserted[0].sort_order, 5);
+      assert.deepEqual(inserted[0].primary_trade_roles, ["role"]);
+    }
+  }
+});

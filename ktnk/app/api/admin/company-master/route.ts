@@ -326,7 +326,9 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id")?.trim();
 
-    if (!id) {
+    const primaryCompany = searchParams.get("primaryCompany")?.trim();
+
+    if ((!id && !primaryCompany) || (id && primaryCompany)) {
       return NextResponse.json(
         { error: "削除対象が指定されていません。" },
         { status: 400 },
@@ -334,15 +336,13 @@ export async function DELETE(request: Request) {
     }
 
     const supabase = createServerClient();
-    const { data, error } = await supabase
-      .from("company_master")
-      .delete()
-      .eq("id", id)
-      .select("id")
-      .maybeSingle();
+    const query = supabase.from("company_master").delete();
+    const { data, error } = await (
+      primaryCompany ? query.eq("primary_company", primaryCompany) : query.eq("id", id!)
+    ).select("id");
 
     if (error) throw error;
-    if (!data) {
+    if (!data?.length) {
       return NextResponse.json(
         { error: "削除対象の会社マスタが見つかりません。" },
         { status: 404 },

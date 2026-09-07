@@ -21,13 +21,15 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { CompanyMaster, CompanyMasterRow, ExportRow } from "@/lib/types";
+import type { CompanyMaster, CompanyMasterRow, ExportRow, ScheduleWithSubcompanies } from "@/lib/types";
 import { addDays, toDateString } from "@/lib/utils";
 
 type AdminResult = {
   rows: ExportRow[];
   count: number;
+  schedules: ScheduleWithSubcompanies[];
 };
 
 type RangePreset =
@@ -95,7 +97,13 @@ export function AdminDashboard() {
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<
     string | null
   >(initialWeek.today);
-  const [result, setResult] = useState<AdminResult>({ rows: [], count: 0 });
+  const [result, setResult] = useState<AdminResult>({ rows: [], count: 0, schedules: [] });
+  const [editingSchedule, setEditingSchedule] = useState<ScheduleWithSubcompanies | null>(null);
+
+  function scheduleEditButton(row: ScheduleSummaryRow) {
+    const schedule = result.schedules.find((item) => item.work_date === row.workDate && item.primary_company === row.primaryCompany);
+    return <button type="button" className="btn btn-secondary" disabled={loading || !schedule} aria-label={`${row.workDate} ${row.primaryCompany}の予定を編集`} onClick={() => schedule && setEditingSchedule(schedule)}>編集</button>;
+  }
   const [companyRows, setCompanyRows] = useState<CompanyMasterRow[]>([]);
   const [newPrimaryCompany, setNewPrimaryCompany] = useState("");
   const [newSecondaryCompanies, setNewSecondaryCompanies] = useState("");
@@ -298,7 +306,7 @@ export function AdminDashboard() {
   async function logout() {
     await fetch("/api/admin/logout", { method: "POST" });
     setAuthenticated(false);
-    setResult({ rows: [], count: 0 });
+    setResult({ rows: [], count: 0, schedules: [] });
     window.location.href = "/";
   }
 
@@ -315,7 +323,7 @@ export function AdminDashboard() {
       const response = await fetch(`/api/schedules?${queryString()}`);
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "取得に失敗しました。");
-      setResult({ rows: body.rows ?? [], count: body.count ?? 0 });
+      setResult({ rows: body.rows ?? [], count: body.count ?? 0, schedules: body.schedules ?? [] });
       setAppliedFilters({
         dateFrom,
         dateTo,
@@ -420,10 +428,13 @@ export function AdminDashboard() {
     }
   }
 
-  async function removeCompanyMaster(id: string) {
-    if (!authenticated) return;
-    if (!window.confirm("この協力会社を一覧から削除しますか？")) return;
-    const params = new URLSearchParams({ id });
+  async function removeCompanyMaster(id: string, group?: CompanyGroup) {
+    if (!authenticated || companyLoading) return;
+    const confirmation = group
+      ? `「${group.primaryCompany}」と配下の登録${group.rows.length}件を協力会社一覧から削除しますか？登録済みの作業予定は残ります。`
+      : "この協力会社を一覧から削除しますか？";
+    if (!window.confirm(confirmation)) return;
+    const params = new URLSearchParams(group ? { primaryCompany: group.primaryCompany } : { id });
     setMessage("");
     setCompanyLoading(true);
 
@@ -436,7 +447,7 @@ export function AdminDashboard() {
       if (!response.ok)
         throw new Error(body.error ?? "会社マスタの削除に失敗しました。");
 
-      if (editingCompanyId === id) setEditingCompanyId(null);
+      if (editingCompanyId === id || group?.rows.some((row) => row.id === editingCompanyId)) setEditingCompanyId(null);
       await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
     } catch (error) {
       setMessage(
@@ -1146,6 +1157,15 @@ export function AdminDashboard() {
                   >
                     この一次会社に追加
                   </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary justify-self-start text-red-700"
+                    disabled={companyLoading || !!editingCompanyId}
+                    aria-label={`${group.primaryCompany}と配下の二次会社を削除`}
+                    onClick={() => void removeCompanyMaster("", group)}
+                  >
+                    一次会社ごと削除
+                  </button>
                   {group.rows.map((row, rowIndex) => (
                     <div
                       key={row.id}
@@ -1330,15 +1350,6 @@ export function AdminDashboard() {
             <div role="group" aria-label="表示形式">
               <div className="inline-flex h-11 gap-1 rounded-md border border-border bg-white p-1">
                 <button
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors ${scheduleView === "summary" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
-                  type="button"
-                  aria-pressed={scheduleView === "summary"}
-                  onClick={() => setScheduleView("summary")}
-                >
-                  <List size={17} aria-hidden="true" />
-                  一覧
-                </button>
-                <button
                   className={`inline-flex items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors ${scheduleView === "calendar" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
                   type="button"
                   aria-pressed={scheduleView === "calendar"}
@@ -1346,6 +1357,15 @@ export function AdminDashboard() {
                 >
                   <Table2 size={17} aria-hidden="true" />
                   カレンダー
+                </button>
+                <button
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors ${scheduleView === "summary" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                  type="button"
+                  aria-pressed={scheduleView === "summary"}
+                  onClick={() => setScheduleView("summary")}
+                >
+                  <List size={17} aria-hidden="true" />
+                  一覧
                 </button>
               </div>
             </div>
@@ -1417,6 +1437,7 @@ export function AdminDashboard() {
                         </>
                       ) : null}
                     </dl>
+                    {scheduleEditButton(row)}
                     {expanded ? <ScheduleDetails row={row} /> : null}
                   </article>
                 );
@@ -1489,6 +1510,7 @@ export function AdminDashboard() {
                           ) : null}
                         </td>
                         <td className="whitespace-nowrap px-3 py-3 font-semibold">
+                          <div>{scheduleEditButton(row)}</div>
                           <CopyValue
                             value={row.primaryCompany}
                             label="一次会社"
@@ -1576,8 +1598,8 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          <div className="rounded-md border border-border bg-white p-5">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="rounded-md border border-border bg-white p-2 sm:p-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-2">
               <h2 className="text-base font-bold text-slate-950">
                 {selectedCalendarDate
                   ? `${selectedCalendarDate} の詳細`
@@ -1598,34 +1620,43 @@ export function AdminDashboard() {
                 この日の予定はありません。
               </p>
             ) : (
-              <div className="grid gap-2 md:grid-cols-2">
+              <div className="divide-y divide-border border-t border-border">
+                <div className="hidden grid-cols-[minmax(0,1.2fr)_4rem_minmax(0,0.8fr)_minmax(0,1.8fr)_1rem] gap-3 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-500 sm:grid">
+                  <span>一次会社</span>
+                  <span className="text-right">合計人数</span>
+                  <span>作業エリア</span>
+                  <span>作業内容</span>
+                  <span />
+                </div>
                 {selectedCalendarRows.map((row) => (
-                  <div
-                    key={row.key}
-                    className="rounded-md border border-border p-3 text-left"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-bold text-slate-950">
-                          <CopyValue
-                            value={row.primaryCompany}
-                            label="一次会社"
-                          />
-                        </div>
-                        <div className="mt-1 text-sm text-slate-600">
-                          <CopyValue value={row.workArea} label="作業エリア" />
-                        </div>
+                  <div key={row.key} className="flex items-start gap-2">
+                  <details className="group min-w-0 flex-1">
+                    <summary
+                      className="grid min-h-10 cursor-pointer list-none grid-cols-[minmax(0,1fr)_4rem_1rem] items-center gap-x-3 gap-y-0.5 px-2 py-1.5 text-sm hover:bg-slate-50 sm:grid-cols-[minmax(0,1.2fr)_4rem_minmax(0,0.8fr)_minmax(0,1.8fr)_1rem] [&::-webkit-details-marker]:hidden"
+                      aria-label={`${row.primaryCompany}、合計${row.totalCount}人。詳細を開閉`}
+                    >
+                      <span className="truncate font-semibold text-slate-950" title={row.primaryCompany}>
+                        {row.primaryCompany}
+                      </span>
+                      <span className="text-right font-semibold tabular-nums">{row.totalCount}人</span>
+                      <span className="col-start-1 row-start-2 truncate text-xs text-slate-600 sm:col-start-auto sm:row-start-auto sm:text-sm" title={row.workArea}>
+                        {row.workArea || "—"}
+                      </span>
+                      <span className="col-span-2 col-start-1 row-start-3 truncate text-xs text-slate-600 sm:col-span-1 sm:col-start-auto sm:row-start-auto sm:text-sm" title={row.workContent}>
+                        {row.workContent || "—"}
+                      </span>
+                      <ChevronRight size={15} aria-hidden="true" className="col-start-3 row-start-1 text-slate-400 group-open:rotate-90 sm:col-start-auto" />
+                    </summary>
+                    <div className="border-t border-border bg-slate-50 px-3 py-2 text-sm">
+                      <div className="grid gap-x-4 sm:grid-cols-2">
+                        <div><span className="text-xs text-slate-500">一次会社：</span><CopyValue value={row.primaryCompany} label="一次会社" /></div>
+                        <div><span className="text-xs text-slate-500">作業エリア：</span><CopyValue value={row.workArea} label="作業エリア" /></div>
                       </div>
-                      <div className="shrink-0 rounded bg-slate-100 px-2 py-1 text-sm font-bold text-slate-900">
-                        <CopyValue value={row.totalCount} label="合計人数">
-                          {row.totalCount}人
-                        </CopyValue>
-                      </div>
+                      <div><span className="text-xs text-slate-500">作業内容：</span><CopyValue value={row.workContent} label="作業内容" /></div>
+                      <ScheduleDetails row={row} />
                     </div>
-                    <div className="mt-2 text-sm text-slate-700">
-                      <CopyValue value={row.workContent} label="作業内容" />
-                    </div>
-                    <ScheduleDetails row={row} />
+                  </details>
+                  <div className="py-1">{scheduleEditButton(row)}</div>
                   </div>
                 ))}
               </div>
@@ -1633,6 +1664,13 @@ export function AdminDashboard() {
           </div>
         </section>
       </div>
+      {editingSchedule && <AdminScheduleEditor
+        key={editingSchedule.id}
+        schedule={editingSchedule}
+        master={companyMaster}
+        onClose={() => setEditingSchedule(null)}
+        onSaved={() => { setEditingSchedule(null); void search(); }}
+      />}
     </main>
   );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CopyButton } from "@/components/copy-button";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { SubcompanyFields } from "@/components/subcompany-fields";
+import { AddSecondaryCompany } from "@/components/add-secondary-company";
 import type {
   CompanyMaster,
   PreviousSchedule,
@@ -632,7 +633,20 @@ export function ScheduleForm({
     <div className="simple-schedule min-h-screen pb-32 sm:pb-8">
       <header className="border-b border-border bg-white">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-4">
-          <h1 className="text-xl font-bold text-slate-900">作業予定入力</h1>
+          <h1 className="text-xl font-bold text-slate-900">
+            <Link
+              href="/"
+              prefetch={false}
+              className="rounded-md hover:text-primary"
+              aria-label="作業予定入力：トップページに戻って最初から入力"
+              onClick={(event) => {
+                event.preventDefault();
+                window.location.assign("/");
+              }}
+            >
+              作業予定入力
+            </Link>
+          </h1>
           <Link href="/admin" prefetch={false} className="btn btn-secondary">
             管理画面
           </Link>
@@ -1237,6 +1251,31 @@ export function ScheduleForm({
                               : { nextSubcompanies: rows },
                           )
                         }
+                      />
+                      <AddSecondaryCompany
+                        key={`${form.primaryCompany}-${form.status}`}
+                        primaryCompany={form.primaryCompany}
+                        onAdded={(company) => {
+                          const primary = form.primaryCompany;
+                          const field = isWork ? "currentSubcompanies" : "nextSubcompanies";
+                          setCompanyMaster((master) => master ? {
+                            ...master,
+                            secondariesByPrimary: {
+                              ...master.secondariesByPrimary,
+                              [primary]: [...new Set([...(master.secondariesByPrimary[primary] ?? []), company])],
+                            },
+                          } : master);
+                          setForm((current) => {
+                            if (current.primaryCompany !== primary || current.status !== form.status) return current;
+                            const rows = current[field];
+                            if (rows.some((row) => row.secondaryCompany === company)) return current;
+                            const blank = rows.findIndex((row) => !row.secondaryCompany);
+                            return { ...current, [field]: blank >= 0
+                              ? rows.map((row, index) => index === blank ? { ...row, secondaryCompany: company, usePreviousWorkerCount: false } : row)
+                              : [...rows, { secondaryCompany: company, workerCount: isWork ? 0 : null, usePreviousWorkerCount: false }],
+                            };
+                          });
+                        }}
                       />
                     </div>
                     <div
