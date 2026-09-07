@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import type { CompanyMaster, ScheduleSubmitInput, ScheduleWithSubcompanies } from "@/lib/types";
 import { SubcompanyFields } from "@/components/subcompany-fields";
 
-export function AdminScheduleEditor({ schedule, master, onClose, onSaved }: {
+export function AdminScheduleEditor({ schedule, master, onClose, onSaved, workerMode = false }: {
   schedule: ScheduleWithSubcompanies;
   master: CompanyMaster | null;
   onClose: () => void;
   onSaved: () => void;
+  workerMode?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
@@ -19,6 +20,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved }: {
     primaryCount: schedule.primary_count, workArea: schedule.work_area ?? "", workContent: schedule.work_content ?? "",
     nextVisitDate: schedule.next_visit_date, nextPrimaryCount: schedule.next_primary_count,
     nextWorkArea: schedule.next_work_area ?? "", nextWorkContent: schedule.next_work_content ?? "",
+    notes: schedule.notes ?? "",
     currentSubcompanies: schedule.subcompanies.filter((row) => row.kind === "current").map((row) => ({ secondaryCompany: row.secondary_company ?? "", workerCount: row.worker_count })),
     nextSubcompanies: schedule.subcompanies.filter((row) => row.kind === "next_visit").map((row) => ({ secondaryCompany: row.secondary_company ?? "", workerCount: row.worker_count })),
   }));
@@ -35,10 +37,10 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved }: {
     if (remove && !window.confirm(`${schedule.work_date}「${schedule.primary_company}」の予定を削除しますか？二次会社の人数内訳も削除されます。`)) return;
     setBusy(true); setError("");
     try {
-      const response = await fetch(`/api/admin/schedules${remove ? `?id=${encodeURIComponent(schedule.id)}` : ""}`, {
-        method: remove ? "DELETE" : "PATCH",
+      const response = await fetch(workerMode ? "/api/schedules" : `/api/admin/schedules${remove ? `?id=${encodeURIComponent(schedule.id)}` : ""}`, {
+        method: workerMode ? "POST" : remove ? "DELETE" : "PATCH",
         headers: { "content-type": "application/json" },
-        ...(remove ? {} : { body: JSON.stringify({ ...form, id: schedule.id }) }),
+        ...(remove && !workerMode ? {} : { body: JSON.stringify({ ...form, id: schedule.id }) }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "保存に失敗しました。");
@@ -58,12 +60,13 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved }: {
         <SubcompanyFields title="二次会社" rows={form[rowsField]} options={options} countRequired={work} onChange={(rows) => setForm({ ...form, [rowsField]: rows })} />
         <label className="field"><span className="label">作業エリア{work ? "（必須）" : "（任意）"}</span><input className="input" required={work} value={form[areaField]} onChange={(event) => setForm({ ...form, [areaField]: event.target.value })} /></label>
         <label className="field"><span className="label">作業内容{work ? "（必須）" : "（任意）"}</span><textarea className="textarea" required={work} value={form[contentField]} onChange={(event) => setForm({ ...form, [contentField]: event.target.value })} /></label>
+        <label className="field"><span className="label">備考（任意）</span><textarea className="textarea" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
       </fieldset>
       {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "処理中…" : "保存"}</button>
         <button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>キャンセル</button>
-        <button type="button" className="btn btn-secondary ml-auto text-red-700" disabled={busy} onClick={() => void submit(true)}>この予定を削除</button>
+        {!workerMode && <button type="button" className="btn btn-secondary ml-auto text-red-700" disabled={busy} onClick={() => void submit(true)}>この予定を削除</button>}
       </div>
     </form>
   </dialog>;

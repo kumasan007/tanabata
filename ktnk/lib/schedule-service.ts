@@ -53,6 +53,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
       next_primary_count: input.status === "no_work" ? resolvePreviousNumber(input.nextPrimaryCount, input.usePreviousNextPrimaryCount, previous?.next_primary_count, "一次会社人数") : null,
       next_work_area: input.status === "no_work" ? emptyToNull(resolvePreviousText(input.nextWorkArea, previous?.next_work_area, "作業エリア")) : null,
       next_work_content: input.status === "no_work" ? emptyToNull(resolvePreviousText(input.nextWorkContent, previous?.next_work_content, "作業内容")) : null,
+      notes: emptyToNull(input.notes),
     };
 
     if (input.status === "work") {
@@ -227,6 +228,7 @@ export async function getScheduleSummariesByPrimaryCompany(primaryCompany: strin
       nextWorkArea: schedule.next_work_area ?? "",
       nextWorkContent: schedule.next_work_content ?? "",
       companyText: subs.join("、"),
+      notes: schedule.notes ?? "",
     };
   });
 }
@@ -260,6 +262,7 @@ export function schedulesToExportRows(schedules: ScheduleWithSubcompanies[]): Ex
           nextSecondaryCount: "",
           nextWorkArea: "",
           nextWorkContent: "",
+          notes: schedule.notes ?? "",
           createdAt: formatDateTime(schedule.created_at),
           updatedAt: formatDateTime(schedule.updated_at),
         });
@@ -282,6 +285,7 @@ export function schedulesToExportRows(schedules: ScheduleWithSubcompanies[]): Ex
           nextSecondaryCount: sub?.worker_count ?? "",
           nextWorkArea: schedule.next_work_area ?? "",
           nextWorkContent: schedule.next_work_content ?? "",
+          notes: schedule.notes ?? "",
           createdAt: formatDateTime(schedule.created_at),
           updatedAt: formatDateTime(schedule.updated_at),
         });

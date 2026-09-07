@@ -118,16 +118,13 @@ export function SubcompanyFields({
                       min={0}
                       step={1}
                       type="number"
-                      value={row.workerCount ?? 0}
-                      onChange={(event) =>
-                        updateRow(index, {
-                          usePreviousWorkerCount: false,
-                          workerCount: Math.max(
-                            0,
-                            Number(event.target.value) || 0,
-                          ),
-                        })
-                      }
+                      value={row.workerCount ?? ""}
+                      onChange={(event) => updateRow(index, {
+                        usePreviousWorkerCount: false,
+                        workerCount: event.target.value === ""
+                          ? null
+                          : Math.max(0, Number(event.target.value)),
+                      })}
                       required={countRequired}
                     />
                     <span

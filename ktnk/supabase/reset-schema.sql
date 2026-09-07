@@ -4,6 +4,7 @@
 drop trigger if exists schedule_groups_set_updated_at on public.schedule_groups;
 drop table if exists public.schedule_subcompanies;
 drop table if exists public.schedule_groups;
+drop table if exists public.new_entrant_records;
 drop function if exists public.set_updated_at();
 
 create extension if not exists pgcrypto;
@@ -81,6 +82,7 @@ create table public.schedule_groups (
   next_primary_count integer check (next_primary_count is null or next_primary_count >= 0),
   next_work_area text,
   next_work_content text,
+  notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint schedule_groups_work_date_primary_company_key unique (work_date, primary_company)
@@ -93,6 +95,17 @@ create table public.schedule_subcompanies (
   secondary_company text,
   worker_count integer check (worker_count is null or worker_count >= 0),
   sort_order integer not null default 0
+);
+
+create table public.new_entrant_records (
+  id uuid primary key default gen_random_uuid(), entry_date date not null,
+  primary_company text not null, secondary_company text not null,
+  is_new_company boolean not null default false,
+  person_count integer not null default 0 check (person_count >= 0),
+  person_names text, notes text,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  unique (entry_date, primary_company, secondary_company),
+  check (is_new_company or person_count > 0)
 );
 
 create index schedule_groups_work_date_idx
@@ -113,12 +126,14 @@ create index schedule_subcompanies_secondary_company_idx
 alter table public.company_master enable row level security;
 alter table public.schedule_groups enable row level security;
 alter table public.schedule_subcompanies enable row level security;
+alter table public.new_entrant_records enable row level security;
 
 grant usage on schema public to anon, authenticated, service_role;
 
 grant select, insert, update, delete on public.company_master to anon, authenticated, service_role;
 grant select, insert, update, delete on public.schedule_groups to anon, authenticated, service_role;
 grant select, insert, update, delete on public.schedule_subcompanies to anon, authenticated, service_role;
+grant select, insert, update, delete on public.new_entrant_records to anon, authenticated, service_role;
 
 drop policy if exists company_master_app_all on public.company_master;
 create policy company_master_app_all
@@ -142,6 +157,9 @@ to anon, authenticated
 using (true)
 with check (true);
 
+create policy new_entrant_records_app_all on public.new_entrant_records
+for all to anon, authenticated using (true) with check (true);
+
 -- このアプリはNext.js API routesを入口とし、service roleとanonキーの両方に対応します。
 
 create function public.set_updated_at()
@@ -158,5 +176,8 @@ create trigger schedule_groups_set_updated_at
 before update on public.schedule_groups
 for each row
 execute function public.set_updated_at();
+
+create trigger new_entrant_records_set_updated_at before update on public.new_entrant_records
+for each row execute function public.set_updated_at();
 
 notify pgrst, 'reload schema';

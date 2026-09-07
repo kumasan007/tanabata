@@ -35,6 +35,7 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   nextSubcompanies: [],
   nextWorkArea: "",
   nextWorkContent: "",
+  notes: "",
 });
 
 function displayDate(value: string) {
@@ -89,10 +90,10 @@ function CountField({
           min={0}
           step={1}
           placeholder="0"
-          value={value ?? 0}
-          onChange={(event) =>
-            onChange(Math.max(0, Number(event.target.value) || 0))
-          }
+          value={value ?? ""}
+          onChange={(event) => onChange(
+            event.target.value === "" ? null : Math.max(0, Number(event.target.value)),
+          )}
           required={required}
         />
         <span className="pointer-events-none absolute right-4 top-4 text-sm text-slate-600">
@@ -638,17 +639,13 @@ export function ScheduleForm({
               href="/"
               prefetch={false}
               className="rounded-md hover:text-primary"
-              aria-label="作業予定入力：トップページに戻って最初から入力"
-              onClick={(event) => {
-                event.preventDefault();
-                window.location.assign("/");
-              }}
+              aria-label="メニューに戻る"
             >
               作業予定入力
             </Link>
           </h1>
-          <Link href="/admin" prefetch={false} className="btn btn-secondary">
-            管理画面
+          <Link href="/calendar" prefetch={false} className="btn btn-secondary">
+            カレンダー
           </Link>
         </div>
       </header>
@@ -1123,6 +1120,12 @@ export function ScheduleForm({
                         </dl>
                       </div>
                     )}
+                    {form.notes && (
+                      <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm">
+                        <span className="font-semibold">備考：</span>
+                        <span className="whitespace-pre-wrap">{form.notes}</span>
+                      </div>
+                    )}
                     <button
                       type="button"
                       className="btn btn-secondary mt-5 w-full"
@@ -1314,6 +1317,15 @@ export function ScheduleForm({
                           )
                         }
                       />
+                      <WorkField
+                        key={`${previousKey}-${copyVersion}-notes`}
+                        label="備考"
+                        value={form.notes}
+                        previousValue={null}
+                        placeholder="連絡事項や注意点など"
+                        multiline
+                        onChange={(value) => patch({ notes: value })}
+                      />
                     </div>
                     {submitState.status === "error" && (
                       <p role="alert" className="mt-3 text-red-700">
@@ -1489,6 +1501,7 @@ export function ScheduleForm({
                         {summary.nextVisitDate && (
                           <p>次回来場 {summary.nextVisitDate}</p>
                         )}
+                        {summary.notes && <p>備考：{summary.notes}</p>}
                       </div>
                     ))
                   )}
