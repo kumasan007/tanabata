@@ -61,7 +61,15 @@ type ScheduleSummaryRow = {
   }>;
 };
 
-const tomorrow = () => toDateString(addDays(new Date(), 1));
+function currentWeek() {
+  const today = new Date();
+  const monday = addDays(today, -((today.getDay() + 6) % 7));
+  return {
+    today: toDateString(today),
+    from: toDateString(monday),
+    to: toDateString(addDays(monday, 6)),
+  };
+}
 
 export function AdminDashboard() {
   const [password, setPassword] = useState("");
@@ -69,9 +77,10 @@ export function AdminDashboard() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [loginLoading, setLoginLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>("schedules");
-  const [rangePreset, setRangePreset] = useState<RangePreset>("tomorrow");
-  const [dateFrom, setDateFrom] = useState(tomorrow);
-  const [dateTo, setDateTo] = useState(tomorrow);
+  const [initialWeek] = useState(currentWeek);
+  const [rangePreset, setRangePreset] = useState<RangePreset>("week");
+  const [dateFrom, setDateFrom] = useState(initialWeek.from);
+  const [dateTo, setDateTo] = useState(initialWeek.to);
   const [primaryCompany, setPrimaryCompany] = useState("");
   const [secondaryCompany, setSecondaryCompany] = useState("");
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(
@@ -79,13 +88,13 @@ export function AdminDashboard() {
   );
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("work");
   const [sortBy, setSortBy] = useState<SortBy>("dateAsc");
-  const [scheduleView, setScheduleView] = useState<ScheduleView>("summary");
+  const [scheduleView, setScheduleView] = useState<ScheduleView>("calendar");
   const [expandedScheduleKeys, setExpandedScheduleKeys] = useState<string[]>(
     [],
   );
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<
     string | null
-  >(null);
+  >(initialWeek.today);
   const [result, setResult] = useState<AdminResult>({ rows: [], count: 0 });
   const [companyRows, setCompanyRows] = useState<CompanyMasterRow[]>([]);
   const [newPrimaryCompany, setNewPrimaryCompany] = useState("");
@@ -251,8 +260,13 @@ export function AdminDashboard() {
 
   useEffect(() => {
     setExpandedScheduleKeys([]);
-    setSelectedCalendarDate(null);
-  }, [dateFrom, dateTo, primaryCompany, secondaryCompany, statusFilter]);
+    setSelectedCalendarDate((selected) => {
+      const { dateFrom: from, dateTo: to } = appliedFilters;
+      if (selected && selected >= from && selected <= to) return selected;
+      const today = toDateString(new Date());
+      return today >= from && today <= to ? today : from || null;
+    });
+  }, [appliedFilters]);
 
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1531,52 +1545,31 @@ export function AdminDashboard() {
                 {calendarDays.days.map((day) => {
                   const rows = calendarRowsByDate[day] ?? [];
                   const selected = selectedCalendarDate === day;
+                  const isToday = day === toDateString(new Date());
+                  const companyCount = new Set(rows.flatMap((row) => [
+                    row.primaryCompany,
+                    ...row.details.map((detail) => detail.company),
+                  ]).filter(Boolean)).size;
+                  const workerCount = rows.reduce((sum, row) => sum + row.totalCount, 0);
                   return (
-                    <div
+                    <button
                       key={day}
-                      className={`min-h-32 bg-white p-2 text-left align-top ${selected ? "ring-2 ring-inset ring-emerald-700" : ""}`}
+                      type="button"
+                      className={`flex h-28 min-w-0 flex-col gap-1 overflow-hidden p-2 text-left transition-colors hover:bg-emerald-50 ${selected ? "bg-emerald-50 ring-2 ring-inset ring-emerald-700" : "bg-white"}`}
+                      aria-pressed={selected}
+                      aria-current={isToday ? "date" : undefined}
+                      aria-label={`${day}、${companyCount}社、合計${workerCount}人の予定`}
+                      onClick={() => setSelectedCalendarDate(day)}
                     >
-                      <div className="mb-2 flex items-center justify-between gap-1">
-                        <button
-                          type="button"
-                          className="min-h-11 whitespace-nowrap rounded px-1 text-sm font-bold text-emerald-800 hover:bg-emerald-50"
-                          aria-expanded={selected}
-                          aria-label={`${day}の予定`}
-                          onClick={() =>
-                            setSelectedCalendarDate(selected ? null : day)
-                          }
-                        >
-                          {`${Number(day.slice(5, 7))}月${Number(day.slice(8))}日`}
-                        </button>
-                      </div>
-                      <div className="grid gap-1">
-                        {rows.slice(0, 3).map((row) => (
-                          <button
-                            key={row.key}
-                            type="button"
-                            className="flex min-h-8 w-full items-center gap-1 rounded bg-slate-50 px-1.5 text-left text-xs hover:bg-emerald-50"
-                            onClick={() => setSelectedCalendarDate(day)}
-                            title={`${row.primaryCompany} / ${row.totalCount}人`}
-                          >
-                            <span className="min-w-0 truncate">
-                              {row.primaryCompany}
-                            </span>
-                            <span className="shrink-0 font-semibold">
-                              / {row.totalCount}人
-                            </span>
-                          </button>
-                        ))}
-                        {rows.length > 3 && (
-                          <button
-                            type="button"
-                            className="min-h-8 text-xs font-semibold text-emerald-800"
-                            onClick={() => setSelectedCalendarDate(day)}
-                          >
-                            ほか{rows.length - 3}社を表示
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                      <span className="text-sm font-bold text-emerald-800">
+                        {Number(day.slice(5, 7))}/{Number(day.slice(8))}
+                        {isToday && <span className="ml-1 text-xs">今日</span>}
+                      </span>
+                      <span className="mt-auto text-xs text-slate-600">{companyCount}社</span>
+                      <span className="text-sm font-semibold tabular-nums text-slate-900">
+                        合計 {workerCount}人
+                      </span>
+                    </button>
                   );
                 })}
               </div>
