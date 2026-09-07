@@ -267,6 +267,7 @@ export function ScheduleForm({
   const [choice, setChoice] = useState<"same" | "new" | null>(null);
   const [statusChosen, setStatusChosen] = useState(false);
   const [customDate, setCustomDate] = useState(false);
+  const [continuingInput, setContinuingInput] = useState(false);
   const [step, setStep] = useState<
     "date" | "status" | "copy" | "visit" | "edit" | "confirm" | "copyContent"
   >("date");
@@ -500,6 +501,7 @@ export function ScheduleForm({
       setStatusChosen(false);
       setStep("date");
       setCustomDate(false);
+      setContinuingInput(false);
       setSummaryOpen(false);
       setCopyVersion((v) => v + 1);
       setSubmitState({ status: "idle" });
@@ -534,7 +536,10 @@ export function ScheduleForm({
   }
   function selectDate(date: string) {
     patch({ startDate: date, endDate: date });
-    if (parseLocalDate(date)) setStep("status");
+    if (parseLocalDate(date)) {
+      setStep(continuingInput ? "confirm" : "status");
+      setContinuingInput(false);
+    }
   }
   function resetForm() {
     setForm(emptyForm(""));
@@ -543,6 +548,7 @@ export function ScheduleForm({
     setChoosingCompany(true);
     setStep("date");
     setCustomDate(false);
+    setContinuingInput(false);
     setSummaryOpen(false);
     setSubmitState({ status: "idle" });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -584,30 +590,48 @@ export function ScheduleForm({
     submitting.current = true;
     setSubmitState({ status: "submitting" });
     try {
-      const response = await fetch("/api/schedules", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          endDate: form.startDate,
-          excludeWeekends: false,
-          usePreviousPrimaryCount: false,
-          usePreviousNextPrimaryCount: false,
-          currentSubcompanies: isWork
-            ? form.currentSubcompanies.map((row) => ({
-                ...row,
-                usePreviousWorkerCount: false,
-              }))
-            : [],
-          nextSubcompanies: isWork
-            ? []
-            : form.nextSubcompanies.map((row) => ({
-                ...row,
-                usePreviousWorkerCount: false,
-              })),
-        }),
-      });
-      const body = await response.json();
+      const submit = async (overwriteExisting: boolean) => {
+        const response = await fetch("/api/schedules", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ...form,
+            endDate: form.startDate,
+            excludeWeekends: false,
+            usePreviousPrimaryCount: false,
+            usePreviousNextPrimaryCount: false,
+            overwriteExisting,
+            currentSubcompanies: isWork
+              ? form.currentSubcompanies.map((row) => ({
+                  ...row,
+                  usePreviousWorkerCount: false,
+                }))
+              : [],
+            nextSubcompanies: isWork
+              ? []
+              : form.nextSubcompanies.map((row) => ({
+                  ...row,
+                  usePreviousWorkerCount: false,
+                })),
+          }),
+        });
+        return { response, body: await response.json() };
+      };
+
+      let { response, body } = await submit(false);
+      if (
+        response.status === 409 &&
+        body.code === "SCHEDULE_ALREADY_EXISTS"
+      ) {
+        const confirmed = window.confirm(
+          `${displayDate(form.startDate)}の「${form.primaryCompany}」の作業内容は既に入力されています。変更しますか？`,
+        );
+        if (!confirmed) {
+          setSubmitState({ status: "idle" });
+          return;
+        }
+        ({ response, body } = await submit(true));
+      }
       if (!response.ok)
         throw new Error(
           body.error ?? "送信に失敗しました。再度お試しください。",
@@ -801,7 +825,10 @@ export function ScheduleForm({
                           type="button"
                           className="btn btn-primary mt-3 w-full"
                           disabled={!validDate}
-                          onClick={() => setStep("status")}
+                          onClick={() => {
+                            setStep(continuingInput ? "confirm" : "status");
+                            setContinuingInput(false);
+                          }}
                         >
                           次へ
                         </button>
@@ -1376,18 +1403,14 @@ export function ScheduleForm({
                     type="button"
                     className="btn btn-primary"
                     onClick={() => {
-                      const date = toDateString(
-                        addDays(parseLocalDate(form.startDate)!, 1),
-                      );
-                      setCustomDate(
-                        !dateOptions.some((option) => option.date === date),
-                      );
-                      selectDate(date);
-                      setStep("confirm");
+                      setSubmitState({ status: "idle" });
+                      setContinuingInput(true);
+                      setCustomDate(false);
+                      setStep("date");
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
                   >
-                    同じ内容で別日を入力
+                    引き続き入力
                   </button>
                   <button
                     type="button"

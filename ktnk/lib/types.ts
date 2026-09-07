@@ -48,6 +48,7 @@ export type ScheduleSubmitInput = {
   nextWorkArea: string;
   nextWorkContent: string;
   notes: string;
+  overwriteExisting?: boolean;
 };
 
 export type ScheduleGroupRow = {
@@ -118,7 +119,6 @@ export type NewEntrantRecord = {
   entry_date: string;
   primary_company: string;
   secondary_company: string;
-  is_new_company: boolean;
   person_count: number;
   person_names: string | null;
   notes: string | null;

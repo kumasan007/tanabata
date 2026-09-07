@@ -24,6 +24,29 @@ export async function getCompanyMaster(): Promise<CompanyMaster> {
   return buildCompanyMaster(data ?? []);
 }
 
+export async function ensureSecondaryCompany(primaryCompany: string, secondaryCompany: string) {
+  const db = createServerClient();
+  const { data: rows, error } = await db
+    .from("company_master")
+    .select("secondary_company,primary_trade_roles,sort_order")
+    .eq("primary_company", primaryCompany)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  if (!rows?.length) return false;
+
+  if (!rows.some((row) => row.secondary_company === secondaryCompany)) {
+    const { error: insertError } = await db.from("company_master").insert({
+      primary_company: primaryCompany,
+      secondary_company: secondaryCompany,
+      primary_trade_roles: rows[0].primary_trade_roles ?? [],
+      sort_order: Math.max(...rows.map((row) => row.sort_order)) + 1,
+    });
+    // 同時登録は会社ペアのユニーク制約に任せる。
+    if (insertError && insertError.code !== "23505") throw insertError;
+  }
+  return true;
+}
+
 function buildCompanyMaster(rows: CompanyMasterRecord[]): CompanyMaster {
   const primaryCompanies: string[] = [];
   const secondariesByPrimary: Record<string, string[]> = {};

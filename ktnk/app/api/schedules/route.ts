@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { assertAdminFromRequest } from "@/lib/supabase";
-import { getSchedules, saveScheduleSubmission, schedulesToExportRows } from "@/lib/schedule-service";
+import { z } from "zod";
+import { assertAdminFromRequest, createServerClient } from "@/lib/supabase";
+import { getSchedules, saveScheduleSubmission, ScheduleAlreadyExistsError, schedulesToExportRows } from "@/lib/schedule-service";
 import type { ScheduleStatus } from "@/lib/types";
 import { scheduleSubmitSchema } from "@/lib/validation";
 
@@ -24,6 +25,16 @@ export async function POST(request: Request) {
     const result = await saveScheduleSubmission(parsed.data);
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof ScheduleAlreadyExistsError) {
+      return NextResponse.json(
+        {
+          error: "同じ日・一次会社の作業内容が既に入力されています。",
+          code: "SCHEDULE_ALREADY_EXISTS",
+          dates: error.dates,
+        },
+        { status: 409 },
+      );
+    }
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "予定の登録に失敗しました。",
@@ -61,6 +72,19 @@ export async function GET(request: Request) {
       },
       { status: 500 },
     );
+  }
+}
+
+export async function DELETE(request: Request) {
+  const id = z.string().uuid().safeParse(new URL(request.url).searchParams.get("id"));
+  if (!id.success) return NextResponse.json({ error: "予定の指定が正しくありません。" }, { status: 400 });
+  try {
+    const { data, error } = await createServerClient().from("schedule_groups").delete().eq("id", id.data).select("id");
+    if (error) throw error;
+    if (!data?.length) return NextResponse.json({ error: "予定は既に削除されています。カレンダーを更新してください。" }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "予定の削除に失敗しました。" }, { status: 500 });
   }
 }
 

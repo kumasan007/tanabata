@@ -40,6 +40,7 @@ export const scheduleSubmitSchema = z
     nextWorkArea: z.string().default(""),
     nextWorkContent: z.string().default(""),
     notes: z.string().max(2000, "備考は2000文字以内で入力してください。").default(""),
+    overwriteExisting: z.boolean().optional().default(false),
   })
   .superRefine((value, ctx) => {
     if (value.startDate > value.endDate) {

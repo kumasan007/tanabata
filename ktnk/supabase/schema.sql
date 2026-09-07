@@ -101,14 +101,12 @@ create table if not exists public.new_entrant_records (
   entry_date date not null,
   primary_company text not null,
   secondary_company text not null,
-  is_new_company boolean not null default false,
-  person_count integer not null default 0 check (person_count >= 0),
+  person_count integer not null check (person_count > 0),
   person_names text,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (entry_date, primary_company, secondary_company),
-  check (is_new_company or person_count > 0)
+  unique (entry_date, primary_company, secondary_company)
 );
 
 create index if not exists schedule_groups_work_date_idx

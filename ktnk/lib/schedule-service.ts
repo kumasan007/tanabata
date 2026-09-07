@@ -13,6 +13,13 @@ import type { ScheduleSubmitParsed } from "@/lib/validation";
 
 const SAME_AS_PREVIOUS = "前回と同じ";
 
+export class ScheduleAlreadyExistsError extends Error {
+  constructor(public readonly dates: string[]) {
+    super("同じ日・一次会社の作業内容が既に入力されています。");
+    this.name = "ScheduleAlreadyExistsError";
+  }
+}
+
 export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
   const dates = expandDateRange(input.startDate, input.endDate, input.excludeWeekends);
   if (dates.length === 0) {
@@ -21,6 +28,23 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
 
   const supabase = createServerClient();
   const savedIds: string[] = [];
+
+  if (!input.overwriteExisting) {
+    const { data: existingSchedules, error: existingError } = await supabase
+      .from("schedule_groups")
+      .select("work_date")
+      .eq("primary_company", input.primaryCompany)
+      .in("work_date", dates);
+
+    if (existingError) {
+      throwSupabaseError(existingError, "既存予定の確認に失敗しました。");
+    }
+    if (existingSchedules?.length) {
+      throw new ScheduleAlreadyExistsError(
+        existingSchedules.map((row) => row.work_date),
+      );
+    }
+  }
 
   for (const workDate of dates) {
     const previous = usesPreviousValue(input)

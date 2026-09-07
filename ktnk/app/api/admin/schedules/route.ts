@@ -16,7 +16,7 @@ export async function PATCH(request: Request) {
     const { data: existing, error } = await db.from("schedule_groups").select("id,work_date,primary_company").eq("id", id.data).maybeSingle();
     if (error) throw error;
     if (!existing) return NextResponse.json({ error: "予定は削除されています。一覧を更新してください。" }, { status: 404 });
-    const parsed = scheduleSubmitSchema.safeParse({ ...body, startDate: existing.work_date, endDate: existing.work_date, primaryCompany: existing.primary_company, excludeWeekends: false });
+    const parsed = scheduleSubmitSchema.safeParse({ ...body, startDate: existing.work_date, endDate: existing.work_date, primaryCompany: existing.primary_company, excludeWeekends: false, overwriteExisting: true });
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     await saveScheduleSubmission(parsed.data);
     return NextResponse.json({ ok: true });

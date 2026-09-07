@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
 import type { CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 
@@ -72,21 +72,33 @@ export function WorkerCalendar({ initialDate }: { initialDate: string }) {
         <label className="field min-w-56 sm:ml-auto"><span className="label">一次会社</span><select className="input" value={company} onChange={(e) => setCompany(e.target.value)}><option value="">すべて</option>{master?.primaryCompanies.map((item) => <option key={item}>{item}</option>)}</select></label>
       </div>
       {message && <p role="alert" className="mt-4 text-red-700">{message}</p>}
-      <section className="panel mt-4 overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500">
+      <section className="panel mt-4 overflow-x-auto">
+        <div className={`grid grid-cols-7 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500 ${company ? "min-w-[56rem]" : ""}`}>
           {weekdays.map((weekday, index) => <div key={weekday} className={`py-2 ${index === 0 ? "text-red-600" : index === 6 ? "text-blue-600" : ""}`}>{weekday}</div>)}
         </div>
-        <div className="grid grid-cols-7 bg-border/70 gap-px">
+        <div className={`grid grid-cols-7 bg-border/70 gap-px ${company ? "min-w-[56rem]" : ""}`}>
           {Array.from({ length: firstDayOffset }, (_, index) => <div key={`blank-${index}`} className="min-h-20 bg-slate-50" />)}
           {days.map((date) => {
             const daySchedules = scheduleMap[date] ?? [];
             const dayEntrants = entrantMap[date] ?? [];
             const total = daySchedules.reduce((sum, row) => sum + totalWorkers(row), 0);
-            return <button key={date} type="button" onClick={() => setSelectedDate(date)} aria-pressed={selectedDate === date} className={`min-h-20 bg-white p-1.5 text-left align-top transition hover:bg-emerald-50 sm:min-h-24 sm:p-2 ${selectedDate === date ? "relative z-10 bg-emerald-50 ring-2 ring-inset ring-primary" : ""}`}>
-              <span className="block text-sm font-bold">{Number(date.slice(-2))}</span>
-              {daySchedules.length > 0 && <span className="mt-1 block rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-semibold leading-4 text-emerald-900 sm:text-xs">{daySchedules.length}社・{total}人</span>}
-              {dayEntrants.length > 0 && <span className="mt-1 block text-[10px] font-semibold leading-4 text-amber-700 sm:text-xs">新規 {dayEntrants.length}社</span>}
-            </button>;
+            return <div key={date} className={`${company ? "min-h-40 sm:min-h-48" : "min-h-20 sm:min-h-24"} min-w-0 bg-white p-1.5 text-left align-top transition hover:bg-emerald-50 sm:p-2 ${selectedDate === date ? "relative z-10 bg-emerald-50 ring-2 ring-inset ring-primary" : ""}`}>
+              <button type="button" onClick={() => setSelectedDate(date)} aria-pressed={selectedDate === date} className="block w-full text-left text-sm font-bold">{Number(date.slice(-2))}</button>
+              {!company && daySchedules.length > 0 && <span className="mt-1 block rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-semibold leading-4 text-emerald-900 sm:text-xs">{daySchedules.length}社・{total}人</span>}
+              {!company && dayEntrants.length > 0 && <span className="mt-1 block text-[10px] font-semibold leading-4 text-amber-700 sm:text-xs">新規 {dayEntrants.length}社</span>}
+              {company && daySchedules.map((row) => {
+                const area = row.status === "work" ? row.work_area : row.next_work_area;
+                const content = row.status === "work" ? row.work_content : row.next_work_content;
+                return <div key={row.id} className="relative mt-1 min-w-0 rounded bg-emerald-100 p-1 pr-6 text-[10px] leading-4 text-emerald-950 sm:text-xs">
+                  <button type="button" className="absolute right-0.5 top-0.5 rounded p-0.5 hover:bg-white/70" onClick={() => { setSelectedDate(date); setEditing(row); }} aria-label={`${date}の予定を編集`} title="予定を編集"><Pencil size={12} aria-hidden="true" /></button>
+                  <p className="font-bold">{row.status === "work" ? `${totalWorkers(row)}人` : "作業なし"}</p>
+                  {row.status === "no_work" && row.next_visit_date && <p className="truncate" title={`次回 ${row.next_visit_date}`}>次回 {row.next_visit_date.slice(5).replace("-", "/")}</p>}
+                  <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
+                  <p className="line-clamp-2 break-words" title={content ?? ""}>{content || "作業内容未入力"}</p>
+                </div>;
+              })}
+              {company && dayEntrants.map((row) => <div key={row.id} className="mt-1 min-w-0 rounded bg-amber-100 p-1 text-[10px] leading-4 text-amber-900 sm:text-xs"><p className="truncate font-semibold" title={row.secondary_company}>新規：{row.secondary_company}</p><p>{row.person_count}人</p></div>)}
+            </div>;
           })}
         </div>
       </section>
@@ -103,17 +115,58 @@ export function WorkerCalendar({ initialDate }: { initialDate: string }) {
             const content = row.status === "work" ? row.work_content : row.next_work_content;
             return <article key={row.id} className="panel relative min-w-0 p-3 pr-11 text-sm">
               <button type="button" className="btn btn-secondary absolute right-2 top-2 h-8 min-h-8 w-8 p-0" onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
-              <p className="truncate pr-1 font-bold" title={row.primary_company}>{row.primary_company}</p>
-              <p className="mt-0.5 font-semibold text-primary">{row.status === "work" ? `${totalWorkers(row)}人` : "作業なし"}<span className="ml-2 font-normal text-slate-500">二次 {subs.length}社</span></p>
-              <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area || "エリア未入力"}</p>
-              <p className="truncate text-slate-600" title={content ?? ""}>{content || "作業内容未入力"}</p>
-              {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：{row.notes}</p>}
+              <div className="flex min-w-0 items-center gap-2 pr-1">
+                <p className="min-w-0 truncate font-bold" title={row.primary_company}>
+                  <CopyValue value={row.primary_company} label="一次会社" />
+                </p>
+                {(master?.primaryTradeRolesByPrimary[row.primary_company] ?? []).length > 0 && (
+                  <span className="shrink-0 truncate text-xs font-normal text-slate-400" title={(master?.primaryTradeRolesByPrimary[row.primary_company] ?? []).join("・")}>
+                    {(master?.primaryTradeRolesByPrimary[row.primary_company] ?? []).join("・")}
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 font-semibold text-primary">
+                {row.status === "work" ? <CopyValue value={totalWorkers(row)} label="合計人数">{totalWorkers(row)}人</CopyValue> : "作業なし"}
+                <span className="ml-2 font-normal text-slate-500">二次 {subs.length}社</span>
+              </p>
+              <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label={row.status === "work" ? "作業エリア" : "次回来場"} /> : "エリア未入力"}</p>
+              <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" /> : "作業内容未入力"}</p>
+              {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" /></p>}
             </article>;
           })}
-          {selectedEntrants.map((row) => <article key={row.id} className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm"><p className="truncate font-bold">新規入場：{row.secondary_company}</p><p>{row.person_count}人{row.is_new_company ? "・会社も新規" : ""}</p></article>)}
+          {selectedEntrants.map((row) => <article key={row.id} className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm"><p className="font-bold">新規入場</p><p className="mt-1 break-words"><span className="font-semibold">{row.primary_company}</span><span className="mx-1 text-slate-400">→</span>{row.secondary_company}</p><p>{row.person_count}人</p></article>)}
         </div>}
       </section>
     </main>
     {editing && <AdminScheduleEditor schedule={editing} master={master} workerMode onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setVersion((v) => v + 1); }} />}
   </div>;
+}
+
+function CopyValue({ value, label, children }: { value: string | number; label: string; children?: ReactNode }) {
+  const [notice, setNotice] = useState("");
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 2400);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  return <>
+    <button
+      type="button"
+      className="max-w-full rounded px-0.5 text-left underline-offset-4 hover:bg-emerald-50 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700"
+      title={`${label}をコピー`}
+      aria-label={`${label}をコピー：${value}`}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(String(value));
+          setNotice(`${label}をコピーしました`);
+        } catch {
+          setNotice("コピーできませんでした。もう一度お試しください。");
+        }
+      }}
+    >
+      {children ?? value}
+    </button>
+    {notice && <span role="status" className="fixed bottom-5 left-1/2 z-50 w-max max-w-[90vw] -translate-x-1/2 rounded-md bg-slate-800 px-4 py-3 text-sm font-medium text-white shadow-lg">{notice}</span>}
+  </>;
 }

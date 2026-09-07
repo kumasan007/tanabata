@@ -10,13 +10,12 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
-  List,
   LogIn,
   LogOut,
   LoaderCircle,
   Plus,
   Search,
-  Table2,
+  Trash2,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -42,7 +41,6 @@ type RangePreset =
 type StatusFilter = "work" | "no_work";
 type SortBy = "dateAsc" | "dateDesc" | "primaryAsc";
 type AdminTab = "schedules" | "companies";
-type ScheduleView = "summary" | "calendar";
 type CompanyGroup = {
   primaryCompany: string;
   rows: CompanyMasterRow[];
@@ -89,13 +87,12 @@ export function AdminDashboard() {
   );
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("work");
   const [sortBy, setSortBy] = useState<SortBy>("dateAsc");
-  const [scheduleView, setScheduleView] = useState<ScheduleView>("calendar");
   const [expandedScheduleKeys, setExpandedScheduleKeys] = useState<string[]>(
     [],
   );
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState<
-    string | null
-  >(initialWeek.today);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(
+    initialWeek.today,
+  );
   const [result, setResult] = useState<AdminResult>({ rows: [], count: 0, schedules: [] });
   const [editingSchedule, setEditingSchedule] = useState<ScheduleWithSubcompanies | null>(null);
 
@@ -1105,27 +1102,32 @@ export function AdminDashboard() {
                     <span className="font-semibold text-slate-600">職種</span>
                     <RoleBadges roles={group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []} />
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary justify-self-start"
-                    onClick={() => {
-                      setNewPrimaryCompany(group.primaryCompany);
-                      setNewSecondaryCompanies("");
-                      setNewPrimaryRoles("");
-                      document.getElementById("add-company-primary")?.focus();
-                    }}
-                  >
-                    この一次会社に追加
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary justify-self-start text-red-700"
-                    disabled={companyLoading || !!editingCompanyId}
-                    aria-label={`${group.primaryCompany}と配下の二次会社を削除`}
-                    onClick={() => void removeCompanyMaster("", group)}
-                  >
-                    一次会社ごと削除
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-secondary h-9 w-9 p-0"
+                      aria-label={`${group.primaryCompany}に追加`}
+                      title="この一次会社に追加"
+                      onClick={() => {
+                        setNewPrimaryCompany(group.primaryCompany);
+                        setNewSecondaryCompanies("");
+                        setNewPrimaryRoles("");
+                        document.getElementById("add-company-primary")?.focus();
+                      }}
+                    >
+                      <Plus size={17} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary h-9 w-9 p-0 text-red-700"
+                      disabled={companyLoading || !!editingCompanyId}
+                      aria-label={`${group.primaryCompany}と配下の二次会社を削除`}
+                      title="一次会社ごと削除"
+                      onClick={() => void removeCompanyMaster("", group)}
+                    >
+                      <Trash2 size={17} aria-hidden="true" />
+                    </button>
+                  </div>
                   {group.rows.map((row, rowIndex) => (
                     <div
                       key={row.id}
@@ -1293,33 +1295,11 @@ export function AdminDashboard() {
                 <option value="primaryAsc">一次会社順</option>
               </select>
             </label>
-            <div role="group" aria-label="表示形式">
-              <div className="inline-flex h-11 gap-1 rounded-md border border-border bg-white p-1">
-                <button
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors ${scheduleView === "calendar" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
-                  type="button"
-                  aria-pressed={scheduleView === "calendar"}
-                  onClick={() => setScheduleView("calendar")}
-                >
-                  <Table2 size={17} aria-hidden="true" />
-                  カレンダー
-                </button>
-                <button
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors ${scheduleView === "summary" ? "bg-emerald-800 text-white" : "text-slate-600 hover:bg-slate-50"}`}
-                  type="button"
-                  aria-pressed={scheduleView === "summary"}
-                  onClick={() => setScheduleView("summary")}
-                >
-                  <List size={17} aria-hidden="true" />
-                  一覧
-                </button>
-              </div>
-            </div>
           </div>
         </section>
 
         <section
-          className={`${activeTab === "schedules" && scheduleView === "summary" ? "block" : "hidden"} overflow-hidden rounded-md border border-border bg-white`}
+          className={`${activeTab === "schedules" ? "block" : "hidden"} overflow-hidden rounded-md border border-border bg-white`}
           aria-label="作業予定一覧"
           aria-busy={loading}
         >
@@ -1498,7 +1478,7 @@ export function AdminDashboard() {
         </section>
 
         <section
-          className={`${activeTab === "schedules" && scheduleView === "calendar" ? "grid" : "hidden"} gap-3`}
+          className="hidden"
         >
           <div className="overflow-x-auto rounded-md border border-border bg-white">
             <div className="min-w-[630px]">

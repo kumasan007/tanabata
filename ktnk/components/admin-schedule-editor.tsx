@@ -37,10 +37,13 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
     if (remove && !window.confirm(`${schedule.work_date}「${schedule.primary_company}」の予定を削除しますか？二次会社の人数内訳も削除されます。`)) return;
     setBusy(true); setError("");
     try {
-      const response = await fetch(workerMode ? "/api/schedules" : `/api/admin/schedules${remove ? `?id=${encodeURIComponent(schedule.id)}` : ""}`, {
-        method: workerMode ? "POST" : remove ? "DELETE" : "PATCH",
+      const endpoint = workerMode
+        ? `/api/schedules${remove ? `?id=${encodeURIComponent(schedule.id)}` : ""}`
+        : `/api/admin/schedules${remove ? `?id=${encodeURIComponent(schedule.id)}` : ""}`;
+      const response = await fetch(endpoint, {
+        method: remove ? "DELETE" : workerMode ? "POST" : "PATCH",
         headers: { "content-type": "application/json" },
-        ...(remove && !workerMode ? {} : { body: JSON.stringify({ ...form, id: schedule.id }) }),
+        ...(!remove ? { body: JSON.stringify({ ...form, id: schedule.id, overwriteExisting: true }) } : {}),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "保存に失敗しました。");
@@ -66,7 +69,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "処理中…" : "保存"}</button>
         <button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>キャンセル</button>
-        {!workerMode && <button type="button" className="btn btn-secondary ml-auto text-red-700" disabled={busy} onClick={() => void submit(true)}>この予定を削除</button>}
+        <button type="button" className="btn btn-secondary ml-auto text-red-700" disabled={busy} onClick={() => void submit(true)}>この予定を削除</button>
       </div>
     </form>
   </dialog>;
