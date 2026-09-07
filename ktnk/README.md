@@ -29,13 +29,14 @@ npm run dev
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SECRET_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 ADMIN_PASSWORD=
 ADMIN_SESSION_SECRET=
 ```
 
 Supabase接続はサーバー側のNext.js API routesに集約し、`SUPABASE_URL` と `SUPABASE_ANON_KEY` を使用します。`supabase/migrations/20260904_allow_anon_app_access.sql` を実行して、必要なRLSポリシーを適用してください。
 
-管理画面のバックアップ機能だけは、非公開の `SUPABASE_SECRET_KEY`（`sb_secret_...`）を使用します。この値はブラウザへ公開せず、ローカルの `.env.local` とVercelの環境変数だけに設定してください。
+管理画面のバックアップ機能だけは、非公開の `SUPABASE_SECRET_KEY`（`sb_secret_...`）または従来の `SUPABASE_SERVICE_ROLE_KEY` を使用します。この値はブラウザへ公開せず、ローカルの `.env.local` とVercelの環境変数だけに設定してください。
 
 anonキー運用では公開キーを知る利用者がSupabase REST APIを直接操作できるため、管理画面のログインはアプリ画面とAPIに対する制御になります。DBへの直接操作も防止したい場合はservice role運用を使用してください。
 
@@ -76,6 +77,7 @@ VercelではRoot Directoryを `ktnk` にします。
 SUPABASE_URL
 SUPABASE_ANON_KEY
 SUPABASE_SECRET_KEY
+SUPABASE_SERVICE_ROLE_KEY
 ADMIN_PASSWORD
 ADMIN_SESSION_SECRET
 ```

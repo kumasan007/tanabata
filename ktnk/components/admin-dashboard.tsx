@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Search,
   Trash2,
+  Upload,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -408,8 +409,29 @@ export function AdminDashboard() {
     }
   }
 
+  async function importBackup(file: File) {
+    if (!window.confirm(`${file.name} のバックアップを取り込み、現在のデータを置き換えます。よろしいですか？`)) return;
+    setBackupLoading(true);
+    setBackupMessage("");
+    setBackupError(false);
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      const response = await fetch("/api/admin/backups", { method: "POST", body: formData });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "バックアップを取り込めませんでした。");
+      await Promise.all([refreshBackups(), refreshCompanyMaster(), refreshCompanyOptions(), search()]);
+      setBackupMessage("バックアップを取り込みました。");
+    } catch (error) {
+      setBackupError(true);
+      setBackupMessage(error instanceof Error ? error.message : "バックアップを取り込めませんでした。");
+    } finally {
+      setBackupLoading(false);
+    }
+  }
+
   async function restoreBackup(backup: BackupRow) {
-    if (!window.confirm(`${formatBackupTime(backup.created_at)} の状態に全データを戻します。現在のデータは置き換わります。よろしいですか？`)) return;
+    if (!window.confirm(`${formatBackupTime(backup.created_at)} の状態に全データを戻します。復元前に現在のデータをバックアップして保険として保存します。現在のデータは置き換わります。よろしいですか？`)) return;
     setBackupLoading(true);
     setBackupMessage("");
     setBackupError(false);
@@ -422,7 +444,7 @@ export function AdminDashboard() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "バックアップを復元できませんでした。");
       await Promise.all([refreshBackups(), refreshCompanyMaster(), refreshCompanyOptions(), search()]);
-      setBackupMessage("バックアップを復元しました。");
+      setBackupMessage("バックアップを復元しました。復元前のデータも保険として保存されています。");
     } catch (error) {
       setBackupError(true);
       setBackupMessage(error instanceof Error ? error.message : "バックアップを復元できませんでした。");
@@ -1402,6 +1424,21 @@ export function AdminDashboard() {
               {backupLoading ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : <DatabaseBackup size={17} aria-hidden="true" />}
               今すぐバックアップ
             </button>
+            <label className="btn btn-secondary cursor-pointer">
+              <Upload size={17} aria-hidden="true" />
+              JSONを取り込む
+              <input
+                className="sr-only"
+                type="file"
+                accept="application/json,.json"
+                disabled={backupLoading}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) void importBackup(file);
+                }}
+              />
+            </label>
           </div>
 
           {backupMessage ? (
@@ -1433,7 +1470,7 @@ export function AdminDashboard() {
                     <div className="flex flex-wrap gap-2">
                       <a className="btn btn-secondary" href={`/api/admin/backups?id=${encodeURIComponent(backup.id)}`} download>
                         <Download size={16} aria-hidden="true" />
-                        保存
+                        PCに保存
                       </a>
                       <button className="btn btn-secondary" type="button" disabled={backupLoading} onClick={() => void restoreBackup(backup)}>
                         <RotateCcw size={16} aria-hidden="true" />

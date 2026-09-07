@@ -19,11 +19,12 @@ export function createServerClient() {
 
 export function createAdminServerClient() {
   const url = process.env.SUPABASE_URL;
-  const secretKey = process.env.SUPABASE_SECRET_KEY;
+  const secretKey =
+    process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !secretKey) {
     throw new Error(
-      "SUPABASE_URL / SUPABASE_SECRET_KEY を設定してください。",
+      "SUPABASE_URL と SUPABASE_SECRET_KEY（または SUPABASE_SERVICE_ROLE_KEY）を設定してください。",
     );
   }
 
