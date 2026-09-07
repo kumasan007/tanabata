@@ -90,9 +90,6 @@ export function AdminDashboard() {
   const [newPrimaryCompany, setNewPrimaryCompany] = useState("");
   const [newSecondaryCompanies, setNewSecondaryCompanies] = useState("");
   const [newPrimaryRoles, setNewPrimaryRoles] = useState("");
-  const [selectedPrimaryCompany, setSelectedPrimaryCompany] = useState<
-    string | null
-  >(null);
   const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
   const [editPrimaryCompany, setEditPrimaryCompany] = useState("");
   const [editSecondaryCompany, setEditSecondaryCompany] = useState("");
@@ -170,8 +167,8 @@ export function AdminDashboard() {
     if (!companyMaster) return [];
 
     const options =
-      primaryCompany && companyMaster.secondariesByPrimary[primaryCompany]
-        ? companyMaster.secondariesByPrimary[primaryCompany]
+      primaryCompany
+        ? companyMaster.secondariesByPrimary[primaryCompany] ?? []
         : Object.values(companyMaster.secondariesByPrimary).flat();
 
     return [...new Set(options)].sort(compareText);
@@ -189,9 +186,6 @@ export function AdminDashboard() {
       rows,
     }));
   }, [companyRows]);
-  const selectedPrimaryIndex = companyGroups.findIndex(
-    (group) => group.primaryCompany === selectedPrimaryCompany,
-  );
 
   useEffect(() => {
     fetch("/api/admin/session")
@@ -455,6 +449,7 @@ export function AdminDashboard() {
     primaryCompanyName: string,
     direction: -1 | 1,
   ) {
+    if (companyLoading || editingCompanyId) return;
     const index = companyGroups.findIndex(
       (group) => group.primaryCompany === primaryCompanyName,
     );
@@ -467,7 +462,27 @@ export function AdminDashboard() {
       reorderedGroups[destination],
       reorderedGroups[index],
     ];
-    const reordered = reorderedGroups.flatMap((group) => group.rows);
+    await saveCompanyOrder(reorderedGroups.flatMap((group) => group.rows));
+  }
+
+  async function moveSecondaryCompany(
+    group: CompanyGroup,
+    index: number,
+    direction: -1 | 1,
+  ) {
+    if (companyLoading || editingCompanyId) return;
+    const destination = index + direction;
+    if (destination < 0 || destination >= group.rows.length) return;
+    const rows = [...group.rows];
+    [rows[index], rows[destination]] = [rows[destination], rows[index]];
+    await saveCompanyOrder(
+      companyGroups.flatMap((item) =>
+        item.primaryCompany === group.primaryCompany ? rows : item.rows,
+      ),
+    );
+  }
+
+  async function saveCompanyOrder(reordered: CompanyMasterRow[]) {
     setCompanyRows(reordered);
     setMessage("");
     setCompanyLoading(true);
@@ -881,33 +896,29 @@ export function AdminDashboard() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_0.7fr_auto]">
             <label className="field">
               <span className="label">一次会社</span>
-              <input
+              <select
                 className="input"
-                list="admin-primary-companies"
                 value={primaryCompany}
-                onChange={(event) => setPrimaryCompany(event.target.value)}
-                placeholder="すべての一次会社"
-              />
-              <datalist id="admin-primary-companies">
+                onChange={(event) => { setPrimaryCompany(event.target.value); setSecondaryCompany(""); }}
+              >
+                <option value="">すべての一次会社</option>
                 {primaryCompanyOptions.map((company) => (
-                  <option key={company} value={company} />
+                  <option key={company} value={company}>{company}</option>
                 ))}
-              </datalist>
+              </select>
             </label>
             <label className="field">
               <span className="label">二次会社</span>
-              <input
+              <select
                 className="input"
-                list="admin-secondary-companies"
                 value={secondaryCompany}
                 onChange={(event) => setSecondaryCompany(event.target.value)}
-                placeholder="すべての二次会社"
-              />
-              <datalist id="admin-secondary-companies">
+              >
+                <option value="">すべての二次会社</option>
                 {secondaryCompanyOptions.map((company) => (
-                  <option key={company} value={company} />
+                  <option key={company} value={company}>{company}</option>
                 ))}
-              </datalist>
+              </select>
             </label>
             <label className="field">
               <span className="label">表示する予定</span>
@@ -1010,48 +1021,9 @@ export function AdminDashboard() {
             </button>
           </div>
 
-          <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
-            <div className="text-sm text-slate-700">
-              {selectedPrimaryCompany ? (
-                <>
-                  <span className="font-bold text-emerald-900">
-                    {selectedPrimaryCompany}
-                  </span>{" "}
-                  の登録をまとめて移動します
-                </>
-              ) : (
-                "一覧の一次会社名をクリックすると、その会社をまとめて並び替えられます。"
-              )}
-            </div>
-            <div className="flex gap-2">
-              <button
-                className="btn btn-secondary h-9 px-3"
-                type="button"
-                disabled={companyLoading || selectedPrimaryIndex <= 0}
-                onClick={() =>
-                  selectedPrimaryCompany &&
-                  void movePrimaryCompany(selectedPrimaryCompany, -1)
-                }
-              >
-                <ArrowUp size={16} aria-hidden="true" /> 上へ
-              </button>
-              <button
-                className="btn btn-secondary h-9 px-3"
-                type="button"
-                disabled={
-                  companyLoading ||
-                  selectedPrimaryIndex < 0 ||
-                  selectedPrimaryIndex >= companyGroups.length - 1
-                }
-                onClick={() =>
-                  selectedPrimaryCompany &&
-                  void movePrimaryCompany(selectedPrimaryCompany, 1)
-                }
-              >
-                <ArrowDown size={16} aria-hidden="true" /> 下へ
-              </button>
-            </div>
-          </div>
+          <p className="text-sm text-slate-600">
+            ↑・↓で並び替えできます。二次会社は同じ一次会社内で移動します。変更は自動保存されます。
+          </p>
 
           <div className="grid gap-3">
             {companyGroups.length === 0 && (
@@ -1059,15 +1031,29 @@ export function AdminDashboard() {
                 協力会社がまだ登録されていません
               </p>
             )}
-            {companyGroups.map((group) => (
-              <details
-                key={group.primaryCompany}
-                className="rounded-xl border border-border bg-white"
-                onToggle={(event) => {
-                  if (event.currentTarget.open)
-                    setSelectedPrimaryCompany(group.primaryCompany);
-                }}
-              >
+            {companyGroups.map((group, groupIndex) => (
+              <div key={group.primaryCompany} className="flex items-start gap-2">
+                <div className="flex gap-1 pt-3">
+                  <button
+                    className="btn btn-secondary h-9 w-9 p-0"
+                    type="button"
+                    aria-label={`${group.primaryCompany}を上へ`}
+                    disabled={companyLoading || !!editingCompanyId || groupIndex === 0}
+                    onClick={() => void movePrimaryCompany(group.primaryCompany, -1)}
+                  >
+                    <ArrowUp size={16} aria-hidden="true" />
+                  </button>
+                  <button
+                    className="btn btn-secondary h-9 w-9 p-0"
+                    type="button"
+                    aria-label={`${group.primaryCompany}を下へ`}
+                    disabled={companyLoading || !!editingCompanyId || groupIndex === companyGroups.length - 1}
+                    onClick={() => void movePrimaryCompany(group.primaryCompany, 1)}
+                  >
+                    <ArrowDown size={16} aria-hidden="true" />
+                  </button>
+                </div>
+              <details className="min-w-0 flex-1 rounded-xl border border-border bg-white">
                 <summary className="cursor-pointer rounded-xl px-4 py-4 font-semibold text-slate-900 marker:text-emerald-700">
                   <span className="break-words">{group.primaryCompany}</span>
                   <span className="ml-3 text-sm font-normal text-slate-500">
@@ -1087,7 +1073,7 @@ export function AdminDashboard() {
                   >
                     この一次会社に追加
                   </button>
-                  {group.rows.map((row) => (
+                  {group.rows.map((row, rowIndex) => (
                     <div
                       key={row.id}
                       className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
@@ -1138,7 +1124,29 @@ export function AdminDashboard() {
                           </div>
                         </div>
                       )}
-                      <div className="flex items-start gap-2">
+                      <div className="flex flex-wrap items-start gap-2">
+                        {group.rows.length > 1 ? (
+                          <>
+                            <button
+                              className="btn btn-secondary h-9 w-9 p-0"
+                              type="button"
+                              aria-label={`${group.primaryCompany}の${row.secondary_company || "一次会社のみ"}を上へ`}
+                              disabled={companyLoading || !!editingCompanyId || rowIndex === 0}
+                              onClick={() => void moveSecondaryCompany(group, rowIndex, -1)}
+                            >
+                              <ArrowUp size={16} aria-hidden="true" />
+                            </button>
+                            <button
+                              className="btn btn-secondary h-9 w-9 p-0"
+                              type="button"
+                              aria-label={`${group.primaryCompany}の${row.secondary_company || "一次会社のみ"}を下へ`}
+                              disabled={companyLoading || !!editingCompanyId || rowIndex === group.rows.length - 1}
+                              onClick={() => void moveSecondaryCompany(group, rowIndex, 1)}
+                            >
+                              <ArrowDown size={16} aria-hidden="true" />
+                            </button>
+                          </>
+                        ) : null}
                         {editingCompanyId === row.id ? (
                           <>
                             <button
@@ -1184,6 +1192,7 @@ export function AdminDashboard() {
                   ))}
                 </div>
               </details>
+              </div>
             ))}
           </div>
         </section>
