@@ -21,6 +21,8 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
     primaryCount: schedule.primary_count, workArea: schedule.work_area ?? "", workContent: schedule.work_content ?? "",
     nextVisitDate: schedule.next_visit_date, nextPrimaryCount: schedule.next_primary_count,
     nextWorkArea: schedule.next_work_area ?? "", nextWorkContent: schedule.next_work_content ?? "",
+    aerialWorkVehicleCount: schedule.aerial_work_vehicle_count,
+    aerialWorkVehicleDetails: schedule.aerial_work_vehicle_details ?? "",
     notes: schedule.notes ?? "",
     currentSubcompanies: schedule.subcompanies.filter((row) => row.kind === "current").map((row) => ({ secondaryCompany: row.secondary_company ?? "", workerCount: row.worker_count })),
     nextSubcompanies: schedule.subcompanies.filter((row) => row.kind === "next_visit").map((row) => ({ secondaryCompany: row.secondary_company ?? "", workerCount: row.worker_count })),
