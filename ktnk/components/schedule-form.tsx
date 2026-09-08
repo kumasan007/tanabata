@@ -54,6 +54,11 @@ function displayDate(value: string) {
     : "日付を選択";
 }
 
+function displayDateRange(startDate: string, endDate: string) {
+  if (!endDate || startDate === endDate) return displayDate(startDate);
+  return `${displayDate(startDate)}〜${displayDate(endDate)}`;
+}
+
 function SectionHeading({ title }: { title: string }) {
   return <h2 className="mb-5 text-lg font-bold text-slate-900">{title}</h2>;
 }
@@ -275,6 +280,7 @@ export function ScheduleForm({
   const [statusChosen, setStatusChosen] = useState(false);
   const [editingExisting, setEditingExisting] = useState<ScheduleWithSubcompanies | null>(null);
   const [customDate, setCustomDate] = useState(false);
+  const [dateRange, setDateRange] = useState(false);
   const [continuingInput, setContinuingInput] = useState(false);
   const [step, setStep] = useState<
     "existing" | "date" | "status" | "copy" | "visit" | "edit" | "confirm" | "copyContent"
@@ -330,6 +336,7 @@ export function ScheduleForm({
     if (form.status === "work") {
       setForm((current) => ({
         ...emptyForm(current.startDate),
+        endDate: current.endDate,
         primaryCompany: current.primaryCompany,
       }));
     }
@@ -340,7 +347,10 @@ export function ScheduleForm({
     setCopyVersion((version) => version + 1);
     setSubmitState({ status: "idle" });
   }, [step, choice, sourceLoading, sourceError, source, form.status]);
-  const validDate = isWorkingDate(form.startDate);
+  const validDate =
+    isWorkingDate(form.startDate) &&
+    isWorkingDate(form.endDate) &&
+    form.startDate <= form.endDate;
   const ready = Boolean(
     form.primaryCompany &&
     choice &&
@@ -540,6 +550,7 @@ export function ScheduleForm({
       setStatusChosen(false);
       setStep("date");
       setCustomDate(false);
+      setDateRange(false);
       setContinuingInput(false);
       setSummaryOpen(false);
       setCopyVersion((v) => v + 1);
@@ -552,6 +563,7 @@ export function ScheduleForm({
     const next = isWork
       ? {
           ...emptyForm(form.startDate),
+          endDate: form.endDate,
           primaryCompany: form.primaryCompany,
         }
       : { ...form };
@@ -585,10 +597,22 @@ export function ScheduleForm({
     setCopyVersion((v) => v + 1);
     setSubmitState({ status: "idle" });
   }
-  function selectDate(date: string) {
-    patch({ startDate: date, endDate: date });
-    if (isWorkingDate(date)) setStep("existing");
-    else if (date) setSubmitState({ status: "error", message: "日曜日は入力できません。月曜〜土曜を選択してください。" });
+  function selectDate(startDate: string, endDate = startDate) {
+    patch({ startDate, endDate });
+    if (!isWorkingDate(startDate) || !isWorkingDate(endDate)) {
+      if (startDate && endDate) setSubmitState({ status: "error", message: "開始日と終了日は月曜〜土曜を選択してください。" });
+      return;
+    }
+    if (startDate > endDate) {
+      setSubmitState({ status: "error", message: "終了日は開始日以降を選択してください。" });
+      return;
+    }
+    if (startDate !== endDate) {
+      setStep(continuingInput ? "confirm" : "status");
+      setContinuingInput(false);
+      return;
+    }
+    setStep("existing");
   }
   function resetForm() {
     setForm(emptyForm(""));
@@ -597,6 +621,7 @@ export function ScheduleForm({
     setChoosingCompany(true);
     setStep("date");
     setCustomDate(false);
+    setDateRange(false);
     setContinuingInput(false);
     setSummaryOpen(false);
     setSubmitState({ status: "idle" });
@@ -667,7 +692,6 @@ export function ScheduleForm({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             ...form,
-            endDate: form.startDate,
             excludeWeekends: false,
             usePreviousPrimaryCount: false,
             usePreviousNextPrimaryCount: false,
@@ -771,7 +795,7 @@ export function ScheduleForm({
               <p className="min-w-0 text-right break-words">
                 {form.primaryCompany}
                 {validDate && (
-                  <span className="block">{displayDate(form.startDate)}</span>
+                  <span className="block">{displayDateRange(form.startDate, form.endDate)}</span>
                 )}
               </p>
             </div>
@@ -866,6 +890,7 @@ export function ScheduleForm({
                           }
                           onClick={() => {
                             setCustomDate(false);
+                            setDateRange(false);
                             selectDate(option.date);
                           }}
                         >
@@ -884,38 +909,78 @@ export function ScheduleForm({
                       onClick={() => {
                         if (!customDate) {
                           setCustomDate(true);
-                          selectDate("");
+                          setDateRange(false);
+                          patch({ startDate: "", endDate: "" });
                         }
                       }}
                     >
                       任意の日付を選ぶ
                     </button>
                     {customDate && (
-                      <label className="field mt-3" id="custom-work-date">
-                        <span className="label">作業日（月曜〜土曜）</span>
-                        <input
-                          className="input"
-                          type="date"
-                          value={form.startDate}
-                          onChange={(event) =>
-                            patch({
-                              startDate: event.target.value,
-                              endDate: event.target.value,
-                            })
-                          }
-                          required
-                        />
+                      <div className="mt-3 space-y-3" id="custom-work-date">
+                        <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 font-semibold">
+                          <input
+                            type="checkbox"
+                            className="h-6 w-6 shrink-0 accent-primary"
+                            checked={dateRange}
+                            onChange={(event) => {
+                              const checked = event.target.checked;
+                              setDateRange(checked);
+                              if (!checked) patch({ endDate: form.startDate });
+                            }}
+                          />
+                          期間で入力する
+                        </label>
+                        <div className={dateRange ? "grid gap-3 sm:grid-cols-2" : ""}>
+                          <label className="field">
+                            <span className="label">{dateRange ? "開始日" : "作業日"}（月曜〜土曜）</span>
+                            <input
+                              className="input"
+                              type="date"
+                              value={form.startDate}
+                              onChange={(event) => {
+                                const startDate = event.target.value;
+                                patch({
+                                  startDate,
+                                  endDate:
+                                    !dateRange || !form.endDate || form.endDate < startDate
+                                      ? startDate
+                                      : form.endDate,
+                                });
+                              }}
+                              required
+                            />
+                          </label>
+                          {dateRange && (
+                            <label className="field">
+                              <span className="label">終了日（月曜〜土曜）</span>
+                              <input
+                                className="input"
+                                type="date"
+                                min={form.startDate}
+                                value={form.endDate}
+                                onChange={(event) => patch({ endDate: event.target.value })}
+                                required
+                              />
+                            </label>
+                          )}
+                        </div>
+                        {dateRange && (
+                          <p className="text-sm leading-6 text-slate-600">
+                            選択した期間の月曜〜土曜へ同じ内容を入力します。日曜は除きます。
+                          </p>
+                        )}
                         <button
                           type="button"
-                          className="btn btn-primary mt-3 w-full"
+                          className="btn btn-primary w-full"
                           disabled={!validDate}
                           onClick={() => {
-                            selectDate(form.startDate);
+                            selectDate(form.startDate, form.endDate);
                           }}
                         >
                           次へ
                         </button>
-                      </label>
+                      </div>
                     )}
                   </section>
                 )}
@@ -1045,6 +1110,7 @@ export function ScheduleForm({
                           setStatusChosen(true);
                           setForm({
                             ...emptyForm(form.startDate),
+                            endDate: form.endDate,
                             primaryCompany: form.primaryCompany,
                             status: "no_work",
                           });
@@ -1152,7 +1218,7 @@ export function ScheduleForm({
                           <input
                             type="date"
                             className="input"
-                            min={form.startDate}
+                            min={form.endDate}
                             value={form.nextVisitDate ?? ""}
                             onChange={(event) =>
                               patch({
@@ -1166,7 +1232,7 @@ export function ScheduleForm({
                           className="btn btn-primary w-full"
                           disabled={
                             !isWorkingDate(form.nextVisitDate ?? "") ||
-                            (form.nextVisitDate ?? "") <= form.startDate
+                            (form.nextVisitDate ?? "") <= form.endDate
                           }
                           onClick={() => {
                             setChoice(null);
@@ -1185,7 +1251,7 @@ export function ScheduleForm({
                   <section className="panel p-5 sm:p-6">
                     <SectionHeading title="この内容で送信します" />
                     <p className="mb-4 font-semibold text-primary">
-                      {displayDate(form.startDate)}・
+                      {displayDateRange(form.startDate, form.endDate)}・
                       {isWork ? "作業あり" : "作業なし"}
                     </p>
                     {hasPlannedWork ? (
@@ -1569,6 +1635,7 @@ export function ScheduleForm({
                       setSubmitState({ status: "idle" });
                       setContinuingInput(true);
                       setCustomDate(false);
+                      setDateRange(false);
                       setStep("date");
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
@@ -1599,7 +1666,7 @@ export function ScheduleForm({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold">
-                      {displayDate(form.startDate)}・
+                      {displayDateRange(form.startDate, form.endDate)}・
                       {isWork ? "作業あり" : "作業なし"}
                     </p>
                     <p className="mt-1 text-sm text-slate-600">
@@ -1621,7 +1688,7 @@ export function ScheduleForm({
           {ready && (
             <>
               <p className="px-1 text-sm leading-6 text-slate-500">
-                同じ日付・一次会社の再送信は上書きされます。
+                入力済みの日付が含まれる場合は、上書き前に確認します。
               </p>
               <details
                 className="panel p-4"
