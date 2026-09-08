@@ -320,6 +320,19 @@ export function ScheduleForm({
   const sourceIsFuture = Boolean(
     source?.workDate && sourceResult?.today && source.workDate > sourceResult.today,
   );
+  useEffect(() => {
+    if (step !== "copy" || choice !== null || sourceLoading || sourceError || source) return;
+    setForm((current) => ({
+      ...emptyForm(current.startDate),
+      primaryCompany: current.primaryCompany,
+    }));
+    setChoice("new");
+    setStatusChosen(true);
+    setStep("edit");
+    setEditorPart("people");
+    setCopyVersion((version) => version + 1);
+    setSubmitState({ status: "idle" });
+  }, [step, choice, sourceLoading, sourceError, source]);
   const validDate = isWorkingDate(form.startDate);
   const ready = Boolean(
     form.primaryCompany &&
@@ -920,18 +933,7 @@ export function ScheduleForm({
                           </p>
                         </>
                       ) : (
-                        <>
-                          <p className="text-base text-slate-600">
-                            これまでの作業予定はありません。
-                          </p>
-                          <button
-                            type="button"
-                            className="btn btn-primary mt-4 w-full"
-                            onClick={() => answer(false)}
-                          >
-                            新しく入力する
-                          </button>
-                        </>
+                        <LoadingIndicator label="入力画面を準備しています…" />
                       )
                     ) : (
                       <div className="flex items-center justify-between gap-3">
