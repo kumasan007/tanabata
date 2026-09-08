@@ -260,11 +260,11 @@ export function ScheduleForm({
   today,
   initialCompanyMaster,
 }: {
-  initialDate: string;
   today: string;
   initialCompanyMaster: CompanyMaster;
 }) {
   const [form, setForm] = useState<ScheduleSubmitInput>(() => emptyForm(""));
+  const [aerialWorkVehicleCountInput, setAerialWorkVehicleCountInput] = useState("");
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(
     initialCompanyMaster,
   );
@@ -309,6 +309,11 @@ export function ScheduleForm({
   const [summaryVersion, setSummaryVersion] = useState(0);
   const submitting = useRef(false);
   const resultRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setAerialWorkVehicleCountInput(
+      form.aerialWorkVehicleCount === null ? "" : String(form.aerialWorkVehicleCount),
+    );
+  }, [form.aerialWorkVehicleCount]);
   const source =
     sourceResult?.company === form.primaryCompany ? sourceResult.source : null;
   const sourceLoading = Boolean(
@@ -624,6 +629,15 @@ export function ScheduleForm({
       setStep("edit");
       setEditorPart("content");
       setSubmitState({ status: "error", message: "高所作業車を使用するか選択してください。" });
+      return;
+    }
+    if (
+      (form.aerialWorkVehicleCount ?? 0) > 0 &&
+      (!/^\d+$/.test(aerialWorkVehicleCountInput) || Number(aerialWorkVehicleCountInput) < 1)
+    ) {
+      setStep("edit");
+      setEditorPart("content");
+      setSubmitState({ status: "error", message: "高所作業車の希望台数を1以上の整数で入力してください。" });
       return;
     }
     if ((form.aerialWorkVehicleCount ?? 0) > 0 && !form.aerialWorkVehicleFloor.trim()) {
@@ -1402,15 +1416,22 @@ export function ScheduleForm({
                                 label="高所作業車を前回からコピー"
                                 copied={aerialWorkVehicleCopied}
                                 disabled={previousAerialWorkVehicleCount <= 0}
-                                onCopy={() => patch({
-                                  aerialWorkVehicleCount: previousAerialWorkVehicleCount,
-                                  aerialWorkVehicleFloor: previousAerialWorkVehicleFloor,
-                                })}
+                                onCopy={() => {
+                                  setAerialWorkVehicleCountInput(String(previousAerialWorkVehicleCount));
+                                  patch({
+                                    aerialWorkVehicleCount: previousAerialWorkVehicleCount,
+                                    aerialWorkVehicleFloor: previousAerialWorkVehicleFloor,
+                                  });
+                                }}
                               />
                             )}
                           </div>
                           <div className="mt-3 grid grid-cols-2 gap-3">
-                            <button type="button" className="status-option" aria-pressed={(form.aerialWorkVehicleCount ?? 0) > 0} onClick={() => patch({ aerialWorkVehicleCount: Math.max(1, form.aerialWorkVehicleCount ?? 1) })}>使用する</button>
+                            <button type="button" className="status-option" aria-pressed={(form.aerialWorkVehicleCount ?? 0) > 0} onClick={() => {
+                              const count = Math.max(1, form.aerialWorkVehicleCount ?? 1);
+                              setAerialWorkVehicleCountInput(String(count));
+                              patch({ aerialWorkVehicleCount: count });
+                            }}>使用する</button>
                             <button type="button" className="status-option" aria-pressed={form.aerialWorkVehicleCount === 0} onClick={() => patch({ aerialWorkVehicleCount: 0, aerialWorkVehicleFloor: "" })}>使用しない</button>
                           </div>
                           {(form.aerialWorkVehicleCount ?? 0) > 0 && <div className="mt-3 grid gap-3 sm:grid-cols-[9rem_1fr]">
@@ -1423,10 +1444,15 @@ export function ScheduleForm({
                                   inputMode="numeric"
                                   min={1}
                                   step={1}
-                                  value={form.aerialWorkVehicleCount ?? ""}
-                                  onChange={(event) => patch({
-                                    aerialWorkVehicleCount: event.target.value === "" ? null : Math.max(1, Number(event.target.value)),
-                                  })}
+                                  required
+                                  value={aerialWorkVehicleCountInput}
+                                  onChange={(event) => {
+                                    const value = event.target.value;
+                                    setAerialWorkVehicleCountInput(value);
+                                    if (/^\d+$/.test(value) && Number(value) >= 1) {
+                                      patch({ aerialWorkVehicleCount: Number(value) });
+                                    }
+                                  }}
                                 />
                                 <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">台</span>
                               </div>
@@ -1491,6 +1517,14 @@ export function ScheduleForm({
                         }
                         if (editorPart === "content" && hasPlannedWork && form.aerialWorkVehicleCount === null) {
                           setSubmitState({ status: "error", message: "高所作業車を使用するか選択してください。" });
+                          return;
+                        }
+                        if (
+                          editorPart === "content" &&
+                          (form.aerialWorkVehicleCount ?? 0) > 0 &&
+                          (!/^\d+$/.test(aerialWorkVehicleCountInput) || Number(aerialWorkVehicleCountInput) < 1)
+                        ) {
+                          setSubmitState({ status: "error", message: "高所作業車の希望台数を1以上の整数で入力してください。" });
                           return;
                         }
                         if (editorPart === "content" && (form.aerialWorkVehicleCount ?? 0) > 0 && !form.aerialWorkVehicleFloor.trim()) {

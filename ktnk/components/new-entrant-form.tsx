@@ -19,7 +19,7 @@ function SectionHeading({ title }: { title: string }) {
 
 export function NewEntrantForm({ today, initialMaster }: { today: string; initialMaster: CompanyMaster }) {
   const [master, setMaster] = useState<CompanyMaster>(initialMaster);
-  const [form, setForm] = useState<EntrantForm>({ entryDate: today, primaryCompany: "", secondaryCompany: "", personCount: null, personNames: "", nationalityStatus: "", notes: "" });
+  const [form, setForm] = useState<EntrantForm>({ entryDate: "", primaryCompany: "", secondaryCompany: "", personCount: null, personNames: "", nationalityStatus: "", notes: "" });
   const [step, setStep] = useState<Step>("company");
   const [customDate, setCustomDate] = useState(false);
   const [message, setMessage] = useState("");
@@ -82,7 +82,7 @@ export function NewEntrantForm({ today, initialMaster }: { today: string; initia
   }
 
   function resetForm(keepCompany = false) {
-    setForm({ entryDate: today, primaryCompany: keepCompany ? form.primaryCompany : "", secondaryCompany: "", personCount: null, personNames: "", nationalityStatus: "", notes: "" });
+    setForm({ entryDate: "", primaryCompany: keepCompany ? form.primaryCompany : "", secondaryCompany: "", personCount: null, personNames: "", nationalityStatus: "", notes: "" });
     setCustomDate(false); setMessage(""); setStep(keepCompany ? "date" : "company");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }

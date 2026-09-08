@@ -48,7 +48,7 @@ anonキー運用では公開キーを知る利用者がSupabase REST APIを直�
 
 `new row violates row-level security policy` が出る場合は、既存データを残したまま `supabase/fix-rls-policies.sql` をSupabase SQL Editorで実行します。
 
-バックアップ機能を追加する場合は、Supabase DashboardのCronを有効にしてから `supabase/migrations/20260907_add_daily_backups.sql` をSQL Editorで1回実行します。毎日14:59 UTC（日本時間23:59）に業務データを `data_backups` へ保存します。
+バックアップ機能を追加する場合は、Supabase DashboardのCronを有効にしてから `supabase/migrations/20260907_add_daily_backups.sql` と、それ以降のバックアップ用マイグレーションをSQL Editorで順番に1回実行します。毎日14:59 UTC（日本時間23:59）に業務データを `data_backups` へ保存し、10日を過ぎたバックアップだけを自動削除します。管理画面やAPIからの手動削除はできません。
 
 登録時にDB列・制約のズレで失敗する場合は、既存データを削除してよければ `supabase/reset-schema.sql` をSupabase SQL Editorで実行します。`schedule_groups` と `schedule_subcompanies` を作り直します。
 

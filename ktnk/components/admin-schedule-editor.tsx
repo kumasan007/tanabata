@@ -28,7 +28,15 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
     currentSubcompanies: schedule.subcompanies.filter((row) => row.kind === "current").map((row) => ({ secondaryCompany: row.secondary_company ?? "", workerCount: row.worker_count })),
     nextSubcompanies: schedule.subcompanies.filter((row) => row.kind === "next_visit").map((row) => ({ secondaryCompany: row.secondary_company ?? "", workerCount: row.worker_count })),
   }));
+  const [aerialWorkVehicleCountInput, setAerialWorkVehicleCountInput] = useState(
+    schedule.aerial_work_vehicle_count === null ? "" : String(schedule.aerial_work_vehicle_count),
+  );
   useEffect(() => { dialog.current?.showModal(); }, []);
+  useEffect(() => {
+    setAerialWorkVehicleCountInput(
+      form.aerialWorkVehicleCount === null ? "" : String(form.aerialWorkVehicleCount),
+    );
+  }, [form.aerialWorkVehicleCount]);
   const work = form.status === "work";
   const countField = work ? "primaryCount" : "nextPrimaryCount";
   const areaField = work ? "workArea" : "nextWorkArea";
@@ -39,6 +47,10 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
   async function submit(remove = false) {
     if (busy) return;
     if (remove && !window.confirm(`${schedule.work_date}「${schedule.primary_company}」の予定を削除しますか？二次会社の人数内訳も削除されます。`)) return;
+    if (!remove && (form.aerialWorkVehicleCount ?? 0) > 0 && (!/^\d+$/.test(aerialWorkVehicleCountInput) || Number(aerialWorkVehicleCountInput) < 1)) {
+      setError("高所作業車の希望台数を1以上の整数で入力してください。");
+      return;
+    }
     setBusy(true); setError("");
     try {
       const endpoint = workerMode
@@ -84,7 +96,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
         <label className="field"><span className="label">作業エリア{work ? "（必須）" : "（任意）"}</span><input className="input" required={work} value={form[areaField]} onChange={(event) => setForm({ ...form, [areaField]: event.target.value })} /></label>
         <label className="field"><span className="label">作業内容{work ? "（必須）" : "（任意）"}</span><textarea className="textarea" required={work} value={form[contentField]} onChange={(event) => setForm({ ...form, [contentField]: event.target.value })} /></label>
         <label className="field"><span className="label">備考（任意）</span><textarea className="textarea" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
-        {(work || form.nextVisitDate) && <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-3"><p className="label">高所作業車を使用しますか？</p><div className="grid grid-cols-2 gap-2"><button type="button" className="status-option" aria-pressed={(form.aerialWorkVehicleCount ?? 0) > 0} onClick={() => setForm({ ...form, aerialWorkVehicleCount: Math.max(1, form.aerialWorkVehicleCount ?? 1) })}>使用する</button><button type="button" className="status-option" aria-pressed={form.aerialWorkVehicleCount === 0} onClick={() => setForm({ ...form, aerialWorkVehicleCount: 0, aerialWorkVehicleFloor: "" })}>使用しない</button></div>{(form.aerialWorkVehicleCount ?? 0) > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-[8rem_1fr]"><label className="field"><span className="label">希望台数</span><input className="input" type="number" min={1} step={1} value={form.aerialWorkVehicleCount ?? ""} onChange={(event) => setForm({ ...form, aerialWorkVehicleCount: event.target.value === "" ? null : Number(event.target.value) })} /></label><label className="field"><span className="label">使用フロア（必須）</span><input className="input" required maxLength={100} value={form.aerialWorkVehicleFloor} onChange={(event) => setForm({ ...form, aerialWorkVehicleFloor: event.target.value })} /></label></div>}</div>}
+        {(work || form.nextVisitDate) && <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-3"><p className="label">高所作業車を使用しますか？</p><div className="grid grid-cols-2 gap-2"><button type="button" className="status-option" aria-pressed={(form.aerialWorkVehicleCount ?? 0) > 0} onClick={() => { const count = Math.max(1, form.aerialWorkVehicleCount ?? 1); setAerialWorkVehicleCountInput(String(count)); setForm({ ...form, aerialWorkVehicleCount: count }); }}>使用する</button><button type="button" className="status-option" aria-pressed={form.aerialWorkVehicleCount === 0} onClick={() => setForm({ ...form, aerialWorkVehicleCount: 0, aerialWorkVehicleFloor: "" })}>使用しない</button></div>{(form.aerialWorkVehicleCount ?? 0) > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-[8rem_1fr]"><label className="field"><span className="label">希望台数</span><input className="input" type="number" inputMode="numeric" min={1} step={1} required value={aerialWorkVehicleCountInput} onChange={(event) => { const value = event.target.value; setAerialWorkVehicleCountInput(value); if (/^\d+$/.test(value) && Number(value) >= 1) setForm({ ...form, aerialWorkVehicleCount: Number(value) }); }} /></label><label className="field"><span className="label">使用フロア（必須）</span><input className="input" required maxLength={100} value={form.aerialWorkVehicleFloor} onChange={(event) => setForm({ ...form, aerialWorkVehicleFloor: event.target.value })} /></label></div>}</div>}
       </fieldset>
       {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
       <div className="mt-4 flex flex-wrap gap-2">

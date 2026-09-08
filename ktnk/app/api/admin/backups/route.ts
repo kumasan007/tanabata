@@ -147,17 +147,3 @@ export async function PATCH(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
-  if (!assertAdminFromRequest(request)) return unauthorized();
-
-  try {
-    const id = backupIdSchema.safeParse(new URL(request.url).searchParams.get("id"));
-    if (!id.success) return NextResponse.json({ error: "バックアップIDが不正です。" }, { status: 400 });
-
-    const { error } = await createAdminServerClient().from("data_backups").delete().eq("id", id.data);
-    if (error) throw error;
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    return errorResponse(error);
-  }
-}

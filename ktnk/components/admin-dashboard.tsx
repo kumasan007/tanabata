@@ -459,25 +459,6 @@ export function AdminDashboard() {
     }
   }
 
-  async function deleteBackup(backup: BackupRow) {
-    if (!window.confirm(`${formatBackupTime(backup.created_at)} のバックアップを削除しますか？`)) return;
-    setBackupLoading(true);
-    setBackupMessage("");
-    setBackupError(false);
-    try {
-      const response = await fetch(`/api/admin/backups?id=${encodeURIComponent(backup.id)}`, { method: "DELETE" });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "バックアップを削除できませんでした。");
-      await refreshBackups();
-      setBackupMessage("バックアップを削除しました。");
-    } catch (error) {
-      setBackupError(true);
-      setBackupMessage(error instanceof Error ? error.message : "バックアップを削除できませんでした。");
-    } finally {
-      setBackupLoading(false);
-    }
-  }
-
   async function addCompanyMaster() {
     if (!authenticated) return;
     const primaryCompany = newPrimaryCompany.trim();
@@ -1434,7 +1415,7 @@ export function AdminDashboard() {
             <div>
               <h2 className="text-lg font-bold text-slate-950">バックアップ</h2>
               <p className="mt-1 text-sm text-slate-600">
-                毎日23:59（日本時間）に自動保存します。必要な時は手動でも保存できます。
+                毎日23:59（日本時間）に自動保存します。バックアップは手動削除できず、10日を過ぎると自動で整理されます。
               </p>
             </div>
             <button className="btn btn-primary" type="button" disabled={backupLoading} onClick={() => void createBackup()}>
@@ -1492,10 +1473,6 @@ export function AdminDashboard() {
                       <button className="btn btn-secondary" type="button" disabled={backupLoading} onClick={() => void restoreBackup(backup)}>
                         <RotateCcw size={16} aria-hidden="true" />
                         復元
-                      </button>
-                      <button className="btn btn-secondary text-red-700" type="button" disabled={backupLoading} onClick={() => void deleteBackup(backup)}>
-                        <Trash2 size={16} aria-hidden="true" />
-                        削除
                       </button>
                     </div>
                   </div>
