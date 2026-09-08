@@ -44,7 +44,6 @@ type RangePreset =
   | "nextMonth"
   | "selectMonth"
   | "custom";
-type StatusFilter = "work" | "no_work";
 type SortBy = "dateAsc" | "dateDesc" | "primaryAsc";
 type AdminTab = "schedules" | "companies" | "backups";
 type BackupRow = {
@@ -67,7 +66,6 @@ type ScheduleSummaryRow = {
   totalCount: number;
   workArea: string;
   workContent: string;
-  nextVisitDate: string;
   aerialWorkVehicleCount: number | "";
   aerialWorkVehicleFloor: string;
   details: Array<{
@@ -101,7 +99,6 @@ export function AdminDashboard() {
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(
     null,
   );
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("work");
   const [sortBy, setSortBy] = useState<SortBy>("dateAsc");
   const [expandedScheduleKeys, setExpandedScheduleKeys] = useState<string[]>(
     [],
@@ -169,28 +166,15 @@ export function AdminDashboard() {
     dateTo,
     primaryCompany,
     secondaryCompany,
-    statusFilter,
   });
   const hasPendingFilters =
     dateFrom !== appliedFilters.dateFrom ||
     dateTo !== appliedFilters.dateTo ||
     primaryCompany !== appliedFilters.primaryCompany ||
-    secondaryCompany !== appliedFilters.secondaryCompany ||
-    statusFilter !== appliedFilters.statusFilter;
+    secondaryCompany !== appliedFilters.secondaryCompany;
 
   const visibleRows = useMemo(() => {
-    const filtered = result.rows.filter((row) => {
-      if (appliedFilters.statusFilter === "work" && row.status !== "作業あり")
-        return false;
-      if (
-        appliedFilters.statusFilter === "no_work" &&
-        row.status !== "作業なし"
-      )
-        return false;
-      return true;
-    });
-
-    return [...filtered].sort((a, b) => {
+    return [...result.rows].sort((a, b) => {
       if (sortBy === "dateDesc")
         return (
           compareText(b.workDate, a.workDate) ||
@@ -206,11 +190,11 @@ export function AdminDashboard() {
         compareText(a.primaryCompany, b.primaryCompany)
       );
     });
-  }, [result.rows, sortBy, appliedFilters.statusFilter]);
+  }, [result.rows, sortBy]);
 
   const summaryRows = useMemo(
-    () => buildScheduleSummaryRows(visibleRows, appliedFilters.statusFilter),
-    [visibleRows, appliedFilters.statusFilter],
+    () => buildScheduleSummaryRows(visibleRows),
+    [visibleRows],
   );
   const calendarDays = useMemo(
     () => buildCalendarDays(appliedFilters.dateFrom, appliedFilters.dateTo),
@@ -349,7 +333,6 @@ export function AdminDashboard() {
         dateTo,
         primaryCompany,
         secondaryCompany,
-        statusFilter,
       });
     } catch (error) {
       setMessage(
@@ -667,7 +650,6 @@ export function AdminDashboard() {
     const params = new URLSearchParams();
     if (dateFrom) params.set("dateFrom", dateFrom);
     if (dateTo) params.set("dateTo", dateTo);
-    params.set("status", statusFilter);
     if (primaryCompany) params.set("primaryCompany", primaryCompany);
     if (secondaryCompany) params.set("secondaryCompany", secondaryCompany);
     return params.toString();
@@ -1032,19 +1014,6 @@ export function AdminDashboard() {
                 ))}
               </select>
             </label>
-            <label className="field">
-              <span className="label">表示する予定</span>
-              <select
-                className="input"
-                value={statusFilter}
-                onChange={(event) =>
-                  setStatusFilter(event.target.value as StatusFilter)
-                }
-              >
-                <option value="work">作業あり</option>
-                <option value="no_work">作業なし</option>
-              </select>
-            </label>
             <button
               className="btn btn-primary self-end"
               type="submit"
@@ -1390,8 +1359,7 @@ export function AdminDashboard() {
               {appliedFilters.dateFrom === appliedFilters.dateTo
                 ? appliedFilters.dateFrom
                 : `${appliedFilters.dateFrom} 〜 ${appliedFilters.dateTo}`}{" "}
-              ・{" "}
-              {appliedFilters.statusFilter === "work" ? "作業あり" : "作業なし"}
+              ・作業予定
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -1534,19 +1502,7 @@ export function AdminDashboard() {
                       <dd className="break-words text-slate-800">
                         <CopyValue value={row.workContent} label="作業内容" />
                       </dd>
-                      {appliedFilters.statusFilter === "work" && <><dt className="text-slate-500">高所作業車</dt><dd className="break-words text-slate-800">{row.aerialWorkVehicleCount === "" || row.aerialWorkVehicleCount === 0 ? "使用なし" : `${row.aerialWorkVehicleCount}台${row.aerialWorkVehicleFloor ? `（使用フロア：${row.aerialWorkVehicleFloor}）` : ""}`}</dd></>}
-                      {appliedFilters.statusFilter === "no_work" &&
-                      row.nextVisitDate ? (
-                        <>
-                          <dt className="text-slate-500">次回来場</dt>
-                          <dd className="text-slate-800">
-                            <CopyValue
-                              value={row.nextVisitDate}
-                              label="次回来場"
-                            />
-                          </dd>
-                        </>
-                      ) : null}
+                      <dt className="text-slate-500">高所作業車</dt><dd className="break-words text-slate-800">{row.aerialWorkVehicleCount === "" || row.aerialWorkVehicleCount === 0 ? "使用なし" : `${row.aerialWorkVehicleCount}台${row.aerialWorkVehicleFloor ? `（使用フロア：${row.aerialWorkVehicleFloor}）` : ""}`}</dd>
                     </dl>
                     <div className="mt-3 flex justify-end">{scheduleEditButton(row)}</div>
                     {expanded ? <ScheduleDetails row={row} /> : null}
@@ -1614,12 +1570,6 @@ export function AdminDashboard() {
                             )}
                             {row.workDate}
                           </button>
-                          {appliedFilters.statusFilter === "no_work" &&
-                          row.nextVisitDate ? (
-                            <div className="mt-1 text-xs text-slate-500">
-                              来場予定 {row.nextVisitDate}
-                            </div>
-                          ) : null}
                         </td>
                         <td className="whitespace-nowrap px-3 py-3 font-semibold">
                           <CopyValue
@@ -1970,25 +1920,19 @@ function compareText(left: string, right: string) {
 
 function buildScheduleSummaryRows(
   rows: ScheduleListRow[],
-  statusFilter: StatusFilter,
 ): ScheduleSummaryRow[] {
   const groups = new Map<string, ScheduleSummaryRow>();
 
   for (const row of rows) {
-    const workArea = statusFilter === "work" ? row.workArea : row.nextWorkArea;
-    const workContent =
-      statusFilter === "work" ? row.workContent : row.nextWorkContent;
-    const primaryCount =
-      statusFilter === "work" ? row.primaryCount : row.nextPrimaryCount;
-    const secondaryCompany =
-      statusFilter === "work" ? row.secondaryCompany : row.nextSecondaryCompany;
-    const secondaryCount =
-      statusFilter === "work" ? row.secondaryCount : row.nextSecondaryCount;
+    const workArea = row.workArea;
+    const workContent = row.workContent;
+    const primaryCount = row.primaryCount;
+    const secondaryCompany = row.secondaryCompany;
+    const secondaryCount = row.secondaryCount;
     const key = [
-      statusFilter,
+      "work",
       row.workDate,
       row.primaryCompany,
-      row.nextVisitDate,
       workArea,
       workContent,
       row.aerialWorkVehicleCount,
@@ -2005,7 +1949,6 @@ function buildScheduleSummaryRows(
         totalCount: primaryCountNumber,
         workArea,
         workContent,
-        nextVisitDate: row.nextVisitDate,
         aerialWorkVehicleCount: row.aerialWorkVehicleCount,
         aerialWorkVehicleFloor: row.aerialWorkVehicleFloor,
         details: [],

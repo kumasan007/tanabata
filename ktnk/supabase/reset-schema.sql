@@ -73,15 +73,10 @@ $$;
 create table public.schedule_groups (
   id uuid primary key default gen_random_uuid(),
   work_date date not null,
-  status text not null check (status in ('work', 'no_work')),
   primary_company text not null,
   primary_count integer check (primary_count is null or primary_count >= 0),
   work_area text,
   work_content text,
-  next_visit_date date,
-  next_primary_count integer check (next_primary_count is null or next_primary_count >= 0),
-  next_work_area text,
-  next_work_content text,
   aerial_work_vehicle_count integer check (aerial_work_vehicle_count is null or aerial_work_vehicle_count >= 0),
   aerial_work_vehicle_floor text,
   notes text,
@@ -93,7 +88,6 @@ create table public.schedule_groups (
 create table public.schedule_subcompanies (
   id uuid primary key default gen_random_uuid(),
   schedule_group_id uuid not null references public.schedule_groups(id) on delete cascade,
-  kind text not null check (kind in ('current', 'next_visit')),
   secondary_company text,
   worker_count integer check (worker_count is null or worker_count >= 0),
   sort_order integer not null default 0
@@ -116,9 +110,6 @@ create index schedule_groups_work_date_idx
 
 create index schedule_groups_primary_company_idx
   on public.schedule_groups (primary_company);
-
-create index schedule_groups_status_idx
-  on public.schedule_groups (status);
 
 create index schedule_subcompanies_group_id_idx
   on public.schedule_subcompanies (schedule_group_id);

@@ -1,6 +1,3 @@
-export type ScheduleStatus = "work" | "no_work";
-export type SubcompanyKind = "current" | "next_visit";
-
 export type CompanyMaster = {
   primaryCompanies: string[];
   secondariesByPrimary: Record<string, string[]>;
@@ -36,19 +33,12 @@ export type ScheduleSubmitInput = {
   startDate: string;
   endDate: string;
   excludeWeekends: boolean;
-  status: ScheduleStatus;
   primaryCompany: string;
   primaryCount: number | null;
   usePreviousPrimaryCount?: boolean;
   currentSubcompanies: SubcompanyInput[];
   workArea: string;
   workContent: string;
-  nextVisitDate: string | null;
-  nextPrimaryCount: number | null;
-  usePreviousNextPrimaryCount?: boolean;
-  nextSubcompanies: SubcompanyInput[];
-  nextWorkArea: string;
-  nextWorkContent: string;
   aerialWorkVehicleCount: number | null;
   aerialWorkVehicleFloor: string;
   notes: string;
@@ -58,15 +48,10 @@ export type ScheduleSubmitInput = {
 export type ScheduleGroupRow = {
   id: string;
   work_date: string;
-  status: ScheduleStatus;
   primary_company: string;
   primary_count: number | null;
   work_area: string | null;
   work_content: string | null;
-  next_visit_date: string | null;
-  next_primary_count: number | null;
-  next_work_area: string | null;
-  next_work_content: string | null;
   aerial_work_vehicle_count: number | null;
   aerial_work_vehicle_floor: string | null;
   notes: string | null;
@@ -77,7 +62,6 @@ export type ScheduleGroupRow = {
 export type ScheduleSubcompanyRow = {
   id: string;
   schedule_group_id: string;
-  kind: SubcompanyKind;
   secondary_company: string | null;
   worker_count: number | null;
   sort_order: number;
@@ -89,19 +73,12 @@ export type ScheduleWithSubcompanies = ScheduleGroupRow & {
 
 export type ScheduleListRow = {
   workDate: string;
-  status: string;
   primaryCompany: string;
   primaryCount: number | "";
   secondaryCompany: string;
   secondaryCount: number | "";
   workArea: string;
   workContent: string;
-  nextVisitDate: string;
-  nextPrimaryCount: number | "";
-  nextSecondaryCompany: string;
-  nextSecondaryCount: number | "";
-  nextWorkArea: string;
-  nextWorkContent: string;
   aerialWorkVehicleCount: number | "";
   aerialWorkVehicleFloor: string;
   notes: string;
@@ -112,12 +89,8 @@ export type ScheduleListRow = {
 export type ScheduleSummary = {
   id: string;
   workDate: string;
-  status: string;
   workArea: string;
   workContent: string;
-  nextVisitDate: string;
-  nextWorkArea: string;
-  nextWorkContent: string;
   aerialWorkVehicleCount: number;
   aerialWorkVehicleFloor: string;
   companyText: string;

@@ -40,11 +40,10 @@ export function ExistingEntryCheck({ date, company, kind, onNew, onOtherDate, on
   return <section className="panel space-y-4 p-5">
     <h2 className="text-lg font-bold">{exists ? "既に入力されています。" : "この日付の入力はありません。"}</h2>
     {schedules.map((row) => <article key={row.id} className="space-y-2 rounded-md bg-slate-50 p-4">
-      <p className="font-semibold">{row.primary_company}・{row.status === "work" ? "作業あり" : "作業なし"}</p>
-      <p>一次会社 {row.status === "work" ? row.primary_count ?? 0 : row.next_primary_count ?? 0}人</p>
-      {row.subcompanies.filter((sub) => sub.kind === (row.status === "work" ? "current" : "next_visit")).map((sub) => <p key={sub.id}>{sub.secondary_company}・{sub.worker_count ?? 0}人</p>)}
-      {row.next_visit_date && <p>次回来場：{row.next_visit_date}</p>}
-      <p className="whitespace-pre-wrap">{row.status === "work" ? row.work_area : row.next_work_area} / {row.status === "work" ? row.work_content : row.next_work_content}</p>
+      <p className="font-semibold">{row.primary_company}</p>
+      <p>一次会社 {row.primary_count ?? 0}人</p>
+      {row.subcompanies.map((sub) => <p key={sub.id}>{sub.secondary_company}・{sub.worker_count ?? 0}人</p>)}
+      <p className="whitespace-pre-wrap">{row.work_area} / {row.work_content}</p>
       {(row.aerial_work_vehicle_count ?? 0) > 0 && <p>高所作業車：{row.aerial_work_vehicle_count}台 使用フロア：{row.aerial_work_vehicle_floor}</p>}
       {row.notes && <p className="whitespace-pre-wrap">備考：{row.notes}</p>}
       <button type="button" className="btn btn-primary w-full" onClick={() => onSchedule?.(row)}>変更する</button>

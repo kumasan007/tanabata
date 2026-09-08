@@ -1,12 +1,6 @@
 import { z } from "zod";
 import { isWorkingDate } from "@/lib/utils";
 
-const nullableDate = z
-  .string()
-  .trim()
-  .transform((value) => (value === "" ? null : value))
-  .nullable();
-
 const countSchema = z
   .union([z.number(), z.string(), z.null(), z.undefined()])
   .transform((value) => {
@@ -27,112 +21,45 @@ export const scheduleSubmitSchema = z
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "開始日を入力してください。"),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "終了日を入力してください。"),
     excludeWeekends: z.boolean().default(false),
-    status: z.enum(["work", "no_work"]),
     primaryCompany: z.string().min(1, "一次会社を選択してください。"),
     primaryCount: countSchema,
     usePreviousPrimaryCount: z.boolean().optional().default(false),
     currentSubcompanies: z.array(subcompanySchema).default([]),
     workArea: z.string().default(""),
     workContent: z.string().default(""),
-    nextVisitDate: nullableDate,
-    nextPrimaryCount: countSchema,
-    usePreviousNextPrimaryCount: z.boolean().optional().default(false),
-    nextSubcompanies: z.array(subcompanySchema).default([]),
-    nextWorkArea: z.string().default(""),
-    nextWorkContent: z.string().default(""),
     aerialWorkVehicleCount: countSchema.default(null),
     aerialWorkVehicleFloor: z.string().max(100, "高所作業車の使用フロアは100文字以内で入力してください。").default(""),
     notes: z.string().max(2000, "備考は2000文字以内で入力してください。").default(""),
     overwriteExisting: z.boolean().optional().default(false),
   })
   .superRefine((value, ctx) => {
-    for (const field of ["startDate", "endDate", "nextVisitDate"] as const) {
-      if (value[field] && !isWorkingDate(value[field])) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: "日曜日は入力できません。月曜〜土曜を選択してください。" });
+    for (const field of ["startDate", "endDate"] as const) {
+      if (!isWorkingDate(value[field])) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: "日曜日は入力できません。月曜〜土曜を選択してください。" });
     }
-    if (value.startDate > value.endDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["endDate"],
-        message: "終了日は開始日以降にしてください。",
-      });
+    if (value.startDate > value.endDate) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: "終了日は開始日以降にしてください。" });
+
+    for (const [field, label] of [["workArea", "作業エリア"], ["workContent", "作業内容"]] as const) {
+      if (!value[field].trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${label}を入力してください。` });
     }
-
-    if (value.status === "work") {
-      for (const [field, label] of [
-        ["workArea", "作業エリア"],
-        ["workContent", "作業内容"],
-      ] as const) {
-        if (!value[field].trim()) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: [field],
-            message: `${label}を入力してください。`,
-          });
-        }
-      }
-
-      if (!value.usePreviousPrimaryCount && value.primaryCount === null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["primaryCount"],
-          message: "一次会社人数を入力してください。",
-        });
-      }
-
-      const secondaryTotal = value.currentSubcompanies.reduce((sum, row) => {
-        return sum + (row.secondaryCompany.trim() && !row.usePreviousWorkerCount ? row.workerCount ?? 0 : 0);
-      }, 0);
-
-      const hasPreviousSecondaryCount = value.currentSubcompanies.some(
-        (row) => row.secondaryCompany.trim() !== "" && row.usePreviousWorkerCount,
-      );
-
-      if (!value.usePreviousPrimaryCount && value.primaryCount === 0 && secondaryTotal < 1 && !hasPreviousSecondaryCount) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["currentSubcompanies"],
-          message: "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。",
-        });
-      }
+    if (!value.usePreviousPrimaryCount && value.primaryCount === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["primaryCount"], message: "一次会社人数を入力してください。" });
     }
 
-    if (value.status === "no_work" && value.nextVisitDate) {
-      if (value.nextVisitDate <= value.endDate) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nextVisitDate"], message: "次回の作業予定日は作業なしの日より後を選択してください。" });
-      }
-      for (const [field, label] of [["nextWorkArea", "次回の作業エリア"], ["nextWorkContent", "次回の作業内容"]] as const) {
-        if (!value[field].trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${label}を入力してください。` });
-      }
-      if (!value.usePreviousNextPrimaryCount && value.nextPrimaryCount === null) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nextPrimaryCount"], message: "次回の一次会社人数を入力してください。" });
-      }
-      const nextSecondaryTotal = value.nextSubcompanies.reduce((sum, row) => sum + (row.secondaryCompany.trim() && !row.usePreviousWorkerCount ? row.workerCount ?? 0 : 0), 0);
-      const hasPreviousNextSecondaryCount = value.nextSubcompanies.some((row) => row.secondaryCompany.trim() !== "" && row.usePreviousWorkerCount);
-      if (!value.usePreviousNextPrimaryCount && value.nextPrimaryCount === 0 && nextSecondaryTotal < 1 && !hasPreviousNextSecondaryCount) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nextSubcompanies"], message: "次回の合計人数を1人以上にしてください。" });
-      }
+    const secondaryTotal = value.currentSubcompanies.reduce((sum, row) => sum + (row.secondaryCompany.trim() && !row.usePreviousWorkerCount ? row.workerCount ?? 0 : 0), 0);
+    const hasPreviousSecondaryCount = value.currentSubcompanies.some((row) => row.secondaryCompany.trim() !== "" && row.usePreviousWorkerCount);
+    if (!value.usePreviousPrimaryCount && value.primaryCount === 0 && secondaryTotal < 1 && !hasPreviousSecondaryCount) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["currentSubcompanies"], message: "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。" });
     }
-
-    if ((value.status === "work" || value.nextVisitDate) && (value.aerialWorkVehicleCount ?? 0) > 0 && !value.aerialWorkVehicleFloor.trim()) {
+    if ((value.aerialWorkVehicleCount ?? 0) > 0 && !value.aerialWorkVehicleFloor.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["aerialWorkVehicleFloor"], message: "高所作業車の使用フロアを入力してください。" });
     }
 
-    const subcompanyField = value.status === "work" ? "currentSubcompanies" : "nextSubcompanies";
-    for (const [index, subcompany] of value[subcompanyField].entries()) {
-      if (value.status === "work" && subcompany.secondaryCompany.trim() !== "" && !subcompany.usePreviousWorkerCount && subcompany.workerCount === null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [subcompanyField, index, "workerCount"],
-          message: "二次会社人数を入力してください。",
-        });
+    for (const [index, subcompany] of value.currentSubcompanies.entries()) {
+      if (subcompany.secondaryCompany.trim() !== "" && !subcompany.usePreviousWorkerCount && subcompany.workerCount === null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["currentSubcompanies", index, "workerCount"], message: "二次会社人数を入力してください。" });
       }
-
       if (((subcompany.workerCount ?? 0) > 0 || subcompany.usePreviousWorkerCount) && subcompany.secondaryCompany.trim() === "") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [subcompanyField, index, "secondaryCompany"],
-          message: "二次会社人数を入力する場合は、二次会社を選択してください。",
-        });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["currentSubcompanies", index, "secondaryCompany"], message: "二次会社人数を入力する場合は、二次会社を選択してください。" });
       }
     }
   });

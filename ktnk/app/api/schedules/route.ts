@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertAdminFromRequest, createServerClient } from "@/lib/supabase";
 import { getSchedules, saveScheduleSubmission, ScheduleAlreadyExistsError, schedulesToListRows } from "@/lib/schedule-service";
-import type { ScheduleStatus } from "@/lib/types";
 import { scheduleSubmitSchema } from "@/lib/validation";
 import { invalidateScheduleData } from "@/lib/data-cache";
 
@@ -56,7 +55,6 @@ export async function GET(request: Request) {
     const schedules = await getSchedules({
       dateFrom: url.searchParams.get("dateFrom"),
       dateTo: url.searchParams.get("dateTo"),
-      status: parseStatus(url.searchParams.get("status")),
       primaryCompany: url.searchParams.get("primaryCompany"),
       secondaryCompany: url.searchParams.get("secondaryCompany"),
     });
@@ -75,7 +73,6 @@ export async function GET(request: Request) {
     );
   }
 }
-
 export async function DELETE(request: Request) {
   const id = z.string().uuid().safeParse(new URL(request.url).searchParams.get("id"));
   if (!id.success) return NextResponse.json({ error: "予定の指定が正しくありません。" }, { status: 400 });
@@ -88,8 +85,4 @@ export async function DELETE(request: Request) {
   } catch {
     return NextResponse.json({ error: "予定の削除に失敗しました。" }, { status: 500 });
   }
-}
-
-function parseStatus(value: string | null): ScheduleStatus | null {
-  return value === "work" || value === "no_work" ? value : null;
 }

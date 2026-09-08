@@ -2,7 +2,6 @@ import { createServerClient } from "@/lib/supabase";
 import type {
   ScheduleListRow,
   ScheduleGroupRow,
-  ScheduleStatus,
   ScheduleSummary,
   ScheduleSubcompanyRow,
   ScheduleWithSubcompanies,
@@ -28,8 +27,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
     throw new Error("登録対象の日付がありません。");
   }
 
-  const plannedWorkDate = input.status === "no_work" ? input.nextVisitDate : null;
-  const targetDates = [...new Set([...dates, ...(plannedWorkDate ? [plannedWorkDate] : [])])];
+  const targetDates = dates;
   const supabase = createServerClient();
   const { data: existingSchedules, error: existingError } = await supabase
     .from("schedule_groups")
@@ -46,61 +44,31 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
   }
 
   const previous = usesPreviousValue(input)
-    ? await getPreviousScheduleForCopy(input.primaryCompany, input.status, dates[0])
+    ? await getPreviousScheduleForCopy(input.primaryCompany, dates[0])
     : null;
   const resolvedSubcompanies = resolveSubcompanyInputs(
-    input.status === "work" ? input.currentSubcompanies : input.nextSubcompanies,
-    previous?.subcompanies.filter((sub) => sub.kind === (input.status === "work" ? "current" : "next_visit")) ?? [],
+    input.currentSubcompanies,
+    previous?.subcompanies ?? [],
   );
 
   const payloads = dates.map((workDate) => {
     const payload = {
       work_date: workDate,
-      status: input.status,
       primary_company: input.primaryCompany,
-      primary_count: input.status === "work" ? resolvePreviousNumber(input.primaryCount, input.usePreviousPrimaryCount, previous?.primary_count, "一次会社人数") : null,
-      work_area: input.status === "work" ? emptyToNull(resolvePreviousText(input.workArea, previous?.work_area, "作業エリア")) : null,
-      work_content: input.status === "work" ? emptyToNull(resolvePreviousText(input.workContent, previous?.work_content, "作業内容")) : null,
-      next_visit_date: input.status === "no_work" ? input.nextVisitDate : null,
-      next_primary_count: input.status === "no_work" ? resolvePreviousNumber(input.nextPrimaryCount, input.usePreviousNextPrimaryCount, previous?.next_primary_count, "一次会社人数") : null,
-      next_work_area: input.status === "no_work" ? emptyToNull(resolvePreviousText(input.nextWorkArea, previous?.next_work_area, "作業エリア")) : null,
-      next_work_content: input.status === "no_work" ? emptyToNull(resolvePreviousText(input.nextWorkContent, previous?.next_work_content, "作業内容")) : null,
-      aerial_work_vehicle_count: input.status === "work" ? input.aerialWorkVehicleCount : null,
-      aerial_work_vehicle_floor: input.status === "work" ? emptyToNull(input.aerialWorkVehicleFloor) : null,
+      primary_count: resolvePreviousNumber(input.primaryCount, input.usePreviousPrimaryCount, previous?.primary_count, "一次会社人数"),
+      work_area: emptyToNull(resolvePreviousText(input.workArea, previous?.work_area, "作業エリア")),
+      work_content: emptyToNull(resolvePreviousText(input.workContent, previous?.work_content, "作業内容")),
+      aerial_work_vehicle_count: input.aerialWorkVehicleCount,
+      aerial_work_vehicle_floor: emptyToNull(input.aerialWorkVehicleFloor),
       notes: emptyToNull(input.notes),
     };
 
-    if (input.status === "work") {
-      const secondaryTotal = resolvedSubcompanies.reduce((sum, subcompany) => sum + (subcompany.workerCount ?? 0), 0);
-      if (payload.primary_count === 0 && secondaryTotal < 1) {
-        throw new Error("一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。");
-      }
+    const secondaryTotal = resolvedSubcompanies.reduce((sum, subcompany) => sum + (subcompany.workerCount ?? 0), 0);
+    if (payload.primary_count === 0 && secondaryTotal < 1) {
+      throw new Error("一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。");
     }
     return payload;
   });
-
-  if (plannedWorkDate) {
-    const nextPrimaryCount = resolvePreviousNumber(input.nextPrimaryCount, input.usePreviousNextPrimaryCount, previous?.next_primary_count, "一次会社人数");
-    const nextSecondaryTotal = resolvedSubcompanies.reduce((sum, subcompany) => sum + (subcompany.workerCount ?? 0), 0);
-    if ((nextPrimaryCount ?? 0) === 0 && nextSecondaryTotal < 1) {
-      throw new Error("次回の作業予定は合計人数を1人以上にしてください。");
-    }
-    payloads.push({
-      work_date: plannedWorkDate,
-      status: "work",
-      primary_company: input.primaryCompany,
-      primary_count: nextPrimaryCount,
-      work_area: emptyToNull(resolvePreviousText(input.nextWorkArea, previous?.next_work_area, "作業エリア")),
-      work_content: emptyToNull(resolvePreviousText(input.nextWorkContent, previous?.next_work_content, "作業内容")),
-      next_visit_date: null,
-      next_primary_count: null,
-      next_work_area: null,
-      next_work_content: null,
-      aerial_work_vehicle_count: input.aerialWorkVehicleCount,
-      aerial_work_vehicle_floor: emptyToNull(input.aerialWorkVehicleFloor),
-      notes: null,
-    });
-  }
 
   const { data: groups, error: upsertError } = await supabase
     .from("schedule_groups")
@@ -125,8 +93,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
   const subcompanyRows = targetDates.flatMap((date) => {
     const id = savedByDate.get(date);
     if (!id) return [];
-    const generatedWork = Boolean(plannedWorkDate && date === plannedWorkDate);
-    return buildSubcompanyRows(id, resolvedSubcompanies, input.status === "work" || generatedWork ? "current" : "next_visit");
+    return buildSubcompanyRows(id, resolvedSubcompanies);
   });
   if (subcompanyRows.length > 0) {
     const { error: insertError } = await supabase.from("schedule_subcompanies").insert(subcompanyRows);
@@ -143,7 +110,6 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
 export type ScheduleSearchParams = {
   dateFrom?: string | null;
   dateTo?: string | null;
-  status?: ScheduleStatus | null;
   primaryCompany?: string | null;
   secondaryCompany?: string | null;
 };
@@ -155,12 +121,11 @@ async function querySchedules(params: ScheduleSearchParams) {
     .from("schedule_groups")
     .select(
       `
-      id, work_date, status, primary_company, primary_count, work_area,
-      work_content, next_visit_date, next_primary_count, next_work_area,
-      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
+      id, work_date, primary_company, primary_count, work_area,
+      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
       notes, created_at, updated_at,
       schedule_subcompanies (
-        id, schedule_group_id, kind, secondary_company, worker_count, sort_order
+        id, schedule_group_id, secondary_company, worker_count, sort_order
       )
     `,
     )
@@ -173,10 +138,6 @@ async function querySchedules(params: ScheduleSearchParams) {
 
   if (params.dateTo) {
     query = query.lte("work_date", params.dateTo);
-  }
-
-  if (params.status) {
-    query = query.eq("status", params.status);
   }
 
   if (params.primaryCompany) {
@@ -202,10 +163,9 @@ const getCachedSchedules = unstable_cache(
   async (
     dateFrom: string,
     dateTo: string,
-    status: ScheduleStatus | "",
     primaryCompany: string,
     secondaryCompany: string,
-  ) => querySchedules({ dateFrom, dateTo, status: status || null, primaryCompany, secondaryCompany }),
+  ) => querySchedules({ dateFrom, dateTo, primaryCompany, secondaryCompany }),
   ["schedules-v1"],
   { tags: [DATA_CACHE_TAGS.schedules], revalidate: 5 * 60 },
 );
@@ -214,29 +174,26 @@ export async function getSchedules(params: ScheduleSearchParams) {
   return getCachedSchedules(
     params.dateFrom ?? "",
     params.dateTo ?? "",
-    params.status ?? "",
     params.primaryCompany?.trim() ?? "",
     params.secondaryCompany?.trim() ?? "",
   );
 }
 
-async function queryPreviousScheduleForCopy(primaryCompany: string, status: ScheduleStatus, workDate: string) {
+async function queryPreviousScheduleForCopy(primaryCompany: string, workDate: string) {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("schedule_groups")
     .select(
       `
-      id, work_date, status, primary_company, primary_count, work_area,
-      work_content, next_visit_date, next_primary_count, next_work_area,
-      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
+      id, work_date, primary_company, primary_count, work_area,
+      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
       notes, created_at, updated_at,
       schedule_subcompanies (
-        id, schedule_group_id, kind, secondary_company, worker_count, sort_order
+        id, schedule_group_id, secondary_company, worker_count, sort_order
       )
     `,
     )
     .eq("primary_company", primaryCompany)
-    .eq("status", status)
     .lt("work_date", workDate)
     .order("work_date", { ascending: false })
     .limit(1)
@@ -252,27 +209,25 @@ const getCachedPreviousSchedule = unstable_cache(
   { tags: [DATA_CACHE_TAGS.schedules], revalidate: 5 * 60 },
 );
 
-export async function getPreviousScheduleForCopy(primaryCompany: string, status: ScheduleStatus, workDate: string) {
-  return getCachedPreviousSchedule(primaryCompany, status, workDate);
+export async function getPreviousScheduleForCopy(primaryCompany: string, workDate: string) {
+  return getCachedPreviousSchedule(primaryCompany, workDate);
 }
 
-async function queryNextScheduleForCopy(primaryCompany: string, status: ScheduleStatus, workDate: string) {
+async function queryNextScheduleForCopy(primaryCompany: string, workDate: string) {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("schedule_groups")
     .select(
       `
-      id, work_date, status, primary_company, primary_count, work_area,
-      work_content, next_visit_date, next_primary_count, next_work_area,
-      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
+      id, work_date, primary_company, primary_count, work_area,
+      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
       notes, created_at, updated_at,
       schedule_subcompanies (
-        id, schedule_group_id, kind, secondary_company, worker_count, sort_order
+        id, schedule_group_id, secondary_company, worker_count, sort_order
       )
     `,
     )
     .eq("primary_company", primaryCompany)
-    .eq("status", status)
     .gte("work_date", workDate)
     .order("work_date", { ascending: true })
     .limit(1)
@@ -288,24 +243,22 @@ const getCachedNextSchedule = unstable_cache(
   { tags: [DATA_CACHE_TAGS.schedules], revalidate: 5 * 60 },
 );
 
-export async function getNextScheduleForCopy(primaryCompany: string, status: ScheduleStatus, workDate: string) {
-  return getCachedNextSchedule(primaryCompany, status, workDate);
+export async function getNextScheduleForCopy(primaryCompany: string, workDate: string) {
+  return getCachedNextSchedule(primaryCompany, workDate);
 }
 
 async function queryWorkScheduleOnDate(primaryCompany: string, workDate: string) {
   const { data, error } = await createServerClient()
     .from("schedule_groups")
     .select(`
-      id, work_date, status, primary_company, primary_count, work_area,
-      work_content, next_visit_date, next_primary_count, next_work_area,
-      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
+      id, work_date, primary_company, primary_count, work_area,
+      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
       notes, created_at, updated_at,
       schedule_subcompanies (
-        id, schedule_group_id, kind, secondary_company, worker_count, sort_order
+        id, schedule_group_id, secondary_company, worker_count, sort_order
       )
     `)
     .eq("primary_company", primaryCompany)
-    .eq("status", "work")
     .eq("work_date", workDate)
     .maybeSingle();
   if (error) throwSupabaseError(error, "本日の予定取得に失敗しました。");
@@ -332,12 +285,11 @@ async function queryScheduleSummariesByPrimaryCompany(primaryCompany: string): P
     .from("schedule_groups")
     .select(
       `
-      id, work_date, status, primary_company, primary_count, work_area,
-      work_content, next_visit_date, next_primary_count, next_work_area,
-      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
+      id, work_date, primary_company, primary_count, work_area,
+      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
       notes, created_at, updated_at,
       schedule_subcompanies (
-        id, schedule_group_id, kind, secondary_company, worker_count, sort_order
+        id, schedule_group_id, secondary_company, worker_count, sort_order
       )
     `,
     )
@@ -352,7 +304,6 @@ async function queryScheduleSummariesByPrimaryCompany(primaryCompany: string): P
   return (data ?? []).map((row) => {
     const schedule = normalizeScheduleRow(row);
     const subs = schedule.subcompanies
-      .filter((sub) => sub.kind === (schedule.status === "work" ? "current" : "next_visit"))
       .map((sub) => {
         const company = sub.secondary_company ?? "二次会社なし";
         const count = sub.worker_count === null ? "" : `${sub.worker_count}人`;
@@ -362,12 +313,8 @@ async function queryScheduleSummariesByPrimaryCompany(primaryCompany: string): P
     return {
       id: schedule.id,
       workDate: schedule.work_date,
-      status: statusLabel(schedule.status),
       workArea: schedule.work_area ?? "",
       workContent: schedule.work_content ?? "",
-      nextVisitDate: schedule.next_visit_date ?? "",
-      nextWorkArea: schedule.next_work_area ?? "",
-      nextWorkContent: schedule.next_work_content ?? "",
       aerialWorkVehicleCount: schedule.aerial_work_vehicle_count ?? 0,
       aerialWorkVehicleFloor: schedule.aerial_work_vehicle_floor ?? "",
       companyText: subs.join("、"),
@@ -390,74 +337,33 @@ export function schedulesToListRows(schedules: ScheduleWithSubcompanies[]): Sche
   const rows: ScheduleListRow[] = [];
 
   for (const schedule of schedules) {
-    const currentSubs = schedule.subcompanies
-      .filter((sub) => sub.kind === "current")
-      .sort((a, b) => a.sort_order - b.sort_order);
-    const nextSubs = schedule.subcompanies
-      .filter((sub) => sub.kind === "next_visit")
-      .sort((a, b) => a.sort_order - b.sort_order);
-
-    if (schedule.status === "work") {
-      const subs = currentSubs.length > 0 ? currentSubs : [null];
-      for (const sub of subs) {
-        rows.push({
+    const currentSubs = schedule.subcompanies.sort((a, b) => a.sort_order - b.sort_order);
+    const subs = currentSubs.length > 0 ? currentSubs : [null];
+    for (const sub of subs) {
+      rows.push({
           workDate: schedule.work_date,
-          status: statusLabel(schedule.status),
           primaryCompany: schedule.primary_company,
           primaryCount: schedule.primary_count ?? "",
           secondaryCompany: sub?.secondary_company ?? "",
           secondaryCount: sub?.worker_count ?? "",
           workArea: schedule.work_area ?? "",
           workContent: schedule.work_content ?? "",
-          nextVisitDate: "",
-          nextPrimaryCount: "",
-          nextSecondaryCompany: "",
-          nextSecondaryCount: "",
-          nextWorkArea: "",
-          nextWorkContent: "",
           aerialWorkVehicleCount: schedule.aerial_work_vehicle_count ?? "",
           aerialWorkVehicleFloor: schedule.aerial_work_vehicle_floor ?? "",
           notes: schedule.notes ?? "",
           createdAt: formatDateTime(schedule.created_at),
           updatedAt: formatDateTime(schedule.updated_at),
-        });
-      }
-    } else {
-      const subs = nextSubs.length > 0 ? nextSubs : [null];
-      for (const sub of subs) {
-        rows.push({
-          workDate: schedule.work_date,
-          status: statusLabel(schedule.status),
-          primaryCompany: schedule.primary_company,
-          primaryCount: "",
-          secondaryCompany: "",
-          secondaryCount: "",
-          workArea: "",
-          workContent: "",
-          nextVisitDate: schedule.next_visit_date ?? "",
-          nextPrimaryCount: schedule.next_primary_count ?? "",
-          nextSecondaryCompany: sub?.secondary_company ?? "",
-          nextSecondaryCount: sub?.worker_count ?? "",
-          nextWorkArea: schedule.next_work_area ?? "",
-          nextWorkContent: schedule.next_work_content ?? "",
-          aerialWorkVehicleCount: "",
-          aerialWorkVehicleFloor: "",
-          notes: schedule.notes ?? "",
-          createdAt: formatDateTime(schedule.created_at),
-          updatedAt: formatDateTime(schedule.updated_at),
-        });
-      }
+      });
     }
   }
 
   return rows;
 }
 
-function buildSubcompanyRows(scheduleGroupId: string, subcompanies: SubcompanyInput[], kind: "current" | "next_visit") {
+function buildSubcompanyRows(scheduleGroupId: string, subcompanies: SubcompanyInput[]) {
   return subcompanies
     .map((subcompany, index) => ({
       schedule_group_id: scheduleGroupId,
-      kind,
       secondary_company: emptyToNull(subcompany.secondaryCompany),
       worker_count: subcompany.workerCount,
       sort_order: index,
@@ -486,20 +392,11 @@ function resolveSubcompanyInputs(
 }
 
 function usesPreviousValue(input: ScheduleSubmitParsed) {
-  if (input.status === "work") {
-    return (
-      input.workArea === SAME_AS_PREVIOUS ||
-      input.workContent === SAME_AS_PREVIOUS ||
-      input.usePreviousPrimaryCount ||
-      input.currentSubcompanies.some((subcompany) => subcompany.usePreviousWorkerCount)
-    );
-  }
-
   return (
-    input.nextWorkArea === SAME_AS_PREVIOUS ||
-    input.nextWorkContent === SAME_AS_PREVIOUS ||
-    input.usePreviousNextPrimaryCount ||
-    input.nextSubcompanies.some((subcompany) => subcompany.usePreviousWorkerCount)
+    input.workArea === SAME_AS_PREVIOUS ||
+    input.workContent === SAME_AS_PREVIOUS ||
+    input.usePreviousPrimaryCount ||
+    input.currentSubcompanies.some((subcompany) => subcompany.usePreviousWorkerCount)
   );
 }
 
@@ -535,10 +432,6 @@ function normalizeScheduleRow(
 
 function emptyToNull(value: string) {
   return value.trim() === "" ? null : value;
-}
-
-function statusLabel(status: ScheduleStatus) {
-  return status === "work" ? "作業あり" : "作業なし";
 }
 
 function escapeLike(value: string) {

@@ -62,39 +62,36 @@ function previousRoute(previous, calls, today = null, todayCalls = []) {
   }).GET;
 }
 
-test("前回取得APIは不正な日付・未選択会社・不正区分でDBを呼ばない", async () => {
+test("前回取得APIは不正な日付・未選択会社でDBを呼ばない", async () => {
   const calls = [];
   const get = previousRoute(null, calls);
-  for (const query of ["", "primaryCompany=A&status=work&workDate=2026-02-30", "primaryCompany=A&status=invalid&workDate=2026-09-07"]) {
+  for (const query of ["", "primaryCompany=A&workDate=2026-02-30", "workDate=2026-09-07"]) {
     assert.equal((await get({url: `http://localhost/api/schedules/previous?${query}`})).status, 400);
   }
   assert.equal(calls.length, 0);
 });
 
-test("前回取得APIは作業区分に合う実数と内容だけを返す", async () => {
+test("前回取得APIは作業予定の実数と内容だけを返す", async () => {
   const calls = [];
   const get = previousRoute({
-    work_date: "2026-09-01", primary_count: 4, next_primary_count: 7,
-    work_area: "10階", next_work_area: "12階", work_content: "配管", next_work_content: "搬入",
+    work_date: "2026-09-01", primary_count: 4,
+    work_area: "10階", work_content: "配管",
     subcompanies: [
-      { kind: "current", secondary_company: "B", worker_count: 2 },
-      { kind: "next_visit", secondary_company: "C", worker_count: 3 },
+      { secondary_company: "B", worker_count: 2 },
     ],
   }, calls);
-  for (const status of ["work", "no_work"]) {
-    const response = await get({url: `http://localhost/api/schedules/previous?primaryCompany=A&status=${status}&workDate=2026-09-07`});
-    assert.equal(response.status, 200);
-    assert.equal(response.body.previous.primaryCount, status === "work" ? 4 : 7);
-    assert.equal(response.body.previous.workArea, status === "work" ? "10階" : "12階");
-    assert.equal(response.body.previous.workContent, status === "work" ? "配管" : "搬入");
-    assert.equal(response.body.previous.subcompanies.length, 1);
-    assert.equal(response.body.previous.subcompanies[0].workerCount, status === "work" ? 2 : 3);
-  }
-  assert.deepEqual(calls, [["A", "work", "2026-09-07"], ["A", "no_work", "2026-09-07"]]);
+  const response = await get({url: "http://localhost/api/schedules/previous?primaryCompany=A&workDate=2026-09-07"});
+  assert.equal(response.status, 200);
+  assert.equal(response.body.previous.primaryCount, 4);
+  assert.equal(response.body.previous.workArea, "10階");
+  assert.equal(response.body.previous.workContent, "配管");
+  assert.equal(response.body.previous.subcompanies.length, 1);
+  assert.equal(response.body.previous.subcompanies[0].workerCount, 2);
+  assert.deepEqual(calls, [["A", "2026-09-07"]]);
 });
 
 test("前回がない場合は空の結果を返す", async () => {
-  const response = await previousRoute(null, [])({url: "http://localhost/api/schedules/previous?primaryCompany=A&status=work&workDate=2026-09-07"});
+  const response = await previousRoute(null, [])({url: "http://localhost/api/schedules/previous?primaryCompany=A&workDate=2026-09-07"});
   assert.equal(response.status, 200);
   assert.equal(response.body.previous, null);
 });
@@ -103,7 +100,7 @@ test("未来日の本日コピーは前回と区別し、日本時間の本日�
   const base = { primary_count: 2, work_area: "本日エリア", work_content: "本日作業", subcompanies: [] };
   const todayCalls = [];
   const get = previousRoute({ ...base, work_date: "2026-09-07", primary_count: 9 }, [], { ...base, work_date: "2026-09-06" }, todayCalls);
-  const response = await get({url: "http://localhost/api/schedules/previous?primaryCompany=A&status=work&workDate=2026-09-08&includeToday=1"});
+  const response = await get({url: "http://localhost/api/schedules/previous?primaryCompany=A&workDate=2026-09-08&includeToday=1"});
   assert.equal(response.status, 200);
   assert.equal(response.body.previous.primaryCount, 9);
   assert.equal(response.body.today.primaryCount, 2);
@@ -113,20 +110,19 @@ test("未来日の本日コピーは前回と区別し、日本時間の本日�
 
 test("本日データがなくても別日の前回データで代用しない", async () => {
   const get = previousRoute({ work_date: "2026-09-05", primary_count: 4, subcompanies: [] }, []);
-  const response = await get({url: "http://localhost/api/schedules/previous?primaryCompany=A&status=work&workDate=2026-09-08&includeToday=1"});
+  const response = await get({url: "http://localhost/api/schedules/previous?primaryCompany=A&workDate=2026-09-08&includeToday=1"});
   assert.equal(response.status, 200);
   assert.equal(response.body.previous.primaryCount, 4);
   assert.equal(response.body.today, null);
 });
 
-test("本日以前・作業なし・本日コピー未要求では余分な本日照会を行わない", async () => {
+test("本日以前・本日コピー未要求では余分な本日照会を行わない", async () => {
   const todayCalls = [];
   const get = previousRoute(null, [], null, todayCalls);
   for (const query of [
-    "status=work&workDate=2026-09-06&includeToday=1",
-    "status=work&workDate=2026-09-05&includeToday=1",
-    "status=no_work&workDate=2026-09-08&includeToday=1",
-    "status=work&workDate=2026-09-08",
+    "workDate=2026-09-06&includeToday=1",
+    "workDate=2026-09-05&includeToday=1",
+    "workDate=2026-09-08",
   ]) {
     assert.equal((await get({url: `http://localhost/api/schedules/previous?primaryCompany=A&${query}`})).status, 200);
   }
@@ -157,8 +153,7 @@ test("会社選択後のコピー元は本日までの作業ありを検索し�
     const get = copySourceRoute({
       work_date: workDate, primary_count: 3, work_area: "2階", work_content: "配管",
       subcompanies: [
-        { kind: "current", secondary_company: "B", worker_count: 2 },
-        { kind: "next_visit", secondary_company: "C", worker_count: 9 },
+        { secondary_company: "B", worker_count: 2 },
       ],
     }, calls);
     const response = await get({ url: "http://localhost/api/schedules/copy-source?primaryCompany=A" });
@@ -171,7 +166,7 @@ test("会社選択後のコピー元は本日までの作業ありを検索し�
     assert.equal(response.body.source.subcompanies.length, 1);
     assert.equal(response.body.source.subcompanies[0].secondaryCompany, "B");
     assert.equal(response.body.source.subcompanies[0].workerCount, 2);
-    assert.deepEqual(calls, [["A", "work", "2026-09-07"]]);
+    assert.deepEqual(calls, [["A", "2026-09-07"]]);
   }
 });
 
@@ -189,7 +184,7 @@ test("今日以前の作業がない場合は最も近い未来の予定を返�
   const futureCalls = [];
   const get = copySourceRoute(null, previousCalls, false, {
     work_date: "2026-09-10", primary_count: 5, work_area: "3階", work_content: "搬入",
-    subcompanies: [{ kind: "current", secondary_company: "B", worker_count: 2 }],
+    subcompanies: [{ secondary_company: "B", worker_count: 2 }],
   }, futureCalls);
   const response = await get({ url: "http://localhost/api/schedules/copy-source?primaryCompany=A" });
   assert.equal(response.status, 200);
@@ -227,15 +222,11 @@ function submission(patch = {}) {
   return {
     startDate: "2026-09-07",
     endDate: "2026-09-07",
-    status: "work",
     primaryCompany: "テスト一次会社",
     primaryCount: 1,
     workArea: "10階",
     workContent: "配管作業",
     currentSubcompanies: [],
-    nextVisitDate: null,
-    nextPrimaryCount: null,
-    nextSubcompanies: [],
     ...patch,
   };
 }
@@ -272,42 +263,6 @@ function serviceWithDatabase(previous = null) {
   return { saveScheduleSubmission, mutations, previousReads: () => previousReads };
 }
 
-test("作業なしは人数と来場予定を入力せず保存できる", async () => {
-  const input = scheduleSubmitSchema.parse(submission({ status: "no_work", primaryCount: null }));
-  const service = serviceWithDatabase();
-  await service.saveScheduleSubmission(input);
-  const saved = service.mutations.find((mutation) => mutation.operation === "upsert").data;
-  assert.equal(saved.next_primary_count, null);
-  assert.equal(saved.next_visit_date, null);
-  assert.equal(service.mutations.some((mutation) => mutation.operation === "insert"), false);
-});
-
-test("作業なしは0人と人数未定の二次会社を受け付ける", async () => {
-  const input = scheduleSubmitSchema.parse(submission({
-    status: "no_work",
-    nextPrimaryCount: 0,
-    nextSubcompanies: [{ secondaryCompany: "テスト二次会社", workerCount: null }],
-  }));
-  const service = serviceWithDatabase();
-  await service.saveScheduleSubmission(input);
-  const rows = service.mutations.find((mutation) => mutation.operation === "insert").data;
-  assert.equal(rows[0].worker_count, null);
-  assert.equal(rows[0].kind, "next_visit");
-});
-
-test("表示していない予定区分の二次会社入力と前回参照を無視する", async () => {
-  for (const status of ["work", "no_work"]) {
-    const inactiveField = status === "work" ? "nextSubcompanies" : "currentSubcompanies";
-    const input = scheduleSubmitSchema.parse(submission({
-      status,
-      [inactiveField]: [{ secondaryCompany: "", workerCount: 1, usePreviousWorkerCount: true }],
-    }));
-    const service = serviceWithDatabase();
-    await service.saveScheduleSubmission(input);
-    assert.equal(service.previousReads(), 0);
-  }
-});
-
 test("作業ありでは人数未入力・全社0人・会社名のない人数を拒否する", () => {
   for (const patch of [
     { primaryCount: null },
@@ -325,7 +280,6 @@ test("前回の人数・エリア・内容・二次会社がない場合、既�
     { workArea: "前回と同じ" },
     { workContent: "前回と同じ" },
     { currentSubcompanies: [{ secondaryCompany: "テスト二次会社", workerCount: null, usePreviousWorkerCount: true }] },
-    { status: "no_work", usePreviousNextPrimaryCount: true },
   ]) {
     const service = serviceWithDatabase();
     const input = scheduleSubmitSchema.parse(submission(patch));
@@ -341,7 +295,7 @@ test("一次0人でも二次会社の前回人数を解決して保存できる"
   }));
   const service = serviceWithDatabase({
     primary_count: 0,
-    schedule_subcompanies: [{ secondary_company: "テスト二次会社", worker_count: 3, kind: "current", sort_order: 0 }],
+    schedule_subcompanies: [{ secondary_company: "テスト二次会社", worker_count: 3, sort_order: 0 }],
   });
   await service.saveScheduleSubmission(input);
   const rows = service.mutations.find((mutation) => mutation.operation === "insert").data;
@@ -360,7 +314,7 @@ test("前回二次会社の人数が未定なら、既存データを変更せ�
     currentSubcompanies: [{ secondaryCompany: "テスト二次会社", workerCount: null, usePreviousWorkerCount: true }],
   }));
   const service = serviceWithDatabase({
-    schedule_subcompanies: [{ secondary_company: "テスト二次会社", worker_count: null, kind: "current", sort_order: 0 }],
+    schedule_subcompanies: [{ secondary_company: "テスト二次会社", worker_count: null, sort_order: 0 }],
   });
   await assert.rejects(service.saveScheduleSubmission(input), /前回人数/);
   assert.equal(service.mutations.length, 0);
@@ -376,21 +330,6 @@ test("通常の作業予定はエリア・内容の未入力や空白だけを�
     }
   }
   assert.equal(scheduleSubmitSchema.safeParse(submission()).success, true);
-});
-
-test("次回来場予定日を指定したら通常作業の必須項目を求める", () => {
-  for (const field of ["nextWorkArea", "nextWorkContent"]) {
-    const result = scheduleSubmitSchema.safeParse(submission({
-      status: "no_work",
-      nextVisitDate: "2026-09-10",
-      nextPrimaryCount: 1,
-      nextWorkArea: "10階",
-      nextWorkContent: "配管作業",
-      [field]: "",
-    }));
-    assert.equal(result.success, false);
-    assert.ok(result.error.issues.some((issue) => issue.path[0] === field));
-  }
 });
 
 test("company deletion requires admin and exactly one target", async () => {

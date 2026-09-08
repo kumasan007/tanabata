@@ -5,6 +5,7 @@ import { isWorkingDate } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
+import { NewEntrantEditor } from "@/components/new-entrant-editor";
 import type { CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 
 function monthRange(month: string) {
@@ -32,6 +33,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
   const [schedules, setSchedules] = useState<ScheduleWithSubcompanies[]>([]);
   const [entrants, setEntrants] = useState<NewEntrantRecord[]>([]);
   const [editing, setEditing] = useState<ScheduleWithSubcompanies | null>(null);
+  const [editingEntrant, setEditingEntrant] = useState<NewEntrantRecord | null>(null);
   const [message, setMessage] = useState("");
   const [version, setVersion] = useState(0);
   const selectedDaySectionRef = useRef<HTMLElement>(null);
@@ -83,10 +85,8 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
   }
 
   function totalWorkers(row: ScheduleWithSubcompanies) {
-    if (row.status === "no_work") return 0;
-    const kind = row.status === "work" ? "current" : "next_visit";
-    return (row.status === "work" ? row.primary_count ?? 0 : row.next_primary_count ?? 0) +
-      row.subcompanies.filter((sub) => sub.kind === kind).reduce((sum, sub) => sum + (sub.worker_count ?? 0), 0);
+    return (row.primary_count ?? 0) +
+      row.subcompanies.reduce((sum, sub) => sum + (sub.worker_count ?? 0), 0);
   }
 
   return <div className="min-h-screen pb-10">
@@ -123,7 +123,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
             const dayEntrants = entrantMap[date] ?? [];
             const total = daySchedules.reduce((sum, row) => sum + totalWorkers(row), 0);
             const totalAerialVehicles = daySchedules.reduce(
-              (sum, row) => sum + (row.status === "work" ? row.aerial_work_vehicle_count ?? 0 : 0),
+              (sum, row) => sum + (row.aerial_work_vehicle_count ?? 0),
               0,
             );
             const isSaturday = new Date(`${date}T00:00:00`).getDay() === 6;
@@ -132,18 +132,17 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
               {!company && daySchedules.length > 0 && <span className="mt-1 flex flex-col rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-semibold leading-4 text-emerald-900 sm:text-xs"><span>{daySchedules.length}社</span><span>{total}人</span>{totalAerialVehicles > 0 && <span className="text-sky-800"><span className="hidden sm:inline">高車：</span>{totalAerialVehicles}台</span>}</span>}
               {!company && dayEntrants.length > 0 && <span className="mt-1 block text-[10px] font-semibold leading-4 text-amber-700 sm:text-xs">新規 {dayEntrants.length}社</span>}
               {company && daySchedules.map((row) => {
-                const area = row.status === "work" ? row.work_area : row.next_work_area;
-                const content = row.status === "work" ? row.work_content : row.next_work_content;
+                const area = row.work_area;
+                const content = row.work_content;
                 return <div key={row.id} className="relative mt-1 min-w-0 rounded bg-emerald-100 p-1 pr-6 text-[10px] leading-4 text-emerald-950 sm:text-xs">
                   <button type="button" className="absolute right-0.5 top-0.5 rounded p-0.5 hover:bg-white/70" onClick={(event) => { event.stopPropagation(); setSelectedDate(date); setEditing(row); }} aria-label={`${date}の予定を編集`} title="予定を編集"><Pencil size={12} aria-hidden="true" /></button>
-                  <p className="font-bold">{row.status === "work" ? `${totalWorkers(row)}人` : "作業なし"}</p>
-                  {row.status === "no_work" && row.next_visit_date && <p className="truncate" title={`次回 ${row.next_visit_date}`}>次回 {row.next_visit_date.slice(5).replace("-", "/")}</p>}
+                  <p className="font-bold">{totalWorkers(row)}人</p>
                   <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
                   <p className="line-clamp-2 break-words" title={content ?? ""}>{content || "作業内容未入力"}</p>
-                  {row.status === "work" && (row.aerial_work_vehicle_count ?? 0) > 0 && <p className="truncate font-semibold text-sky-800">高車：{row.aerial_work_vehicle_count}台</p>}
+                  {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="truncate font-semibold text-sky-800">高車：{row.aerial_work_vehicle_count}台</p>}
                 </div>;
               })}
-              {company && dayEntrants.map((row) => <div key={row.id} className="mt-1 min-w-0 rounded bg-amber-100 p-1 text-[10px] leading-4 text-amber-900 sm:text-xs"><p className="truncate font-semibold" title={row.secondary_company}>新規：{row.secondary_company}</p><p>{row.person_count}人・{row.nationality_status === "includes_foreign" ? "外国籍含む" : row.nationality_status === "japanese_only" ? "日本籍" : "未確認"}</p></div>)}
+              {company && dayEntrants.map((row) => <div key={row.id} className="relative mt-1 min-w-0 rounded bg-amber-100 p-1 pr-6 text-[10px] leading-4 text-amber-900 sm:text-xs"><button type="button" className="absolute right-0.5 top-0.5 rounded p-0.5 hover:bg-white/70" onClick={(event) => { event.stopPropagation(); setSelectedDate(date); setEditingEntrant(row); }} aria-label={`${row.secondary_company}の新規入場を編集`} title="新規入場を編集"><Pencil size={12} aria-hidden="true" /></button><p className="truncate font-semibold" title={row.secondary_company}>新規：<CopyValue value={row.secondary_company} label="二次会社名" /></p><p><CopyValue value={row.person_count} label="新規入場人数">{row.person_count}人</CopyValue>・{row.nationality_status === "includes_foreign" ? "外国籍含む" : row.nationality_status === "japanese_only" ? "日本籍" : "未確認"}</p></div>)}
             </div>;
           })}
         </div>
@@ -156,9 +155,9 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
         </div>
         {loading ? <LoadingIndicator label="予定を読み込み中…" /> : selectedSchedules.length === 0 && selectedEntrants.length === 0 ? <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {selectedSchedules.map((row) => {
-            const subs = row.subcompanies.filter((sub) => sub.kind === (row.status === "work" ? "current" : "next_visit"));
-            const area = row.status === "work" ? row.work_area : `次回 ${row.next_visit_date ?? "未定"}`;
-            const content = row.status === "work" ? row.work_content : row.next_work_content;
+            const subs = row.subcompanies;
+            const area = row.work_area;
+            const content = row.work_content;
             return <article key={row.id} className="panel relative min-w-0 p-3 pr-11 text-sm">
               <button type="button" className="btn btn-secondary absolute right-2 top-2 h-8 min-h-8 w-8 p-0" onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
               <div className="flex min-w-0 items-center gap-2 pr-1">
@@ -171,8 +170,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                   </span>
                 )}
               </div>
-              {row.status === "work" ? (
-                <details className="mt-2 rounded-md border border-border bg-slate-50">
+              <details className="mt-2 rounded-md border border-border bg-slate-50">
                   <summary className="cursor-pointer px-2.5 py-2 font-semibold text-slate-700 marker:text-emerald-700">
                     合計 <CopyValue value={totalWorkers(row)} label="合計人数">{totalWorkers(row)}人</CopyValue>
                   </summary>
@@ -198,36 +196,19 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                       </div>
                     ))}
                   </div>
-                </details>
-              ) : (
-                <>
-                  <p className="mt-0.5 font-semibold text-primary">作業なし</p>
-                  {subs.length > 0 && (
-                    <details className="mt-2 rounded-md border border-border bg-slate-50">
-                      <summary className="cursor-pointer px-2.5 py-2 font-semibold text-slate-700 marker:text-emerald-700">次回の二次会社 {subs.length}社</summary>
-                      <div className="grid gap-1.5 border-t border-border p-2.5">
-                        {subs.map((sub) => (
-                          <div key={sub.id} className="flex min-w-0 items-baseline justify-between gap-3">
-                            <span className="min-w-0 break-words">{sub.secondary_company ? <CopyValue value={sub.secondary_company} label="二次会社名" /> : "会社名未入力"}</span>
-                            <span className="shrink-0 font-semibold text-primary"><CopyValue value={sub.worker_count ?? 0} label="二次会社人数">{sub.worker_count ?? 0}人</CopyValue></span>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  )}
-                </>
-              )}
-              <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label={row.status === "work" ? "作業エリア" : "次回来場"} /> : "エリア未入力"}</p>
+              </details>
+              <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label="作業エリア" /> : "エリア未入力"}</p>
               <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" /> : "作業内容未入力"}</p>
-              {row.status === "work" && <p className="mt-1 text-sky-800">高車：{(row.aerial_work_vehicle_count ?? 0) > 0 ? <><CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数">{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" />）</>}</> : "使用なし"}</p>}
+              <p className="mt-1 text-sky-800">高車：{(row.aerial_work_vehicle_count ?? 0) > 0 ? <><CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数">{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" />）</>}</> : "使用なし"}</p>
               {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" /></p>}
             </article>;
           })}
-          {selectedEntrants.map((row) => <article key={row.id} className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm"><p className="font-bold">新規入場</p><p className="mt-1 break-words"><span className="font-semibold">{row.primary_company}</span><span className="mx-1 text-slate-400">→</span>{row.secondary_company}</p><p>{row.person_count}人・{row.nationality_status === "includes_foreign" ? "外国籍を含む" : row.nationality_status === "japanese_only" ? "日本籍のみ" : "国籍未確認"}</p></article>)}
+          {selectedEntrants.map((row) => <article key={row.id} className="relative rounded-md border border-amber-200 bg-amber-50 p-3 pr-11 text-sm"><button type="button" className="btn btn-secondary absolute right-2 top-2 h-8 min-h-8 w-8 p-0" onClick={() => setEditingEntrant(row)} aria-label={`${row.secondary_company}の新規入場を編集`} title="新規入場を編集"><Pencil size={15} aria-hidden="true" /></button><p className="font-bold">新規入場</p><p className="mt-1 break-words"><span className="font-semibold"><CopyValue value={row.primary_company} label="一次会社名" /></span><span className="mx-1 text-slate-400">→</span><CopyValue value={row.secondary_company} label="二次会社名" /></p><p><CopyValue value={row.person_count} label="新規入場人数">{row.person_count}人</CopyValue>・{row.nationality_status === "includes_foreign" ? "外国籍を含む" : row.nationality_status === "japanese_only" ? "日本籍のみ" : "国籍未確認"}</p></article>)}
         </div>}
       </section>
     </main>
     {editing && <AdminScheduleEditor schedule={editing} master={master} workerMode onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setVersion((v) => v + 1); }} />}
+    {editingEntrant && <NewEntrantEditor record={editingEntrant} master={master} onClose={() => setEditingEntrant(null)} onSaved={() => { setEditingEntrant(null); setVersion((v) => v + 1); }} />}
   </div>;
 }
 

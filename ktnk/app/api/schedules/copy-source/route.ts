@@ -24,9 +24,9 @@ export async function GET(request: Request) {
     const today = todayInTokyoString();
     // Prefer the latest work day up to today, then fall back to the nearest future plan.
     const tomorrow = toDateString(addDays(parseLocalDate(today)!, 1));
-    const previous = await getPreviousScheduleForCopy(company, "work", tomorrow);
+    const previous = await getPreviousScheduleForCopy(company, tomorrow);
     const row =
-      previous ?? await getNextScheduleForCopy(company, "work", tomorrow);
+      previous ?? await getNextScheduleForCopy(company, tomorrow);
     const source: PreviousSchedule | null = row
       ? {
           workDate: row.work_date,
@@ -35,12 +35,10 @@ export async function GET(request: Request) {
           workContent: row.work_content,
           aerialWorkVehicleCount: row.aerial_work_vehicle_count,
           aerialWorkVehicleFloor: row.aerial_work_vehicle_floor,
-          subcompanies: row.subcompanies
-            .filter((sub) => sub.kind === "current")
-            .map((sub) => ({
+          subcompanies: row.subcompanies.map((sub) => ({
               secondaryCompany: sub.secondary_company ?? "",
               workerCount: sub.worker_count,
-            })),
+          })),
         }
       : null;
     return NextResponse.json(

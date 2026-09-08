@@ -11,15 +11,10 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const company = params.get("primaryCompany") ?? "";
-  const status = params.get("status");
   const date = params.get("workDate") ?? "";
-  if (
-    !company.trim() ||
-    !parseLocalDate(date) ||
-    (status !== "work" && status !== "no_work")
-  ) {
+  if (!company.trim() || !parseLocalDate(date)) {
     return NextResponse.json(
-      { error: "会社・作業日・作業区分を確認してください。" },
+      { error: "会社・作業日を確認してください。" },
       { status: 400 },
     );
   }
@@ -27,18 +22,17 @@ export async function GET(request: Request) {
     const todayDate = todayInTokyoString();
     const includeToday =
       params.get("includeToday") === "1" &&
-      status === "work" &&
       date > todayDate;
     const [row, todayRow] = await Promise.all([
-      getPreviousScheduleForCopy(company, status, date),
+      getPreviousScheduleForCopy(company, date),
       includeToday
         ? getWorkScheduleOnDate(company, todayDate)
         : Promise.resolve(null),
     ]);
     return NextResponse.json(
       {
-        previous: toCopyData(row, status === "work"),
-        today: toCopyData(todayRow, true),
+        previous: toCopyData(row),
+        today: toCopyData(todayRow),
       },
       { headers: { "Cache-Control": "no-store" } },
     );
@@ -50,24 +44,19 @@ export async function GET(request: Request) {
   }
 }
 
-function toCopyData(
-  row: ScheduleWithSubcompanies | null,
-  work: boolean,
-): PreviousSchedule | null {
+function toCopyData(row: ScheduleWithSubcompanies | null): PreviousSchedule | null {
   return row
     ? {
         workDate: row.work_date,
-        primaryCount: work ? row.primary_count : row.next_primary_count,
-        workArea: work ? row.work_area : row.next_work_area,
-        workContent: work ? row.work_content : row.next_work_content,
-        aerialWorkVehicleCount: work ? row.aerial_work_vehicle_count : null,
-        aerialWorkVehicleFloor: work ? row.aerial_work_vehicle_floor : null,
-        subcompanies: row.subcompanies
-          .filter((sub) => sub.kind === (work ? "current" : "next_visit"))
-          .map((sub) => ({
+        primaryCount: row.primary_count,
+        workArea: row.work_area,
+        workContent: row.work_content,
+        aerialWorkVehicleCount: row.aerial_work_vehicle_count,
+        aerialWorkVehicleFloor: row.aerial_work_vehicle_floor,
+        subcompanies: row.subcompanies.map((sub) => ({
             secondaryCompany: sub.secondary_company ?? "",
             workerCount: sub.worker_count,
-          })),
+        })),
       }
     : null;
 }

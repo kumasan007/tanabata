@@ -18,6 +18,8 @@ const inputSchema = z.object({
   notes: z.string().trim().max(2000).default(""),
 });
 
+const updateSchema = inputSchema.extend({ id: z.string().uuid() });
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -46,6 +48,30 @@ export async function POST(request: Request) {
       nationality_status: value.nationalityStatus,
       notes: value.notes || null,
     }, { onConflict: "entry_date,primary_company,secondary_company" }).select("*").single();
+    if (error) throw error;
+    invalidateEntrantData();
+    return NextResponse.json({ record: data });
+  } catch (error) {
+    return NextResponse.json({ error: databaseErrorMessage(error) }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const parsed = updateSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 });
+    const value = parsed.data;
+    const primaryExists = await ensureSecondaryCompany(value.primaryCompany, value.secondaryCompany);
+    if (!primaryExists) return NextResponse.json({ error: "一次会社が見つかりません。会社一覧を読み込み直してください。" }, { status: 404 });
+    const { data, error } = await createServerClient().from("new_entrant_records").update({
+      entry_date: value.entryDate,
+      primary_company: value.primaryCompany,
+      secondary_company: value.secondaryCompany,
+      person_count: value.personCount,
+      person_names: value.personNames,
+      nationality_status: value.nationalityStatus,
+      notes: value.notes || null,
+    }).eq("id", value.id).select("*").single();
     if (error) throw error;
     invalidateEntrantData();
     return NextResponse.json({ record: data });

@@ -25,19 +25,12 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   startDate: date,
   endDate: date,
   excludeWeekends: false,
-  status: "work",
   primaryCompany: "",
   primaryCount: 0,
   usePreviousPrimaryCount: false,
   currentSubcompanies: [],
   workArea: "",
   workContent: "",
-  nextVisitDate: null,
-  nextPrimaryCount: 0,
-  usePreviousNextPrimaryCount: false,
-  nextSubcompanies: [],
-  nextWorkArea: "",
-  nextWorkContent: "",
   aerialWorkVehicleCount: null,
   aerialWorkVehicleFloor: "",
   notes: "",
@@ -277,17 +270,13 @@ export function ScheduleForm({
   const [companyRetry, setCompanyRetry] = useState(0);
   const [choosingCompany, setChoosingCompany] = useState(true);
   const [choice, setChoice] = useState<"same" | "new" | null>(null);
-  const [statusChosen, setStatusChosen] = useState(false);
   const [editingExisting, setEditingExisting] = useState<ScheduleWithSubcompanies | null>(null);
   const [customDate, setCustomDate] = useState(false);
   const [dateRange, setDateRange] = useState(false);
   const [continuingInput, setContinuingInput] = useState(false);
   const [step, setStep] = useState<
-    "existing" | "date" | "status" | "copy" | "visit" | "edit" | "confirm" | "copyContent"
+    "existing" | "date" | "copy" | "edit" | "confirm" | "copyContent"
   >("date");
-  const [visitChoice, setVisitChoice] = useState<"date" | "unknown" | null>(
-    null,
-  );
   const [editorPart, setEditorPart] = useState<"people" | "content">("people");
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -333,20 +322,17 @@ export function ScheduleForm({
   );
   useEffect(() => {
     if (step !== "copy" || choice !== null || sourceLoading || sourceError || source) return;
-    if (form.status === "work") {
-      setForm((current) => ({
-        ...emptyForm(current.startDate),
-        endDate: current.endDate,
-        primaryCompany: current.primaryCompany,
-      }));
-    }
+    setForm((current) => ({
+      ...emptyForm(current.startDate),
+      endDate: current.endDate,
+      primaryCompany: current.primaryCompany,
+    }));
     setChoice("new");
-    setStatusChosen(true);
     setStep("edit");
     setEditorPart("people");
     setCopyVersion((version) => version + 1);
     setSubmitState({ status: "idle" });
-  }, [step, choice, sourceLoading, sourceError, source, form.status]);
+  }, [step, choice, sourceLoading, sourceError, source]);
   const validDate =
     isWorkingDate(form.startDate) &&
     isWorkingDate(form.endDate) &&
@@ -355,35 +341,27 @@ export function ScheduleForm({
     form.primaryCompany &&
     choice &&
     validDate &&
-    statusChosen &&
     !choosingCompany &&
     step === "confirm",
   );
   const showEditor = !choosingCompany && step === "edit";
-  const isWork = form.status === "work";
-  const hasPlannedWork = isWork || Boolean(form.nextVisitDate);
   const busy = submitState.status === "submitting";
-  const activeRows = isWork ? form.currentSubcompanies : form.nextSubcompanies;
-  const activeCount = isWork ? form.primaryCount : form.nextPrimaryCount;
+  const activeRows = form.currentSubcompanies;
+  const activeCount = form.primaryCount;
   const totalCount =
     (activeCount ?? 0) +
     activeRows.reduce((sum, row) => sum + (row.workerCount ?? 0), 0);
-  const area = isWork ? form.workArea : form.nextWorkArea;
-  const content = isWork ? form.workContent : form.nextWorkContent;
+  const area = form.workArea;
+  const content = form.workContent;
   const secondaryOptions = useMemo(
     () => companyMaster?.secondariesByPrimary[form.primaryCompany] ?? [],
     [companyMaster, form.primaryCompany],
   );
   const previousKey = JSON.stringify([
     form.primaryCompany,
-    form.status,
     form.startDate,
   ]);
-  const previous = isWork
-    ? previousResult?.key === previousKey
-      ? previousResult.previous
-      : null
-    : source;
+  const previous = previousResult?.key === previousKey ? previousResult.previous : null;
   const previousCounts = new Map(
     previous?.subcompanies.map((row) => [
       row.secondaryCompany,
@@ -449,14 +427,13 @@ export function ScheduleForm({
   }, [form.primaryCompany, sourceRetry]);
 
   useEffect(() => {
-    if (!showEditor || form.status !== "work") return;
+    if (!showEditor) return;
     const controller = new AbortController();
     setPreviousResult(null);
     fetch(
       "/api/schedules/previous?" +
         new URLSearchParams({
           primaryCompany: form.primaryCompany,
-          status: form.status,
           workDate: form.startDate,
         }),
       { signal: controller.signal, cache: "no-store" },
@@ -483,7 +460,6 @@ export function ScheduleForm({
   }, [
     showEditor,
     form.primaryCompany,
-    form.status,
     form.startDate,
     previousKey,
     previousRetry,
@@ -517,25 +493,14 @@ export function ScheduleForm({
   }, [submitState]);
 
   function patch(value: Partial<ScheduleSubmitInput>) {
-    if (value.nextVisitDate && !isWorkingDate(value.nextVisitDate)) {
-      setSubmitState({ status: "error", message: "日曜日は入力できません。月曜〜土曜を選択してください。" });
-      return;
-    }
     setSubmitState({ status: "idle" });
     setForm((current) => {
       const next = { ...current, ...value };
       if (
-        (value.startDate !== undefined &&
-          value.startDate !== current.startDate) ||
-        (value.status !== undefined && value.status !== current.status)
+        value.startDate !== undefined && value.startDate !== current.startDate
       ) {
         next.usePreviousPrimaryCount = false;
-        next.usePreviousNextPrimaryCount = false;
         next.currentSubcompanies = next.currentSubcompanies.map((row) => ({
-          ...row,
-          usePreviousWorkerCount: false,
-        }));
-        next.nextSubcompanies = next.nextSubcompanies.map((row) => ({
           ...row,
           usePreviousWorkerCount: false,
         }));
@@ -547,7 +512,6 @@ export function ScheduleForm({
     if (company !== form.primaryCompany) {
       setForm({ ...emptyForm(""), primaryCompany: company });
       setChoice(null);
-      setStatusChosen(false);
       setStep("date");
       setCustomDate(false);
       setDateRange(false);
@@ -560,13 +524,11 @@ export function ScheduleForm({
   }
   function answer(same: boolean) {
     if (same && !source) return;
-    const next = isWork
-      ? {
-          ...emptyForm(form.startDate),
-          endDate: form.endDate,
-          primaryCompany: form.primaryCompany,
-        }
-      : { ...form };
+    const next = {
+      ...emptyForm(form.startDate),
+      endDate: form.endDate,
+      primaryCompany: form.primaryCompany,
+    };
     if (source) {
       const copiedRows = source.subcompanies
         .filter((row) => row.secondaryCompany)
@@ -575,23 +537,15 @@ export function ScheduleForm({
           workerCount: row.workerCount ?? 0,
           usePreviousWorkerCount: false,
         }));
-      if (isWork) {
-        next.primaryCount = source.primaryCount ?? 0;
-        next.workArea = source.workArea ?? "";
-        next.workContent = source.workContent ?? "";
-        next.currentSubcompanies = copiedRows;
-      } else {
-        next.nextPrimaryCount = source.primaryCount ?? 0;
-        next.nextWorkArea = source.workArea ?? "";
-        next.nextWorkContent = source.workContent ?? "";
-        next.nextSubcompanies = copiedRows;
-      }
+      next.primaryCount = source.primaryCount ?? 0;
+      next.workArea = source.workArea ?? "";
+      next.workContent = source.workContent ?? "";
+      next.currentSubcompanies = copiedRows;
       next.aerialWorkVehicleCount = source.aerialWorkVehicleCount ?? 0;
       next.aerialWorkVehicleFloor = source.aerialWorkVehicleFloor ?? "";
     }
     setForm(next);
     setChoice(same ? "same" : "new");
-    setStatusChosen(true);
     setStep(same ? "copyContent" : "edit");
     setEditorPart("people");
     setCopyVersion((v) => v + 1);
@@ -608,7 +562,7 @@ export function ScheduleForm({
       return;
     }
     if (startDate !== endDate) {
-      setStep(continuingInput ? "confirm" : "status");
+      setStep(continuingInput ? "confirm" : "copy");
       setContinuingInput(false);
       return;
     }
@@ -617,7 +571,6 @@ export function ScheduleForm({
   function resetForm() {
     setForm(emptyForm(""));
     setChoice(null);
-    setStatusChosen(false);
     setChoosingCompany(true);
     setStep("date");
     setCustomDate(false);
@@ -630,7 +583,7 @@ export function ScheduleForm({
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!ready || submitting.current) return;
-    if (hasPlannedWork && (!area.trim() || !content.trim())) {
+    if (!area.trim() || !content.trim()) {
       setStep("edit");
       setEditorPart("content");
       setSubmitState({
@@ -641,7 +594,7 @@ export function ScheduleForm({
       });
       return;
     }
-    if (hasPlannedWork && totalCount < 1) {
+    if (totalCount < 1) {
       setStep("edit");
       setEditorPart("people");
       setSubmitState({
@@ -650,7 +603,7 @@ export function ScheduleForm({
       });
       return;
     }
-    if (hasPlannedWork && form.aerialWorkVehicleCount === null) {
+    if (form.aerialWorkVehicleCount === null) {
       setStep("edit");
       setEditorPart("content");
       setSubmitState({ status: "error", message: "高所作業車を使用するか選択してください。" });
@@ -694,20 +647,11 @@ export function ScheduleForm({
             ...form,
             excludeWeekends: false,
             usePreviousPrimaryCount: false,
-            usePreviousNextPrimaryCount: false,
             overwriteExisting,
-            currentSubcompanies: isWork
-              ? form.currentSubcompanies.map((row) => ({
-                  ...row,
-                  usePreviousWorkerCount: false,
-                }))
-              : [],
-            nextSubcompanies: isWork
-              ? []
-              : form.nextSubcompanies.map((row) => ({
-                  ...row,
-                  usePreviousWorkerCount: false,
-                })),
+            currentSubcompanies: form.currentSubcompanies.map((row) => ({
+              ...row,
+              usePreviousWorkerCount: false,
+            })),
           }),
         });
         return { response, body: await response.json() };
@@ -763,30 +707,23 @@ export function ScheduleForm({
                   if (step === "date") {
                     setForm(emptyForm(""));
                     setChoice(null);
-                    setStatusChosen(false);
                     setCustomDate(false);
                     setContinuingInput(false);
                     setSummaryOpen(false);
                     setChoosingCompany(true);
                   }
-                  else if (step === "status" || step === "existing") setStep("date");
+                  else if (step === "existing") setStep("date");
                   else if (step === "copyContent") {
                     setEditorPart("people");
                     setStep("edit");
                   } else if (step === "copy") {
                     setChoice(null);
-                    setStep(isWork ? "status" : "visit");
-                  } else if (step === "visit") {
-                    setChoice(null);
-                    setStep("status");
+                    setStep("date");
                   } else if (step === "edit" && editorPart === "content")
                     setEditorPart("people");
-                  else if (step === "edit" && !isWork)
-                    setStep(form.nextVisitDate ? "copy" : "visit");
                   else {
                     setChoice(null);
-                    if (!isWork) setChoice("new");
-                    setStep(isWork ? "copy" : "visit");
+                    setStep("copy");
                   }
                 }}
               >
@@ -875,7 +812,7 @@ export function ScheduleForm({
 
             {form.primaryCompany && !choosingCompany && (
               <>
-                {step === "existing" && <ExistingEntryCheck key={`${form.primaryCompany}-${form.startDate}`} date={form.startDate} company={form.primaryCompany} kind="schedule" onNew={() => { setStep(continuingInput ? "confirm" : "status"); setContinuingInput(false); }} onOtherDate={() => setStep("date")} onSchedule={setEditingExisting} />}
+                {step === "existing" && <ExistingEntryCheck key={`${form.primaryCompany}-${form.startDate}`} date={form.startDate} company={form.primaryCompany} kind="schedule" onNew={() => { setStep(continuingInput ? "confirm" : "copy"); setContinuingInput(false); }} onOtherDate={() => setStep("date")} onSchedule={setEditingExisting} />}
                 {step === "date" && (
                   <section className="panel p-5 sm:p-6">
                     <SectionHeading title="入力する日付を選んでください" />
@@ -1085,46 +1022,6 @@ export function ScheduleForm({
                   </section>
                 )}
 
-                {step === "status" && (
-                  <section className="panel p-5 sm:p-6">
-                    <SectionHeading title="作業はありますか？" />
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        className="status-option"
-                        aria-pressed={statusChosen && isWork}
-                        onClick={() => {
-                          setStatusChosen(true);
-                          patch({ status: "work" });
-                          setChoice(null);
-                          setStep("copy");
-                        }}
-                      >
-                        作業あり
-                      </button>
-                      <button
-                        type="button"
-                        className="status-option"
-                        aria-pressed={statusChosen && !isWork}
-                        onClick={() => {
-                          setStatusChosen(true);
-                          setForm({
-                            ...emptyForm(form.startDate),
-                            endDate: form.endDate,
-                            primaryCompany: form.primaryCompany,
-                            status: "no_work",
-                          });
-                          setChoice("new");
-                          setVisitChoice(null);
-                          setStep("visit");
-                        }}
-                      >
-                        作業なし
-                      </button>
-                    </div>
-                  </section>
-                )}
-
                 {step === "copyContent" && source && (
                   <section className="panel p-5 sm:p-6">
                     <SectionHeading
@@ -1157,14 +1054,9 @@ export function ScheduleForm({
                         type="button"
                         className="btn btn-primary min-h-14"
                         onClick={() => {
-                          patch(isWork ? {
+                          patch({
                             workArea: source.workArea ?? "",
                             workContent: source.workContent ?? "",
-                            aerialWorkVehicleCount: source.aerialWorkVehicleCount ?? 0,
-                            aerialWorkVehicleFloor: source.aerialWorkVehicleFloor ?? "",
-                          } : {
-                            nextWorkArea: source.workArea ?? "",
-                            nextWorkContent: source.workContent ?? "",
                             aerialWorkVehicleCount: source.aerialWorkVehicleCount ?? 0,
                             aerialWorkVehicleFloor: source.aerialWorkVehicleFloor ?? "",
                           });
@@ -1187,105 +1079,29 @@ export function ScheduleForm({
                   </section>
                 )}
 
-                {step === "visit" && (
-                  <section className="panel p-5 sm:p-6">
-                    <SectionHeading title="次回の作業予定日は決まっていますか？" />
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        className="btn btn-primary min-h-14"
-                        onClick={() => setVisitChoice("date")}
-                      >
-                        日付を指定
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary min-h-14"
-                        onClick={() => {
-                          patch({ nextVisitDate: null });
-                          setVisitChoice("unknown");
-                          setEditorPart("content");
-                          setStep("edit");
-                        }}
-                      >
-                        未定
-                      </button>
-                    </div>
-                    {visitChoice === "date" && (
-                      <div className="mt-4 space-y-4">
-                        <label className="field">
-                          <span className="label">次回の作業予定日</span>
-                          <input
-                            type="date"
-                            className="input"
-                            min={form.endDate}
-                            value={form.nextVisitDate ?? ""}
-                            onChange={(event) =>
-                              patch({
-                                nextVisitDate: event.target.value || null,
-                              })
-                            }
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="btn btn-primary w-full"
-                          disabled={
-                            !isWorkingDate(form.nextVisitDate ?? "") ||
-                            (form.nextVisitDate ?? "") <= form.endDate
-                          }
-                          onClick={() => {
-                            setChoice(null);
-                            setEditorPart("people");
-                            setStep("copy");
-                          }}
-                        >
-                          次へ
-                        </button>
-                      </div>
-                    )}
-                  </section>
-                )}
-
                 {ready && !showEditor && submitState.status !== "success" && (
                   <section className="panel p-5 sm:p-6">
                     <SectionHeading title="この内容で送信します" />
                     <p className="mb-4 font-semibold text-primary">
-                      {displayDateRange(form.startDate, form.endDate)}・
-                      {isWork ? "作業あり" : "作業なし"}
+                      {displayDateRange(form.startDate, form.endDate)}
                     </p>
-                    {hasPlannedWork ? (
-                      <div>
-                        {!isWork && form.nextVisitDate && (
-                          <p className="mb-3 text-lg font-semibold">
-                            次回の作業予定：{displayDate(form.nextVisitDate)}
-                          </p>
-                        )}
-                        <SchedulePreview
-                          primaryCompany={form.primaryCompany}
-                          schedule={{
-                            workDate: isWork ? form.startDate : form.nextVisitDate ?? form.startDate,
-                            primaryCount: activeCount,
-                            workArea: area,
-                            workContent: content,
-                            subcompanies: activeRows,
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="rounded-xl bg-slate-50 p-4">
-                        <p className="text-lg">次回の作業予定：未定</p>
-                      </div>
-                    )}
-                    {hasPlannedWork && (
-                      <div className="mt-4 rounded-xl bg-sky-50 p-4 text-sm">
+                    <SchedulePreview
+                      primaryCompany={form.primaryCompany}
+                      schedule={{
+                        workDate: form.startDate,
+                        primaryCount: activeCount,
+                        workArea: area,
+                        workContent: content,
+                        subcompanies: activeRows,
+                      }}
+                    />
+                    <div className="mt-4 rounded-xl bg-sky-50 p-4 text-sm">
                         <span className="font-semibold">高所作業車：</span>
                         <span>{(form.aerialWorkVehicleCount ?? 0) > 0 ? `${form.aerialWorkVehicleCount}台` : "使用しない"}</span>
                         {(form.aerialWorkVehicleCount ?? 0) > 0 && form.aerialWorkVehicleFloor && (
                           <span className="ml-2 whitespace-pre-wrap">使用フロア：{form.aerialWorkVehicleFloor}</span>
                         )}
-                      </div>
-                    )}
+                    </div>
                     {form.notes && (
                       <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm">
                         <span className="font-semibold">備考：</span>
@@ -1296,7 +1112,7 @@ export function ScheduleForm({
                       type="button"
                       className="btn btn-secondary mt-5 w-full"
                       onClick={() => {
-                        setEditorPart(hasPlannedWork ? "people" : "content");
+                        setEditorPart("people");
                         setStep("edit");
                       }}
                     >
@@ -1311,9 +1127,7 @@ export function ScheduleForm({
                       title={
                         editorPart === "people"
                           ? "人数を入力してください"
-                          : hasPlannedWork
-                            ? "作業内容を入力してください"
-                            : "備考（任意）"
+                          : "作業内容を入力してください"
                       }
                     />
                     <div
@@ -1338,44 +1152,20 @@ export function ScheduleForm({
                       </div>
                       <CountField
                         value={activeCount}
-                        required={hasPlannedWork}
-                        previous={Boolean(
-                          isWork
-                            ? form.usePreviousPrimaryCount
-                            : form.usePreviousNextPrimaryCount,
-                        )}
+                        required
+                        previous={Boolean(form.usePreviousPrimaryCount)}
                         previousValue={previous?.primaryCount}
                         onChange={(count) =>
-                          patch(
-                            isWork
-                              ? {
-                                  primaryCount: count,
-                                  usePreviousPrimaryCount: false,
-                                }
-                              : {
-                                  nextPrimaryCount: count,
-                                  usePreviousNextPrimaryCount: false,
-                                },
-                          )
+                          patch({ primaryCount: count, usePreviousPrimaryCount: false })
                         }
                         onPreviousChange={() => {
                           if (previous?.primaryCount != null)
-                            patch(
-                              isWork
-                                ? {
-                                    primaryCount: previous.primaryCount,
-                                    usePreviousPrimaryCount: true,
-                                  }
-                                : {
-                                    nextPrimaryCount: previous.primaryCount,
-                                    usePreviousNextPrimaryCount: true,
-                                  },
-                            );
+                            patch({ primaryCount: previous.primaryCount, usePreviousPrimaryCount: true });
                         }}
                       />
                     </div>
-                    {isWork && previousResult?.key !== previousKey && <LoadingIndicator label="前回の値を読み込み中…" />}
-                    {isWork && previousResult?.key === previousKey &&
+                    {previousResult?.key !== previousKey && <LoadingIndicator label="前回の値を読み込み中…" />}
+                    {previousResult?.key === previousKey &&
                       previousResult.error && (
                         <div role="alert" className="mt-3 text-sm text-red-700">
                           {previousResult.error}
@@ -1399,22 +1189,17 @@ export function ScheduleForm({
                         title="二次会社"
                         rows={activeRows}
                         options={secondaryOptions}
-                        countRequired={hasPlannedWork}
+                        countRequired
                         previousCounts={previousCounts}
                         onChange={(rows) =>
-                          patch(
-                            isWork
-                              ? { currentSubcompanies: rows }
-                              : { nextSubcompanies: rows },
-                          )
+                          patch({ currentSubcompanies: rows })
                         }
                       />
                       <AddSecondaryCompany
-                        key={`${form.primaryCompany}-${form.status}`}
+                        key={form.primaryCompany}
                         primaryCompany={form.primaryCompany}
                         onAdded={(company) => {
                           const primary = form.primaryCompany;
-                          const field = isWork ? "currentSubcompanies" : "nextSubcompanies";
                           setCompanyMaster((master) => master ? {
                             ...master,
                             secondariesByPrimary: {
@@ -1423,13 +1208,13 @@ export function ScheduleForm({
                             },
                           } : master);
                           setForm((current) => {
-                            if (current.primaryCompany !== primary || current.status !== form.status) return current;
-                            const rows = current[field];
+                            if (current.primaryCompany !== primary) return current;
+                            const rows = current.currentSubcompanies;
                             if (rows.some((row) => row.secondaryCompany === company)) return current;
                             const blank = rows.findIndex((row) => !row.secondaryCompany);
-                            return { ...current, [field]: blank >= 0
+                            return { ...current, currentSubcompanies: blank >= 0
                               ? rows.map((row, index) => index === blank ? { ...row, secondaryCompany: company, usePreviousWorkerCount: false } : row)
-                              : [...rows, { secondaryCompany: company, workerCount: isWork ? 0 : null, usePreviousWorkerCount: false }],
+                              : [...rows, { secondaryCompany: company, workerCount: 0, usePreviousWorkerCount: false }],
                             };
                           });
                         }}
@@ -1440,7 +1225,7 @@ export function ScheduleForm({
                         editorPart === "content" ? "space-y-4" : "hidden"
                       }
                     >
-                      {hasPlannedWork && <>
+                      <>
                         <WorkField
                           key={`${previousKey}-${copyVersion}-area`}
                           label="作業エリア"
@@ -1449,11 +1234,7 @@ export function ScheduleForm({
                           previousValue={previous?.workArea}
                           placeholder="例：10階、12階"
                           onChange={(value) =>
-                            patch(
-                              isWork
-                                ? { workArea: value }
-                                : { nextWorkArea: value },
-                            )
+                            patch({ workArea: value })
                           }
                         />
                         <WorkField
@@ -1465,16 +1246,11 @@ export function ScheduleForm({
                           placeholder="例：配管つり込み作業"
                           multiline
                           onChange={(value) =>
-                            patch(
-                              isWork
-                                ? { workContent: value }
-                                : { nextWorkContent: value },
-                            )
+                            patch({ workContent: value })
                           }
                         />
-                      </>}
-                      {hasPlannedWork && (
-                        <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+                      </>
+                      <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
                           <div className="flex flex-wrap items-center justify-between gap-x-3">
                             <p className="font-semibold text-slate-900">高所作業車を使用しますか？ <span className="required-mark">必須</span></p>
                             {(form.aerialWorkVehicleCount ?? 0) > 0 && (
@@ -1535,8 +1311,7 @@ export function ScheduleForm({
                               />
                             </label>
                           </div>}
-                        </div>
-                      )}
+                      </div>
                       <WorkField
                         key={`${previousKey}-${copyVersion}-notes`}
                         label="備考"
@@ -1557,7 +1332,7 @@ export function ScheduleForm({
                       className="btn btn-primary mt-5 w-full"
                       onClick={() => {
                         if (
-                          (hasPlannedWork && totalCount < 1) ||
+                          totalCount < 1 ||
                           activeRows.some(
                             (row) =>
                               !row.secondaryCompany.trim() &&
@@ -1572,7 +1347,7 @@ export function ScheduleForm({
                           });
                           return;
                         }
-                        if (editorPart === "content" && hasPlannedWork && (!area.trim() || !content.trim())) {
+                        if (editorPart === "content" && (!area.trim() || !content.trim())) {
                           setSubmitState({
                             status: "error",
                             message: !area.trim()
@@ -1581,7 +1356,7 @@ export function ScheduleForm({
                           });
                           return;
                         }
-                        if (editorPart === "content" && hasPlannedWork && form.aerialWorkVehicleCount === null) {
+                        if (editorPart === "content" && form.aerialWorkVehicleCount === null) {
                           setSubmitState({ status: "error", message: "高所作業車を使用するか選択してください。" });
                           return;
                         }
@@ -1666,13 +1441,10 @@ export function ScheduleForm({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold">
-                      {displayDateRange(form.startDate, form.endDate)}・
-                      {isWork ? "作業あり" : "作業なし"}
+                      {displayDateRange(form.startDate, form.endDate)}
                     </p>
                     <p className="mt-1 text-sm text-slate-600">
-                      {isWork
-                        ? `合計 ${totalCount} 人`
-                        : `次回：${form.nextVisitDate ? displayDate(form.nextVisitDate) : "未定"}`}
+                      合計 {totalCount} 人
                     </p>
                   </div>
                   <button
@@ -1718,24 +1490,17 @@ export function ScheduleForm({
                     summaries.map((summary) => (
                       <div key={summary.id}>
                         <p className="font-semibold">
-                          {displayDate(summary.workDate)} {summary.status}
+                          {displayDate(summary.workDate)}
                         </p>
                         <p>{summary.companyText}</p>
                         <p>
                           {[
-                            summary.status === "作業あり"
-                              ? summary.workArea
-                              : summary.nextWorkArea,
-                            summary.status === "作業あり"
-                              ? summary.workContent
-                              : summary.nextWorkContent,
+                            summary.workArea,
+                            summary.workContent,
                           ]
                             .filter(Boolean)
                             .join(" / ")}
                         </p>
-                        {summary.nextVisitDate && (
-                          <p>次回来場 {summary.nextVisitDate}</p>
-                        )}
                         {summary.aerialWorkVehicleCount > 0 && (
                           <p>高所作業車：{summary.aerialWorkVehicleCount}台{summary.aerialWorkVehicleFloor ? `（使用フロア：${summary.aerialWorkVehicleFloor}）` : ""}</p>
                         )}
