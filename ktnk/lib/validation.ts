@@ -96,6 +96,23 @@ export const scheduleSubmitSchema = z
       }
     }
 
+    if (value.status === "no_work" && value.nextVisitDate) {
+      if (value.nextVisitDate <= value.endDate) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nextVisitDate"], message: "次回の作業予定日は作業なしの日より後を選択してください。" });
+      }
+      for (const [field, label] of [["nextWorkArea", "次回の作業エリア"], ["nextWorkContent", "次回の作業内容"]] as const) {
+        if (!value[field].trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${label}を入力してください。` });
+      }
+      if (!value.usePreviousNextPrimaryCount && value.nextPrimaryCount === null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nextPrimaryCount"], message: "次回の一次会社人数を入力してください。" });
+      }
+      const nextSecondaryTotal = value.nextSubcompanies.reduce((sum, row) => sum + (row.secondaryCompany.trim() && !row.usePreviousWorkerCount ? row.workerCount ?? 0 : 0), 0);
+      const hasPreviousNextSecondaryCount = value.nextSubcompanies.some((row) => row.secondaryCompany.trim() !== "" && row.usePreviousWorkerCount);
+      if (!value.usePreviousNextPrimaryCount && value.nextPrimaryCount === 0 && nextSecondaryTotal < 1 && !hasPreviousNextSecondaryCount) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nextSubcompanies"], message: "次回の合計人数を1人以上にしてください。" });
+      }
+    }
+
     const subcompanyField = value.status === "work" ? "currentSubcompanies" : "nextSubcompanies";
     for (const [index, subcompany] of value[subcompanyField].entries()) {
       if (value.status === "work" && subcompany.secondaryCompany.trim() !== "" && !subcompany.usePreviousWorkerCount && subcompany.workerCount === null) {

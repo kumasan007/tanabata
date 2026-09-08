@@ -83,6 +83,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
   }
 
   function totalWorkers(row: ScheduleWithSubcompanies) {
+    if (row.status === "no_work") return 0;
     const kind = row.status === "work" ? "current" : "next_visit";
     return (row.status === "work" ? row.primary_count ?? 0 : row.next_primary_count ?? 0) +
       row.subcompanies.filter((sub) => sub.kind === kind).reduce((sum, sub) => sum + (sub.worker_count ?? 0), 0);
@@ -135,9 +136,10 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                   {row.status === "no_work" && row.next_visit_date && <p className="truncate" title={`次回 ${row.next_visit_date}`}>次回 {row.next_visit_date.slice(5).replace("-", "/")}</p>}
                   <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
                   <p className="line-clamp-2 break-words" title={content ?? ""}>{content || "作業内容未入力"}</p>
+                  {row.status === "work" && (row.aerial_work_vehicle_count ?? 0) > 0 && <p className="truncate font-semibold text-sky-800">高所作業車 {row.aerial_work_vehicle_count}台</p>}
                 </div>;
               })}
-              {company && dayEntrants.map((row) => <div key={row.id} className="mt-1 min-w-0 rounded bg-amber-100 p-1 text-[10px] leading-4 text-amber-900 sm:text-xs"><p className="truncate font-semibold" title={row.secondary_company}>新規：{row.secondary_company}</p><p>{row.person_count}人</p></div>)}
+              {company && dayEntrants.map((row) => <div key={row.id} className="mt-1 min-w-0 rounded bg-amber-100 p-1 text-[10px] leading-4 text-amber-900 sm:text-xs"><p className="truncate font-semibold" title={row.secondary_company}>新規：{row.secondary_company}</p><p>{row.person_count}人・{row.nationality_status === "includes_foreign" ? "外国籍含む" : row.nationality_status === "japanese_only" ? "日本籍" : "未確認"}</p></div>)}
             </div>;
           })}
         </div>
@@ -191,10 +193,11 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
               )}
               <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label={row.status === "work" ? "作業エリア" : "次回来場"} /> : "エリア未入力"}</p>
               <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" /> : "作業内容未入力"}</p>
+              {row.status === "work" && <p className="mt-1 text-sky-800">高所作業車：{(row.aerial_work_vehicle_count ?? 0) > 0 ? `${row.aerial_work_vehicle_count}台${row.aerial_work_vehicle_details ? `（${row.aerial_work_vehicle_details}）` : ""}` : "使用なし"}</p>}
               {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" /></p>}
             </article>;
           })}
-          {selectedEntrants.map((row) => <article key={row.id} className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm"><p className="font-bold">新規入場</p><p className="mt-1 break-words"><span className="font-semibold">{row.primary_company}</span><span className="mx-1 text-slate-400">→</span>{row.secondary_company}</p><p>{row.person_count}人</p></article>)}
+          {selectedEntrants.map((row) => <article key={row.id} className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm"><p className="font-bold">新規入場</p><p className="mt-1 break-words"><span className="font-semibold">{row.primary_company}</span><span className="mx-1 text-slate-400">→</span>{row.secondary_company}</p><p>{row.person_count}人・{row.nationality_status === "includes_foreign" ? "外国籍を含む" : row.nationality_status === "japanese_only" ? "日本籍のみ" : "国籍未確認"}</p></article>)}
         </div>}
       </section>
     </main>

@@ -51,6 +51,7 @@ export function ExistingEntryCheck({ date, company, kind, onNew, onOtherDate, on
     </article>)}
     {entrants.map((row) => <article key={row.id} className="space-y-2 rounded-md bg-slate-50 p-4">
       <p className="font-semibold">{row.secondary_company}・{row.person_count}人</p>
+      <p className="text-sm text-slate-600">{row.nationality_status === "includes_foreign" ? "外国籍を含む" : row.nationality_status === "japanese_only" ? "日本籍のみ" : "国籍未確認"}</p>
       {row.person_names && <p className="whitespace-pre-wrap">{row.person_names}</p>}
       {row.notes && <p className="whitespace-pre-wrap">備考：{row.notes}</p>}
       <button type="button" className="btn btn-primary w-full" onClick={() => onEntrant?.(row)}>変更する</button>

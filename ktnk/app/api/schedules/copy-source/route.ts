@@ -33,6 +33,8 @@ export async function GET(request: Request) {
           primaryCount: row.primary_count,
           workArea: row.work_area,
           workContent: row.work_content,
+          aerialWorkVehicleCount: row.aerial_work_vehicle_count,
+          aerialWorkVehicleDetails: row.aerial_work_vehicle_details,
           subcompanies: row.subcompanies
             .filter((sub) => sub.kind === "current")
             .map((sub) => ({

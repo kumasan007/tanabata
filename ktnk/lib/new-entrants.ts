@@ -6,7 +6,7 @@ const getCachedNewEntrants = unstable_cache(
   async (from: string, to: string, primaryCompany: string) => {
     let query = createServerClient()
       .from("new_entrant_records")
-      .select("id,entry_date,primary_company,secondary_company,person_count,person_names,notes,created_at,updated_at")
+      .select("id,entry_date,primary_company,secondary_company,person_count,person_names,nationality_status,notes,created_at,updated_at")
       .order("entry_date")
       .order("primary_company");
     if (from) query = query.gte("entry_date", from);

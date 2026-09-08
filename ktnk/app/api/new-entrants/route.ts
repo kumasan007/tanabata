@@ -12,6 +12,9 @@ const inputSchema = z.object({
   secondaryCompany: z.string().trim().min(1, "新規入場する会社を選択してください。"),
   personCount: z.number().int().min(1, "新規入場者を1人以上入力してください。"),
   personNames: z.string().trim().max(1000).default(""),
+  nationalityStatus: z.enum(["japanese_only", "includes_foreign"], {
+    message: "日本籍のみか、外国籍を含むかを選択してください。",
+  }),
   notes: z.string().trim().max(2000).default(""),
 });
 
@@ -40,6 +43,7 @@ export async function POST(request: Request) {
       secondary_company: value.secondaryCompany,
       person_count: value.personCount,
       person_names: value.personNames || null,
+      nationality_status: value.nationalityStatus,
       notes: value.notes || null,
     }, { onConflict: "entry_date,primary_company,secondary_company" }).select("*").single();
     if (error) throw error;
@@ -63,7 +67,7 @@ function databaseErrorMessage(error: unknown) {
   const code = typeof error === "object" && error !== null && "code" in error
     ? String(error.code)
     : "";
-  if (code === "PGRST205" || code === "42P01") {
+  if (code === "PGRST204" || code === "PGRST205" || code === "42P01" || code === "42703") {
     return "新規入場用の追加SQLがまだ実行されていません。";
   }
   return error instanceof Error ? error.message : "新規入場データを処理できませんでした。";

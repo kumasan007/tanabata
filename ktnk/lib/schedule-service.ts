@@ -28,12 +28,14 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
     throw new Error("登録対象の日付がありません。");
   }
 
+  const plannedWorkDate = input.status === "no_work" ? input.nextVisitDate : null;
+  const targetDates = [...new Set([...dates, ...(plannedWorkDate ? [plannedWorkDate] : [])])];
   const supabase = createServerClient();
   const { data: existingSchedules, error: existingError } = await supabase
     .from("schedule_groups")
     .select("work_date")
     .eq("primary_company", input.primaryCompany)
-    .in("work_date", dates);
+    .in("work_date", targetDates);
   if (existingError) {
     throwSupabaseError(existingError, "既存予定の確認に失敗しました。");
   }
@@ -77,6 +79,29 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
     return payload;
   });
 
+  if (plannedWorkDate) {
+    const nextPrimaryCount = resolvePreviousNumber(input.nextPrimaryCount, input.usePreviousNextPrimaryCount, previous?.next_primary_count, "一次会社人数");
+    const nextSecondaryTotal = resolvedSubcompanies.reduce((sum, subcompany) => sum + (subcompany.workerCount ?? 0), 0);
+    if ((nextPrimaryCount ?? 0) === 0 && nextSecondaryTotal < 1) {
+      throw new Error("次回の作業予定は合計人数を1人以上にしてください。");
+    }
+    payloads.push({
+      work_date: plannedWorkDate,
+      status: "work",
+      primary_company: input.primaryCompany,
+      primary_count: nextPrimaryCount,
+      work_area: emptyToNull(resolvePreviousText(input.nextWorkArea, previous?.next_work_area, "作業エリア")),
+      work_content: emptyToNull(resolvePreviousText(input.nextWorkContent, previous?.next_work_content, "作業内容")),
+      next_visit_date: null,
+      next_primary_count: null,
+      next_work_area: null,
+      next_work_content: null,
+      aerial_work_vehicle_count: input.aerialWorkVehicleCount,
+      aerial_work_vehicle_details: emptyToNull(input.aerialWorkVehicleDetails),
+      notes: null,
+    });
+  }
+
   const { data: groups, error: upsertError } = await supabase
     .from("schedule_groups")
     .upsert(payloads, { onConflict: "work_date,primary_company" })
@@ -84,8 +109,8 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
 
   if (upsertError) throwSupabaseError(upsertError, "予定の保存に失敗しました。");
   const savedByDate = new Map((groups ?? []).map((group) => [group.work_date, group.id]));
-  const savedIds = dates.map((date) => savedByDate.get(date)).filter((id): id is string => Boolean(id));
-  if (savedIds.length !== dates.length) {
+  const savedIds = targetDates.map((date) => savedByDate.get(date)).filter((id): id is string => Boolean(id));
+  if (savedIds.length !== targetDates.length) {
     throw new Error("保存した予定の確認に失敗しました。");
   }
 
@@ -97,13 +122,12 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
     if (deleteError) throwSupabaseError(deleteError, "二次会社予定の削除に失敗しました。");
   }
 
-  const subcompanyRows = savedIds.flatMap((id) =>
-    buildSubcompanyRows(
-      id,
-      resolvedSubcompanies,
-      input.status === "work" ? "current" : "next_visit",
-    ),
-  );
+  const subcompanyRows = targetDates.flatMap((date) => {
+    const id = savedByDate.get(date);
+    if (!id) return [];
+    const generatedWork = Boolean(plannedWorkDate && date === plannedWorkDate);
+    return buildSubcompanyRows(id, resolvedSubcompanies, input.status === "work" || generatedWork ? "current" : "next_visit");
+  });
   if (subcompanyRows.length > 0) {
     const { error: insertError } = await supabase.from("schedule_subcompanies").insert(subcompanyRows);
     if (insertError) throwSupabaseError(insertError, "二次会社予定の保存に失敗しました。");
@@ -111,7 +135,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
 
   invalidateScheduleData();
   return {
-    dates,
+    dates: targetDates,
     savedIds,
   };
 }

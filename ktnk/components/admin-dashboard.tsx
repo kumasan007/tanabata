@@ -68,6 +68,8 @@ type ScheduleSummaryRow = {
   workArea: string;
   workContent: string;
   nextVisitDate: string;
+  aerialWorkVehicleCount: number | "";
+  aerialWorkVehicleDetails: string;
   details: Array<{
     company: string;
     count: number | "";
@@ -1546,6 +1548,7 @@ export function AdminDashboard() {
                       <dd className="break-words text-slate-800">
                         <CopyValue value={row.workContent} label="作業内容" />
                       </dd>
+                      {appliedFilters.statusFilter === "work" && <><dt className="text-slate-500">高所作業車</dt><dd className="break-words text-slate-800">{row.aerialWorkVehicleCount === "" || row.aerialWorkVehicleCount === 0 ? "使用なし" : `${row.aerialWorkVehicleCount}台${row.aerialWorkVehicleDetails ? `（${row.aerialWorkVehicleDetails}）` : ""}`}</dd></>}
                       {appliedFilters.statusFilter === "no_work" &&
                       row.nextVisitDate ? (
                         <>
@@ -2012,6 +2015,8 @@ function buildScheduleSummaryRows(
       row.nextVisitDate,
       workArea,
       workContent,
+      row.aerialWorkVehicleCount,
+      row.aerialWorkVehicleDetails,
     ].join("::");
 
     if (!groups.has(key)) {
@@ -2025,6 +2030,8 @@ function buildScheduleSummaryRows(
         workArea,
         workContent,
         nextVisitDate: row.nextVisitDate,
+        aerialWorkVehicleCount: row.aerialWorkVehicleCount,
+        aerialWorkVehicleDetails: row.aerialWorkVehicleDetails,
         details: [],
       });
     }

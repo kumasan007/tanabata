@@ -108,6 +108,8 @@ create table if not exists public.new_entrant_records (
   secondary_company text not null,
   person_count integer not null check (person_count > 0),
   person_names text,
+  nationality_status text
+    check (nationality_status in ('japanese_only', 'includes_foreign')),
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

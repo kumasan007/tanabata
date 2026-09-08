@@ -60,6 +60,8 @@ function toCopyData(
         primaryCount: work ? row.primary_count : row.next_primary_count,
         workArea: work ? row.work_area : row.next_work_area,
         workContent: work ? row.work_content : row.next_work_content,
+        aerialWorkVehicleCount: work ? row.aerial_work_vehicle_count : null,
+        aerialWorkVehicleDetails: work ? row.aerial_work_vehicle_details : null,
         subcompanies: row.subcompanies
           .filter((sub) => sub.kind === (work ? "current" : "next_visit"))
           .map((sub) => ({

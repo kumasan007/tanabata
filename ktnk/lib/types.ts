@@ -27,6 +27,8 @@ export type PreviousSchedule = {
   primaryCount: number | null;
   workArea: string | null;
   workContent: string | null;
+  aerialWorkVehicleCount?: number | null;
+  aerialWorkVehicleDetails?: string | null;
   subcompanies: { secondaryCompany: string; workerCount: number | null }[];
 };
 
@@ -129,6 +131,7 @@ export type NewEntrantRecord = {
   secondary_company: string;
   person_count: number;
   person_names: string | null;
+  nationality_status: "japanese_only" | "includes_foreign" | null;
   notes: string | null;
   created_at: string;
   updated_at: string;

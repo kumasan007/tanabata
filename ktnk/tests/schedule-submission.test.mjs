@@ -378,21 +378,18 @@ test("通常の作業予定はエリア・内容の未入力や空白だけを�
   assert.equal(scheduleSubmitSchema.safeParse(submission()).success, true);
 });
 
-test("次回来場予定はエリア・内容が未入力や未定でも保存できる", async () => {
-  for (const value of ["", "未定"]) {
-    const input = scheduleSubmitSchema.parse(submission({
+test("次回来場予定日を指定したら通常作業の必須項目を求める", () => {
+  for (const field of ["nextWorkArea", "nextWorkContent"]) {
+    const result = scheduleSubmitSchema.safeParse(submission({
       status: "no_work",
-      workArea: "",
-      workContent: "",
       nextVisitDate: "2026-09-10",
-      nextWorkArea: value,
-      nextWorkContent: value,
+      nextPrimaryCount: 1,
+      nextWorkArea: "10階",
+      nextWorkContent: "配管作業",
+      [field]: "",
     }));
-    const service = serviceWithDatabase();
-    await service.saveScheduleSubmission(input);
-    const saved = service.mutations.find((mutation) => mutation.operation === "upsert").data;
-    assert.equal(saved.next_work_area, value || null);
-    assert.equal(saved.next_work_content, value || null);
+    assert.equal(result.success, false);
+    assert.ok(result.error.issues.some((issue) => issue.path[0] === field));
   }
 });
 

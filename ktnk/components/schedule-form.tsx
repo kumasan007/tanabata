@@ -38,7 +38,7 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   nextSubcompanies: [],
   nextWorkArea: "",
   nextWorkContent: "",
-  aerialWorkVehicleCount: 0,
+  aerialWorkVehicleCount: null,
   aerialWorkVehicleDetails: "",
   notes: "",
 });
@@ -344,6 +344,7 @@ export function ScheduleForm({
   );
   const showEditor = !choosingCompany && step === "edit";
   const isWork = form.status === "work";
+  const hasPlannedWork = isWork || Boolean(form.nextVisitDate);
   const busy = submitState.status === "submitting";
   const activeRows = isWork ? form.currentSubcompanies : form.nextSubcompanies;
   const activeCount = isWork ? form.primaryCount : form.nextPrimaryCount;
@@ -576,23 +577,29 @@ export function ScheduleForm({
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!ready || submitting.current) return;
-    if (isWork && (!form.workArea.trim() || !form.workContent.trim())) {
+    if (hasPlannedWork && (!area.trim() || !content.trim())) {
       setStep("edit");
       setEditorPart("content");
       setSubmitState({
         status: "error",
-        message: !form.workArea.trim()
+        message: !area.trim()
           ? "作業エリアを入力してください。"
           : "作業内容を入力してください。",
       });
       return;
     }
-    if (isWork && totalCount < 1) {
+    if (hasPlannedWork && totalCount < 1) {
       setStep("edit");
       setSubmitState({
         status: "error",
-        message: "作業ありの場合は、合計人数を1人以上にしてください。",
+        message: "作業予定がある場合は、合計人数を1人以上にしてください。",
       });
+      return;
+    }
+    if (hasPlannedWork && form.aerialWorkVehicleCount === null) {
+      setStep("edit");
+      setEditorPart("content");
+      setSubmitState({ status: "error", message: "高所作業車を使用するか選択してください。" });
       return;
     }
     if (
@@ -644,7 +651,7 @@ export function ScheduleForm({
         body.code === "SCHEDULE_ALREADY_EXISTS"
       ) {
         const confirmed = window.confirm(
-          `${displayDate(form.startDate)}の「${form.primaryCompany}」の作業内容は既に入力されています。変更しますか？`,
+          `${(body.dates ?? [form.startDate]).map(displayDate).join("、")}の「${form.primaryCompany}」の予定は既に入力されています。変更しますか？`,
         );
         if (!confirmed) {
           setSubmitState({ status: "idle" });
@@ -1016,6 +1023,12 @@ export function ScheduleForm({
                       <dd className="whitespace-pre-wrap break-words">
                         {source.workContent || "未入力"}
                       </dd>
+                      <dt className="text-slate-500">高所作業車</dt>
+                      <dd>
+                        {(source.aerialWorkVehicleCount ?? 0) > 0
+                          ? `${source.aerialWorkVehicleCount}台${source.aerialWorkVehicleDetails ? `（${source.aerialWorkVehicleDetails}）` : ""}`
+                          : "使用しない"}
+                      </dd>
                     </dl>
                     <div className="mt-5 grid grid-cols-2 gap-3">
                       <button
@@ -1025,6 +1038,8 @@ export function ScheduleForm({
                           patch({
                             workArea: source.workArea ?? "",
                             workContent: source.workContent ?? "",
+                            aerialWorkVehicleCount: source.aerialWorkVehicleCount ?? 0,
+                            aerialWorkVehicleDetails: source.aerialWorkVehicleDetails ?? "",
                           });
                           setStep("confirm");
                         }}
@@ -1090,7 +1105,7 @@ export function ScheduleForm({
                           className="btn btn-primary w-full"
                           disabled={
                             !isWorkingDate(form.nextVisitDate ?? "") ||
-                            (form.nextVisitDate ?? "") < form.startDate
+                            (form.nextVisitDate ?? "") <= form.startDate
                           }
                           onClick={() => {
                             setEditorPart("content");
@@ -1140,13 +1155,14 @@ export function ScheduleForm({
                             {form.nextWorkContent || "未入力"}
                           </dd>
                         </dl>
+                        {form.nextVisitDate && <p className="mt-4 text-sm font-semibold text-primary">この日は「作業あり」の予定としてカレンダーにも登録されます。</p>}
                       </div>
                     )}
-                    {isWork && (form.aerialWorkVehicleCount ?? 0) > 0 && (
+                    {hasPlannedWork && (
                       <div className="mt-4 rounded-xl bg-sky-50 p-4 text-sm">
                         <span className="font-semibold">高所作業車：</span>
-                        <span>{form.aerialWorkVehicleCount}台</span>
-                        {form.aerialWorkVehicleDetails && (
+                        <span>{(form.aerialWorkVehicleCount ?? 0) > 0 ? `${form.aerialWorkVehicleCount}台` : "使用しない"}</span>
+                        {(form.aerialWorkVehicleCount ?? 0) > 0 && form.aerialWorkVehicleDetails && (
                           <span className="ml-2 whitespace-pre-wrap">{form.aerialWorkVehicleDetails}</span>
                         )}
                       </div>
@@ -1203,7 +1219,7 @@ export function ScheduleForm({
                       </div>
                       <CountField
                         value={activeCount}
-                        required={isWork}
+                        required={hasPlannedWork}
                         previous={Boolean(
                           isWork
                             ? form.usePreviousPrimaryCount
@@ -1277,7 +1293,7 @@ export function ScheduleForm({
                         title="二次会社"
                         rows={activeRows}
                         options={secondaryOptions}
-                        countRequired={isWork}
+                        countRequired={hasPlannedWork}
                         previousCounts={previousCounts}
                         onChange={(rows) =>
                           patch(
@@ -1322,7 +1338,7 @@ export function ScheduleForm({
                         key={`${previousKey}-${copyVersion}-area`}
                         label="作業エリア"
                         value={area}
-                        required={isWork}
+                        required={hasPlannedWork}
                         previousValue={previous?.workArea}
                         placeholder="例：10階、12階"
                         onChange={(value) =>
@@ -1337,7 +1353,7 @@ export function ScheduleForm({
                         key={`${previousKey}-${copyVersion}-content`}
                         label="作業内容"
                         value={content}
-                        required={isWork}
+                        required={hasPlannedWork}
                         previousValue={previous?.workContent}
                         placeholder="例：配管つり込み作業"
                         multiline
@@ -1349,10 +1365,23 @@ export function ScheduleForm({
                           )
                         }
                       />
-                      {isWork && (
+                      <WorkField
+                        key={`${previousKey}-${copyVersion}-notes`}
+                        label="備考"
+                        value={form.notes}
+                        previousValue={null}
+                        placeholder="連絡事項や注意点など"
+                        multiline
+                        onChange={(value) => patch({ notes: value })}
+                      />
+                      {hasPlannedWork && (
                         <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
-                          <p className="font-semibold text-slate-900">高所作業車</p>
-                          <div className="mt-3 grid gap-3 sm:grid-cols-[9rem_1fr]">
+                          <p className="font-semibold text-slate-900">高所作業車を使用しますか？ <span className="required-mark">必須</span></p>
+                          <div className="mt-3 grid grid-cols-2 gap-3">
+                            <button type="button" className="status-option" aria-pressed={(form.aerialWorkVehicleCount ?? 0) > 0} onClick={() => patch({ aerialWorkVehicleCount: Math.max(1, form.aerialWorkVehicleCount ?? 1) })}>使用する</button>
+                            <button type="button" className="status-option" aria-pressed={form.aerialWorkVehicleCount === 0} onClick={() => patch({ aerialWorkVehicleCount: 0, aerialWorkVehicleDetails: "" })}>使用しない</button>
+                          </div>
+                          {(form.aerialWorkVehicleCount ?? 0) > 0 && <div className="mt-3 grid gap-3 sm:grid-cols-[9rem_1fr]">
                             <label className="field">
                               <span className="label">使用台数</span>
                               <div className="relative">
@@ -1360,11 +1389,11 @@ export function ScheduleForm({
                                   className="input pr-10 tabular-nums"
                                   type="number"
                                   inputMode="numeric"
-                                  min={0}
+                                  min={1}
                                   step={1}
                                   value={form.aerialWorkVehicleCount ?? ""}
                                   onChange={(event) => patch({
-                                    aerialWorkVehicleCount: event.target.value === "" ? null : Number(event.target.value),
+                                    aerialWorkVehicleCount: event.target.value === "" ? null : Math.max(1, Number(event.target.value)),
                                   })}
                                 />
                                 <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">台</span>
@@ -1380,18 +1409,9 @@ export function ScheduleForm({
                                 onChange={(event) => patch({ aerialWorkVehicleDetails: event.target.value })}
                               />
                             </label>
-                          </div>
+                          </div>}
                         </div>
                       )}
-                      <WorkField
-                        key={`${previousKey}-${copyVersion}-notes`}
-                        label="備考"
-                        value={form.notes}
-                        previousValue={null}
-                        placeholder="連絡事項や注意点など"
-                        multiline
-                        onChange={(value) => patch({ notes: value })}
-                      />
                     </div>
                     {submitState.status === "error" && (
                       <p role="alert" className="mt-3 text-red-700">
@@ -1403,7 +1423,7 @@ export function ScheduleForm({
                       className="btn btn-primary mt-5 w-full"
                       onClick={() => {
                         if (
-                          (isWork && totalCount < 1) ||
+                          (hasPlannedWork && totalCount < 1) ||
                           activeRows.some(
                             (row) =>
                               !row.secondaryCompany.trim() &&
@@ -1417,13 +1437,17 @@ export function ScheduleForm({
                           });
                           return;
                         }
-                        if (editorPart === "content" && isWork && (!area.trim() || !content.trim())) {
+                        if (editorPart === "content" && hasPlannedWork && (!area.trim() || !content.trim())) {
                           setSubmitState({
                             status: "error",
                             message: !area.trim()
                               ? "作業エリアを入力してください。"
                               : "作業内容を入力してください。",
                           });
+                          return;
+                        }
+                        if (editorPart === "content" && hasPlannedWork && form.aerialWorkVehicleCount === null) {
+                          setSubmitState({ status: "error", message: "高所作業車を使用するか選択してください。" });
                           return;
                         }
                         setSubmitState({ status: "idle" });
