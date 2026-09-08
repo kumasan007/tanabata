@@ -1211,45 +1211,54 @@ export function AdminDashboard() {
                   </button>
                 </div>
               <details className="min-w-0 flex-1 rounded-md border border-border bg-white">
-                <summary className="min-h-11 cursor-pointer rounded-md px-3 py-2.5 font-semibold text-slate-900 marker:text-emerald-700">
-                  <span className="break-words">{group.primaryCompany}</span>
-                  <span className="ml-3 text-sm font-normal text-slate-500">{(group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []).join("・")}</span>
-                  <span className="ml-3 text-sm font-normal text-slate-500">
-                    二次会社{" "}
-                    {group.rows.filter((row) => row.secondary_company).length}社
+                <summary className="flex min-h-11 cursor-pointer items-center rounded-md px-3 py-2.5 font-semibold text-slate-900 marker:text-emerald-700">
+                  <span className="min-w-0 flex-1 flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <CopyValue
+                      value={group.primaryCompany}
+                      label="一次会社"
+                      stopPropagation
+                    />
+                    <span className="text-sm font-normal text-slate-500">
+                      {(group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []).join("・")}
+                    </span>
+                    <span className="text-sm font-normal text-slate-500">
+                      二次：{group.rows.filter((row) => row.secondary_company).length}社
+                    </span>
+                    <span className="ml-auto flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-secondary h-9 w-9 p-0"
+                        aria-label={`${group.primaryCompany}に追加`}
+                        title="この一次会社に追加"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setNewPrimaryCompany(group.primaryCompany);
+                          setNewSecondaryCompanies("");
+                          setNewPrimaryRoles("");
+                          document.getElementById("add-company-primary")?.focus();
+                        }}
+                      >
+                        <Plus size={17} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary h-9 w-9 p-0 text-red-700"
+                        disabled={companyLoading || !!editingCompanyId}
+                        aria-label={`${group.primaryCompany}と配下の二次会社を削除`}
+                        title="一次会社ごと削除"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void removeCompanyMaster("", group);
+                        }}
+                      >
+                        <Trash2 size={17} aria-hidden="true" />
+                      </button>
+                    </span>
                   </span>
                 </summary>
                 <div className="grid gap-3 border-t border-border p-3 sm:p-4">
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="font-semibold text-slate-600">職種</span>
-                    <RoleBadges roles={group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []} />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-secondary h-9 w-9 p-0"
-                      aria-label={`${group.primaryCompany}に追加`}
-                      title="この一次会社に追加"
-                      onClick={() => {
-                        setNewPrimaryCompany(group.primaryCompany);
-                        setNewSecondaryCompanies("");
-                        setNewPrimaryRoles("");
-                        document.getElementById("add-company-primary")?.focus();
-                      }}
-                    >
-                      <Plus size={17} aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary h-9 w-9 p-0 text-red-700"
-                      disabled={companyLoading || !!editingCompanyId}
-                      aria-label={`${group.primaryCompany}と配下の二次会社を削除`}
-                      title="一次会社ごと削除"
-                      onClick={() => void removeCompanyMaster("", group)}
-                    >
-                      <Trash2 size={17} aria-hidden="true" />
-                    </button>
-                  </div>
                   {group.rows.map((row, rowIndex) => (
                     <div
                       key={row.id}
@@ -1828,10 +1837,12 @@ function CopyValue({
   value,
   label,
   children,
+  stopPropagation = false,
 }: {
   value: string | number;
   label: string;
   children?: ReactNode;
+  stopPropagation?: boolean;
 }) {
   const [notice, setNotice] = useState("");
   useEffect(() => {
@@ -1847,7 +1858,11 @@ function CopyValue({
         className="min-h-9 max-w-full rounded px-1 text-left whitespace-pre-wrap break-words underline-offset-4 hover:bg-emerald-50 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700"
         title={`${label}をコピー`}
         aria-label={`${label}をコピー：${value}`}
-        onClick={async () => {
+        onClick={async (event) => {
+          if (stopPropagation) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
           try {
             await navigator.clipboard.writeText(String(value));
             setNotice(`${label}をコピーしました`);
@@ -1974,22 +1989,6 @@ function ScheduleDetails({ row }: { row: ScheduleSummaryRow }) {
 
 function compareText(left: string, right: string) {
   return left.localeCompare(right, "ja");
-}
-
-function RoleBadges({ roles }: { roles: string[] }) {
-  if (roles.length === 0) return <span className="text-slate-400">-</span>;
-  return (
-    <div className="flex flex-wrap gap-1">
-      {roles.map((role) => (
-        <span
-          key={role}
-          className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700"
-        >
-          {role}
-        </span>
-      ))}
-    </div>
-  );
 }
 
 function buildScheduleSummaryRows(
