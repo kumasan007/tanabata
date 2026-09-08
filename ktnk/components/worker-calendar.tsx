@@ -122,10 +122,14 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
             const daySchedules = scheduleMap[date] ?? [];
             const dayEntrants = entrantMap[date] ?? [];
             const total = daySchedules.reduce((sum, row) => sum + totalWorkers(row), 0);
+            const totalAerialVehicles = daySchedules.reduce(
+              (sum, row) => sum + (row.status === "work" ? row.aerial_work_vehicle_count ?? 0 : 0),
+              0,
+            );
             const isSaturday = new Date(`${date}T00:00:00`).getDay() === 6;
             return <div key={date} onClick={() => selectDate(date)} className={`min-h-20 min-w-0 cursor-pointer p-1.5 text-left align-top transition hover:bg-emerald-50 sm:min-h-24 sm:p-2 ${selectedDate === date ? "relative z-10 bg-emerald-50 ring-2 ring-inset ring-primary" : isSaturday ? "bg-sky-50/70" : "bg-white"}`}>
               <button type="button" onClick={(event) => { event.stopPropagation(); selectDate(date); }} aria-pressed={selectedDate === date} className="block w-full text-left text-sm font-bold">{Number(date.slice(-2))}</button>
-              {!company && daySchedules.length > 0 && <span className="mt-1 flex flex-col rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-semibold leading-4 text-emerald-900 sm:text-xs"><span>{daySchedules.length}社</span><span>{total}人</span></span>}
+              {!company && daySchedules.length > 0 && <span className="mt-1 flex flex-col rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-semibold leading-4 text-emerald-900 sm:text-xs"><span>{daySchedules.length}社</span><span>{total}人</span>{totalAerialVehicles > 0 && <span className="text-sky-800">高車：<CopyValue value={totalAerialVehicles} label={`${date}の高車台数`}>{totalAerialVehicles}台</CopyValue></span>}</span>}
               {!company && dayEntrants.length > 0 && <span className="mt-1 block text-[10px] font-semibold leading-4 text-amber-700 sm:text-xs">新規 {dayEntrants.length}社</span>}
               {company && daySchedules.map((row) => {
                 const area = row.status === "work" ? row.work_area : row.next_work_area;
@@ -136,7 +140,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                   {row.status === "no_work" && row.next_visit_date && <p className="truncate" title={`次回 ${row.next_visit_date}`}>次回 {row.next_visit_date.slice(5).replace("-", "/")}</p>}
                   <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
                   <p className="line-clamp-2 break-words" title={content ?? ""}>{content || "作業内容未入力"}</p>
-                  {row.status === "work" && (row.aerial_work_vehicle_count ?? 0) > 0 && <p className="truncate font-semibold text-sky-800">高所作業車 {row.aerial_work_vehicle_count}台</p>}
+                  {row.status === "work" && (row.aerial_work_vehicle_count ?? 0) > 0 && <p className="truncate font-semibold text-sky-800">高車：<CopyValue value={row.aerial_work_vehicle_count ?? 0} label={`${date}の高車台数`}>{row.aerial_work_vehicle_count}台</CopyValue></p>}
                 </div>;
               })}
               {company && dayEntrants.map((row) => <div key={row.id} className="mt-1 min-w-0 rounded bg-amber-100 p-1 text-[10px] leading-4 text-amber-900 sm:text-xs"><p className="truncate font-semibold" title={row.secondary_company}>新規：{row.secondary_company}</p><p>{row.person_count}人・{row.nationality_status === "includes_foreign" ? "外国籍含む" : row.nationality_status === "japanese_only" ? "日本籍" : "未確認"}</p></div>)}
@@ -167,19 +171,26 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 font-semibold text-primary">
-                {row.status === "work" ? <CopyValue value={totalWorkers(row)} label="合計人数">{totalWorkers(row)}人</CopyValue> : "作業なし"}
-              </p>
-              {subs.length > 0 ? (
+              {row.status === "work" ? (
                 <details className="mt-2 rounded-md border border-border bg-slate-50">
                   <summary className="cursor-pointer px-2.5 py-2 font-semibold text-slate-700 marker:text-emerald-700">
-                    二次会社 {subs.length}社
+                    合計 <CopyValue value={totalWorkers(row)} label="合計人数">{totalWorkers(row)}人</CopyValue>
                   </summary>
                   <div className="grid gap-1.5 border-t border-border p-2.5">
+                    <div className="flex min-w-0 items-baseline justify-between gap-3">
+                      <span className="min-w-0 break-words">
+                        <CopyValue value={row.primary_company} label="一次会社名" />
+                        <span className="ml-1 text-xs text-slate-400">一次</span>
+                      </span>
+                      <span className="shrink-0 font-semibold text-primary">
+                        <CopyValue value={row.primary_count ?? 0} label="一次会社人数">{row.primary_count ?? 0}人</CopyValue>
+                      </span>
+                    </div>
                     {subs.map((sub) => (
                       <div key={sub.id} className="flex min-w-0 items-baseline justify-between gap-3">
                         <span className="min-w-0 break-words">
                           {sub.secondary_company ? <CopyValue value={sub.secondary_company} label="二次会社名" /> : "会社名未入力"}
+                          <span className="ml-1 text-xs text-slate-400">二次</span>
                         </span>
                         <span className="shrink-0 font-semibold text-primary">
                           <CopyValue value={sub.worker_count ?? 0} label="二次会社人数">{sub.worker_count ?? 0}人</CopyValue>
@@ -189,11 +200,26 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                   </div>
                 </details>
               ) : (
-                <p className="mt-1 text-xs text-slate-400">二次会社 0社</p>
+                <>
+                  <p className="mt-0.5 font-semibold text-primary">作業なし</p>
+                  {subs.length > 0 && (
+                    <details className="mt-2 rounded-md border border-border bg-slate-50">
+                      <summary className="cursor-pointer px-2.5 py-2 font-semibold text-slate-700 marker:text-emerald-700">次回の二次会社 {subs.length}社</summary>
+                      <div className="grid gap-1.5 border-t border-border p-2.5">
+                        {subs.map((sub) => (
+                          <div key={sub.id} className="flex min-w-0 items-baseline justify-between gap-3">
+                            <span className="min-w-0 break-words">{sub.secondary_company ? <CopyValue value={sub.secondary_company} label="二次会社名" /> : "会社名未入力"}</span>
+                            <span className="shrink-0 font-semibold text-primary"><CopyValue value={sub.worker_count ?? 0} label="二次会社人数">{sub.worker_count ?? 0}人</CopyValue></span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </>
               )}
               <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label={row.status === "work" ? "作業エリア" : "次回来場"} /> : "エリア未入力"}</p>
               <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" /> : "作業内容未入力"}</p>
-              {row.status === "work" && <p className="mt-1 text-sky-800">高所作業車：{(row.aerial_work_vehicle_count ?? 0) > 0 ? `${row.aerial_work_vehicle_count}台${row.aerial_work_vehicle_floor ? `（使用フロア：${row.aerial_work_vehicle_floor}）` : ""}` : "使用なし"}</p>}
+              {row.status === "work" && <p className="mt-1 text-sky-800">高車：{(row.aerial_work_vehicle_count ?? 0) > 0 ? <><CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数">{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" />）</>}</> : "使用なし"}</p>}
               {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" /></p>}
             </article>;
           })}
@@ -219,7 +245,9 @@ function CopyValue({ value, label, children }: { value: string | number; label: 
       className="max-w-full rounded px-0.5 text-left underline-offset-4 hover:bg-emerald-50 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700"
       title={`${label}をコピー`}
       aria-label={`${label}をコピー：${value}`}
-      onClick={async () => {
+      onClick={async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         try {
           await navigator.clipboard.writeText(String(value));
           setNotice(`${label}をコピーしました`);
