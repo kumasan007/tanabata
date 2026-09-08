@@ -55,7 +55,16 @@ a {
 }
 input[type="date"],
 input[type="month"] {
+  display: block;
+  inline-size: 100%;
+  max-inline-size: 100%;
   min-inline-size: 0;
+  box-sizing: border-box;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="date"]::-webkit-datetime-edit {
+  min-inline-size: 0;
+  text-align: left;
 }
 input[type="checkbox"] {
   accent-color: hsl(var(--primary));
@@ -189,6 +198,10 @@ textarea {
   box-shadow: none;
 }
 
-.calendar-month { min-width: 0; color: transparent; background: transparent; }
-.calendar-month::-webkit-date-and-time-value { color: transparent; }
-.calendar-month::-webkit-datetime-edit { color: transparent; }
+.calendar-month {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  cursor: pointer;
+  opacity: 0;
+}
