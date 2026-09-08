@@ -66,7 +66,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
       next_work_area: input.status === "no_work" ? emptyToNull(resolvePreviousText(input.nextWorkArea, previous?.next_work_area, "作業エリア")) : null,
       next_work_content: input.status === "no_work" ? emptyToNull(resolvePreviousText(input.nextWorkContent, previous?.next_work_content, "作業内容")) : null,
       aerial_work_vehicle_count: input.status === "work" ? input.aerialWorkVehicleCount : null,
-      aerial_work_vehicle_details: input.status === "work" ? emptyToNull(input.aerialWorkVehicleDetails) : null,
+      aerial_work_vehicle_floor: input.status === "work" ? emptyToNull(input.aerialWorkVehicleFloor) : null,
       notes: emptyToNull(input.notes),
     };
 
@@ -97,7 +97,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
       next_work_area: null,
       next_work_content: null,
       aerial_work_vehicle_count: input.aerialWorkVehicleCount,
-      aerial_work_vehicle_details: emptyToNull(input.aerialWorkVehicleDetails),
+      aerial_work_vehicle_floor: emptyToNull(input.aerialWorkVehicleFloor),
       notes: null,
     });
   }
@@ -157,7 +157,7 @@ async function querySchedules(params: ScheduleSearchParams) {
       `
       id, work_date, status, primary_company, primary_count, work_area,
       work_content, next_visit_date, next_primary_count, next_work_area,
-      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_details,
+      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, kind, secondary_company, worker_count, sort_order
@@ -228,7 +228,7 @@ async function queryPreviousScheduleForCopy(primaryCompany: string, status: Sche
       `
       id, work_date, status, primary_company, primary_count, work_area,
       work_content, next_visit_date, next_primary_count, next_work_area,
-      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_details,
+      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, kind, secondary_company, worker_count, sort_order
@@ -264,7 +264,7 @@ async function queryNextScheduleForCopy(primaryCompany: string, status: Schedule
       `
       id, work_date, status, primary_company, primary_count, work_area,
       work_content, next_visit_date, next_primary_count, next_work_area,
-      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_details,
+      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, kind, secondary_company, worker_count, sort_order
@@ -298,7 +298,7 @@ async function queryWorkScheduleOnDate(primaryCompany: string, workDate: string)
     .select(`
       id, work_date, status, primary_company, primary_count, work_area,
       work_content, next_visit_date, next_primary_count, next_work_area,
-      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_details,
+      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, kind, secondary_company, worker_count, sort_order
@@ -334,7 +334,7 @@ async function queryScheduleSummariesByPrimaryCompany(primaryCompany: string): P
       `
       id, work_date, status, primary_company, primary_count, work_area,
       work_content, next_visit_date, next_primary_count, next_work_area,
-      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_details,
+      next_work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, kind, secondary_company, worker_count, sort_order
@@ -369,7 +369,7 @@ async function queryScheduleSummariesByPrimaryCompany(primaryCompany: string): P
       nextWorkArea: schedule.next_work_area ?? "",
       nextWorkContent: schedule.next_work_content ?? "",
       aerialWorkVehicleCount: schedule.aerial_work_vehicle_count ?? 0,
-      aerialWorkVehicleDetails: schedule.aerial_work_vehicle_details ?? "",
+      aerialWorkVehicleFloor: schedule.aerial_work_vehicle_floor ?? "",
       companyText: subs.join("、"),
       notes: schedule.notes ?? "",
     };
@@ -416,7 +416,7 @@ export function schedulesToListRows(schedules: ScheduleWithSubcompanies[]): Sche
           nextWorkArea: "",
           nextWorkContent: "",
           aerialWorkVehicleCount: schedule.aerial_work_vehicle_count ?? "",
-          aerialWorkVehicleDetails: schedule.aerial_work_vehicle_details ?? "",
+          aerialWorkVehicleFloor: schedule.aerial_work_vehicle_floor ?? "",
           notes: schedule.notes ?? "",
           createdAt: formatDateTime(schedule.created_at),
           updatedAt: formatDateTime(schedule.updated_at),
@@ -441,7 +441,7 @@ export function schedulesToListRows(schedules: ScheduleWithSubcompanies[]): Sche
           nextWorkArea: schedule.next_work_area ?? "",
           nextWorkContent: schedule.next_work_content ?? "",
           aerialWorkVehicleCount: "",
-          aerialWorkVehicleDetails: "",
+          aerialWorkVehicleFloor: "",
           notes: schedule.notes ?? "",
           createdAt: formatDateTime(schedule.created_at),
           updatedAt: formatDateTime(schedule.updated_at),

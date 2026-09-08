@@ -8,4 +8,11 @@ alter table public.new_entrant_records
   add constraint new_entrant_records_nationality_status_check
   check (nationality_status in ('japanese_only', 'includes_foreign'));
 
+alter table public.new_entrant_records
+  drop constraint if exists new_entrant_records_person_names_required;
+
+alter table public.new_entrant_records
+  add constraint new_entrant_records_person_names_required
+  check (person_names is not null and btrim(person_names) <> '') not valid;
+
 notify pgrst, 'reload schema';

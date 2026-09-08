@@ -39,7 +39,7 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   nextWorkArea: "",
   nextWorkContent: "",
   aerialWorkVehicleCount: null,
-  aerialWorkVehicleDetails: "",
+  aerialWorkVehicleFloor: "",
   notes: "",
 });
 
@@ -602,6 +602,12 @@ export function ScheduleForm({
       setSubmitState({ status: "error", message: "高所作業車を使用するか選択してください。" });
       return;
     }
+    if ((form.aerialWorkVehicleCount ?? 0) > 0 && !form.aerialWorkVehicleFloor.trim()) {
+      setStep("edit");
+      setEditorPart("content");
+      setSubmitState({ status: "error", message: "高所作業車の使用フロアを入力してください。" });
+      return;
+    }
     if (
       activeRows.some(
         (row) => !row.secondaryCompany.trim() && (row.workerCount ?? 0) > 0,
@@ -1026,7 +1032,7 @@ export function ScheduleForm({
                       <dt className="text-slate-500">高所作業車</dt>
                       <dd>
                         {(source.aerialWorkVehicleCount ?? 0) > 0
-                          ? `${source.aerialWorkVehicleCount}台${source.aerialWorkVehicleDetails ? `（${source.aerialWorkVehicleDetails}）` : ""}`
+                          ? `${source.aerialWorkVehicleCount}台・${source.aerialWorkVehicleFloor || "使用フロア未入力"}`
                           : "使用しない"}
                       </dd>
                     </dl>
@@ -1039,7 +1045,7 @@ export function ScheduleForm({
                             workArea: source.workArea ?? "",
                             workContent: source.workContent ?? "",
                             aerialWorkVehicleCount: source.aerialWorkVehicleCount ?? 0,
-                            aerialWorkVehicleDetails: source.aerialWorkVehicleDetails ?? "",
+                            aerialWorkVehicleFloor: source.aerialWorkVehicleFloor ?? "",
                           });
                           setStep("confirm");
                         }}
@@ -1162,8 +1168,8 @@ export function ScheduleForm({
                       <div className="mt-4 rounded-xl bg-sky-50 p-4 text-sm">
                         <span className="font-semibold">高所作業車：</span>
                         <span>{(form.aerialWorkVehicleCount ?? 0) > 0 ? `${form.aerialWorkVehicleCount}台` : "使用しない"}</span>
-                        {(form.aerialWorkVehicleCount ?? 0) > 0 && form.aerialWorkVehicleDetails && (
-                          <span className="ml-2 whitespace-pre-wrap">{form.aerialWorkVehicleDetails}</span>
+                        {(form.aerialWorkVehicleCount ?? 0) > 0 && form.aerialWorkVehicleFloor && (
+                          <span className="ml-2 whitespace-pre-wrap">使用フロア：{form.aerialWorkVehicleFloor}</span>
                         )}
                       </div>
                     )}
@@ -1379,11 +1385,11 @@ export function ScheduleForm({
                           <p className="font-semibold text-slate-900">高所作業車を使用しますか？ <span className="required-mark">必須</span></p>
                           <div className="mt-3 grid grid-cols-2 gap-3">
                             <button type="button" className="status-option" aria-pressed={(form.aerialWorkVehicleCount ?? 0) > 0} onClick={() => patch({ aerialWorkVehicleCount: Math.max(1, form.aerialWorkVehicleCount ?? 1) })}>使用する</button>
-                            <button type="button" className="status-option" aria-pressed={form.aerialWorkVehicleCount === 0} onClick={() => patch({ aerialWorkVehicleCount: 0, aerialWorkVehicleDetails: "" })}>使用しない</button>
+                            <button type="button" className="status-option" aria-pressed={form.aerialWorkVehicleCount === 0} onClick={() => patch({ aerialWorkVehicleCount: 0, aerialWorkVehicleFloor: "" })}>使用しない</button>
                           </div>
                           {(form.aerialWorkVehicleCount ?? 0) > 0 && <div className="mt-3 grid gap-3 sm:grid-cols-[9rem_1fr]">
                             <label className="field">
-                              <span className="label">使用台数</span>
+                              <span className="label">希望台数</span>
                               <div className="relative">
                                 <input
                                   className="input pr-10 tabular-nums"
@@ -1400,13 +1406,14 @@ export function ScheduleForm({
                               </div>
                             </label>
                             <label className="field">
-                              <span className="label">内容 <span className="ml-2 text-sm font-normal text-slate-600">任意</span></span>
+                              <span className="label">使用フロア <span className="required-mark">必須</span></span>
                               <input
                                 className="input"
-                                value={form.aerialWorkVehicleDetails}
-                                maxLength={500}
-                                placeholder="例：12m、スカイマスター"
-                                onChange={(event) => patch({ aerialWorkVehicleDetails: event.target.value })}
+                                required
+                                value={form.aerialWorkVehicleFloor}
+                                maxLength={100}
+                                placeholder="例：10階、12階"
+                                onChange={(event) => patch({ aerialWorkVehicleFloor: event.target.value })}
                               />
                             </label>
                           </div>}
@@ -1448,6 +1455,10 @@ export function ScheduleForm({
                         }
                         if (editorPart === "content" && hasPlannedWork && form.aerialWorkVehicleCount === null) {
                           setSubmitState({ status: "error", message: "高所作業車を使用するか選択してください。" });
+                          return;
+                        }
+                        if (editorPart === "content" && (form.aerialWorkVehicleCount ?? 0) > 0 && !form.aerialWorkVehicleFloor.trim()) {
+                          setSubmitState({ status: "error", message: "高所作業車の使用フロアを入力してください。" });
                           return;
                         }
                         setSubmitState({ status: "idle" });
@@ -1589,7 +1600,7 @@ export function ScheduleForm({
                           <p>次回来場 {summary.nextVisitDate}</p>
                         )}
                         {summary.aerialWorkVehicleCount > 0 && (
-                          <p>高所作業車：{summary.aerialWorkVehicleCount}台{summary.aerialWorkVehicleDetails ? `（${summary.aerialWorkVehicleDetails}）` : ""}</p>
+                          <p>高所作業車：{summary.aerialWorkVehicleCount}台{summary.aerialWorkVehicleFloor ? `（使用フロア：${summary.aerialWorkVehicleFloor}）` : ""}</p>
                         )}
                         {summary.notes && <p>備考：{summary.notes}</p>}
                       </div>

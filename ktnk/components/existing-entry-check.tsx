@@ -45,7 +45,7 @@ export function ExistingEntryCheck({ date, company, kind, onNew, onOtherDate, on
       {row.subcompanies.filter((sub) => sub.kind === (row.status === "work" ? "current" : "next_visit")).map((sub) => <p key={sub.id}>{sub.secondary_company}・{sub.worker_count ?? 0}人</p>)}
       {row.next_visit_date && <p>次回来場：{row.next_visit_date}</p>}
       <p className="whitespace-pre-wrap">{row.status === "work" ? row.work_area : row.next_work_area} / {row.status === "work" ? row.work_content : row.next_work_content}</p>
-      {(row.aerial_work_vehicle_count ?? 0) > 0 && <p>高所作業車：{row.aerial_work_vehicle_count}台 {row.aerial_work_vehicle_details}</p>}
+      {(row.aerial_work_vehicle_count ?? 0) > 0 && <p>高所作業車：{row.aerial_work_vehicle_count}台 使用フロア：{row.aerial_work_vehicle_floor}</p>}
       {row.notes && <p className="whitespace-pre-wrap">備考：{row.notes}</p>}
       <button type="button" className="btn btn-primary w-full" onClick={() => onSchedule?.(row)}>変更する</button>
     </article>)}

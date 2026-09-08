@@ -193,7 +193,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
               )}
               <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label={row.status === "work" ? "作業エリア" : "次回来場"} /> : "エリア未入力"}</p>
               <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" /> : "作業内容未入力"}</p>
-              {row.status === "work" && <p className="mt-1 text-sky-800">高所作業車：{(row.aerial_work_vehicle_count ?? 0) > 0 ? `${row.aerial_work_vehicle_count}台${row.aerial_work_vehicle_details ? `（${row.aerial_work_vehicle_details}）` : ""}` : "使用なし"}</p>}
+              {row.status === "work" && <p className="mt-1 text-sky-800">高所作業車：{(row.aerial_work_vehicle_count ?? 0) > 0 ? `${row.aerial_work_vehicle_count}台${row.aerial_work_vehicle_floor ? `（使用フロア：${row.aerial_work_vehicle_floor}）` : ""}` : "使用なし"}</p>}
               {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" /></p>}
             </article>;
           })}

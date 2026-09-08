@@ -41,7 +41,7 @@ export const scheduleSubmitSchema = z
     nextWorkArea: z.string().default(""),
     nextWorkContent: z.string().default(""),
     aerialWorkVehicleCount: countSchema.default(null),
-    aerialWorkVehicleDetails: z.string().max(500, "高所作業車の内容は500文字以内で入力してください。").default(""),
+    aerialWorkVehicleFloor: z.string().max(100, "高所作業車の使用フロアは100文字以内で入力してください。").default(""),
     notes: z.string().max(2000, "備考は2000文字以内で入力してください。").default(""),
     overwriteExisting: z.boolean().optional().default(false),
   })
@@ -111,6 +111,10 @@ export const scheduleSubmitSchema = z
       if (!value.usePreviousNextPrimaryCount && value.nextPrimaryCount === 0 && nextSecondaryTotal < 1 && !hasPreviousNextSecondaryCount) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nextSubcompanies"], message: "次回の合計人数を1人以上にしてください。" });
       }
+    }
+
+    if ((value.status === "work" || value.nextVisitDate) && (value.aerialWorkVehicleCount ?? 0) > 0 && !value.aerialWorkVehicleFloor.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["aerialWorkVehicleFloor"], message: "高所作業車の使用フロアを入力してください。" });
     }
 
     const subcompanyField = value.status === "work" ? "currentSubcompanies" : "nextSubcompanies";

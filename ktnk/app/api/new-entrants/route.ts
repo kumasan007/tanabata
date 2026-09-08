@@ -11,7 +11,7 @@ const inputSchema = z.object({
   primaryCompany: z.string().trim().min(1, "一次会社を選択してください。"),
   secondaryCompany: z.string().trim().min(1, "新規入場する会社を選択してください。"),
   personCount: z.number().int().min(1, "新規入場者を1人以上入力してください。"),
-  personNames: z.string().trim().max(1000).default(""),
+  personNames: z.string().trim().min(1, "氏名を入力してください。").max(1000, "氏名は1000文字以内で入力してください。"),
   nationalityStatus: z.enum(["japanese_only", "includes_foreign"], {
     message: "日本籍のみか、外国籍を含むかを選択してください。",
   }),
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       primary_company: value.primaryCompany,
       secondary_company: value.secondaryCompany,
       person_count: value.personCount,
-      person_names: value.personNames || null,
+      person_names: value.personNames,
       nationality_status: value.nationalityStatus,
       notes: value.notes || null,
     }, { onConflict: "entry_date,primary_company,secondary_company" }).select("*").single();

@@ -28,7 +28,7 @@ export type PreviousSchedule = {
   workArea: string | null;
   workContent: string | null;
   aerialWorkVehicleCount?: number | null;
-  aerialWorkVehicleDetails?: string | null;
+  aerialWorkVehicleFloor?: string | null;
   subcompanies: { secondaryCompany: string; workerCount: number | null }[];
 };
 
@@ -50,7 +50,7 @@ export type ScheduleSubmitInput = {
   nextWorkArea: string;
   nextWorkContent: string;
   aerialWorkVehicleCount: number | null;
-  aerialWorkVehicleDetails: string;
+  aerialWorkVehicleFloor: string;
   notes: string;
   overwriteExisting?: boolean;
 };
@@ -68,7 +68,7 @@ export type ScheduleGroupRow = {
   next_work_area: string | null;
   next_work_content: string | null;
   aerial_work_vehicle_count: number | null;
-  aerial_work_vehicle_details: string | null;
+  aerial_work_vehicle_floor: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -103,7 +103,7 @@ export type ScheduleListRow = {
   nextWorkArea: string;
   nextWorkContent: string;
   aerialWorkVehicleCount: number | "";
-  aerialWorkVehicleDetails: string;
+  aerialWorkVehicleFloor: string;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -119,7 +119,7 @@ export type ScheduleSummary = {
   nextWorkArea: string;
   nextWorkContent: string;
   aerialWorkVehicleCount: number;
-  aerialWorkVehicleDetails: string;
+  aerialWorkVehicleFloor: string;
   companyText: string;
   notes: string;
 };
