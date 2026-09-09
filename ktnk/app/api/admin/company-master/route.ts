@@ -226,7 +226,8 @@ export async function PATCH(request: Request) {
 
     if (typeof body.tradeRolesPrimaryCompany === "string") {
       const tradeRolesPrimaryCompany = body.tradeRolesPrimaryCompany.trim();
-      if (!tradeRolesPrimaryCompany || !Array.isArray(body.primaryTradeRoles)) {
+      const primaryCompany = body.primaryCompany?.trim() ?? "";
+      if (!tradeRolesPrimaryCompany || !primaryCompany || !Array.isArray(body.primaryTradeRoles)) {
         return NextResponse.json(
           { error: "一次会社と職種を正しく入力してください。" },
           { status: 400 },
@@ -235,7 +236,10 @@ export async function PATCH(request: Request) {
 
       const { data, error } = await supabase
         .from("company_master")
-        .update({ primary_trade_roles: normalizeTradeRoles(body.primaryTradeRoles) })
+        .update({
+          primary_company: primaryCompany,
+          primary_trade_roles: normalizeTradeRoles(body.primaryTradeRoles),
+        })
         .eq("primary_company", tradeRolesPrimaryCompany)
         .select("id");
       if (error) throw error;

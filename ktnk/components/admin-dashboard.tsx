@@ -18,6 +18,7 @@ import {
   LogIn,
   LogOut,
   LoaderCircle,
+  Pencil,
   Plus,
   RotateCcw,
   Search,
@@ -127,6 +128,7 @@ export function AdminDashboard() {
   const [editPrimaryCompany, setEditPrimaryCompany] = useState("");
   const [editSecondaryCompany, setEditSecondaryCompany] = useState("");
   const [editingPrimaryRoles, setEditingPrimaryRoles] = useState<string | null>(null);
+  const [editPrimaryName, setEditPrimaryName] = useState("");
   const [editPrimaryRoles, setEditPrimaryRoles] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -592,7 +594,7 @@ export function AdminDashboard() {
   }
 
   async function savePrimaryTradeRoles() {
-    if (!editingPrimaryRoles) return;
+    if (!editingPrimaryRoles || !editPrimaryName.trim()) return;
 
     setMessage("");
     setCompanyLoading(true);
@@ -602,6 +604,7 @@ export function AdminDashboard() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           tradeRolesPrimaryCompany: editingPrimaryRoles,
+          primaryCompany: editPrimaryName,
           primaryTradeRoles: parseRoleText(editPrimaryRoles),
         }),
       });
@@ -1142,7 +1145,7 @@ export function AdminDashboard() {
             つまみをドラッグするか、↑・↓で並び替えできます。二次会社は同じ一次会社内で移動でき、変更は自動保存されます。
           </p>
 
-          <div className="grid gap-3">
+          <div className="grid gap-2">
             {companyFetching && <LoadingIndicator label="協力会社一覧を読み込み中…" />}
             {!companyFetching && companyGroups.length === 0 && (
               <p className="py-6 text-center text-slate-500">
@@ -1152,7 +1155,7 @@ export function AdminDashboard() {
             {companyGroups.map((group, groupIndex) => (
               <div
                 key={group.primaryCompany}
-                className={`grid grid-cols-1 items-start gap-2 rounded-md sm:grid-cols-[auto_minmax(0,1fr)] ${dropTarget === group.primaryCompany ? "ring-2 ring-emerald-500 bg-emerald-50" : ""}`}
+                className={`grid grid-cols-1 items-start gap-1 rounded-md sm:grid-cols-[auto_minmax(0,1fr)] ${dropTarget === group.primaryCompany ? "ring-2 ring-emerald-500 bg-emerald-50" : ""}`}
                 onDragOver={(event) => {
                   if (!draggedCompany || draggedCompany.rowId || companyLoading || editingCompanyId) return;
                   event.preventDefault();
@@ -1165,7 +1168,7 @@ export function AdminDashboard() {
                   void dropCompany(group.primaryCompany);
                 }}
               >
-                <div className="hidden h-11 items-center gap-1 sm:flex">
+                <div className="hidden h-10 items-center gap-1 sm:flex">
                   <span
                     className="inline-flex h-9 w-5 items-center justify-center cursor-grab text-slate-400 active:cursor-grabbing"
                     draggable={!companyLoading && !editingCompanyId}
@@ -1197,7 +1200,7 @@ export function AdminDashboard() {
                   </button>
                 </div>
               <details className="min-w-0 flex-1 rounded-md border border-border bg-white">
-                <summary className="flex min-h-11 cursor-pointer items-center rounded-md px-3 py-2.5 font-semibold text-slate-900 marker:text-emerald-700">
+                <summary className="flex min-h-10 cursor-pointer items-center rounded-md px-2.5 py-1.5 font-semibold text-slate-900 marker:text-emerald-700">
                   <span className="min-w-0 flex-1 flex flex-wrap items-center gap-x-3 gap-y-2">
                     <CopyValue
                       value={group.primaryCompany}
@@ -1216,10 +1219,28 @@ export function AdminDashboard() {
                     <span className="text-sm font-normal text-slate-500">
                       二次：{group.rows.filter((row) => row.secondary_company).length}社
                     </span>
-                    <span className="ml-auto flex items-center gap-2">
+                    <span className="ml-auto flex items-center gap-1">
                       <button
                         type="button"
-                        className="btn btn-secondary h-9 w-9 p-0"
+                        className="btn btn-secondary h-8 w-8 p-0"
+                        disabled={companyLoading || !!editingPrimaryRoles}
+                        aria-label={`${group.primaryCompany}の会社名と職種を編集`}
+                        title="一次会社名と職種を編集"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setEditingPrimaryRoles(group.primaryCompany);
+                          setEditPrimaryName(group.primaryCompany);
+                          setEditPrimaryRoles(group.primaryTradeRoles.join("、"));
+                          setMessage("");
+                          event.currentTarget.closest("details")?.setAttribute("open", "");
+                        }}
+                      >
+                        <Pencil size={16} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary h-8 w-8 p-0"
                         aria-label={`${group.primaryCompany}に追加`}
                         title="この一次会社に追加"
                         onClick={(event) => {
@@ -1235,7 +1256,7 @@ export function AdminDashboard() {
                       </button>
                       <button
                         type="button"
-                        className="btn btn-secondary h-9 w-9 p-0 text-red-700"
+                        className="btn btn-secondary h-8 w-8 p-0 text-red-700"
                         disabled={companyLoading || !!editingCompanyId}
                         aria-label={`${group.primaryCompany}と配下の二次会社を削除`}
                         title="一次会社ごと削除"
@@ -1250,12 +1271,19 @@ export function AdminDashboard() {
                     </span>
                   </span>
                 </summary>
-                <div className="grid gap-3 border-t border-border p-3 sm:p-4">
-                  <div className="flex flex-wrap items-end gap-3 rounded-md bg-slate-50 p-3">
-                    {editingPrimaryRoles === group.primaryCompany ? (
-                      <>
-                        <label className="field min-w-0 flex-1 sm:min-w-72">
-                          <span className="label">一次会社の職種</span>
+                <div className="grid gap-2 border-t border-border p-2 sm:p-3">
+                  {editingPrimaryRoles === group.primaryCompany && (
+                    <div className="grid items-end gap-2 rounded-md bg-slate-50 p-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+                        <label className="field min-w-0">
+                          <span className="label">一次会社名</span>
+                          <input
+                            className="input"
+                            value={editPrimaryName}
+                            onChange={(event) => setEditPrimaryName(event.target.value)}
+                          />
+                        </label>
+                        <label className="field min-w-0">
+                          <span className="label">職種</span>
                           <input
                             className="input"
                             value={editPrimaryRoles}
@@ -1270,36 +1298,12 @@ export function AdminDashboard() {
                         <button type="button" className="btn btn-secondary" disabled={companyLoading} onClick={() => setEditingPrimaryRoles(null)}>
                           キャンセル
                         </button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-slate-500">一次会社の職種</p>
-                          <p className="mt-1 break-words text-sm text-slate-800">
-                            {group.primaryTradeRoles.length > 0
-                              ? <CopyValue value={group.primaryTradeRoles.join("・")} label="職種" />
-                              : "未登録"}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          disabled={companyLoading || !!editingPrimaryRoles}
-                          onClick={() => {
-                            setEditingPrimaryRoles(group.primaryCompany);
-                            setEditPrimaryRoles(group.primaryTradeRoles.join("、"));
-                            setMessage("");
-                          }}
-                        >
-                          職種を変更
-                        </button>
-                      </>
-                    )}
-                  </div>
+                    </div>
+                  )}
                   {group.rows.map((row, rowIndex) => (
                     <div
                       key={row.id}
-                      className={`grid items-center gap-3 rounded-md bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto] ${dropTarget === row.id ? "ring-2 ring-emerald-500" : ""}`}
+                      className={`grid items-center gap-2 rounded-md bg-slate-50 px-2 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto] ${dropTarget === row.id ? "ring-2 ring-emerald-500" : ""}`}
                       onDragOver={(event) => {
                         if (!draggedCompany?.rowId || draggedCompany.primary !== group.primaryCompany || companyLoading || editingCompanyId) return;
                         event.preventDefault();
@@ -1315,18 +1319,7 @@ export function AdminDashboard() {
                       }}
                     >
                       {editingCompanyId === row.id ? (
-                        <div className="grid gap-3">
-                          <label className="field">
-                            <span className="label">一次会社</span>
-                            <input
-                              className="input"
-                              value={editPrimaryCompany}
-                              onChange={(event) =>
-                                setEditPrimaryCompany(event.target.value)
-                              }
-                              aria-label="一次会社を編集"
-                            />
-                          </label>
+                        <div className="grid gap-2">
                           <label className="field">
                             <span className="label">二次会社</span>
                             <input
@@ -1403,21 +1396,23 @@ export function AdminDashboard() {
                           <>
                             <button
                               type="button"
-                              className="btn btn-secondary"
+                              className="btn btn-secondary h-8 w-8 p-0"
                               disabled={companyLoading}
                               onClick={() => startEditingCompany(row)}
                               aria-label={`${row.secondary_company || row.primary_company}を編集`}
+                              title="二次会社名を編集"
                             >
-                              編集
+                              <Pencil size={16} aria-hidden="true" />
                             </button>
                             <button
                               type="button"
-                              className="btn btn-secondary text-red-700"
+                              className="btn btn-secondary h-8 w-8 p-0 text-red-700"
                               disabled={companyLoading}
                               onClick={() => void removeCompanyMaster(row.id)}
                               aria-label={`${row.secondary_company || row.primary_company}を削除`}
+                              title="削除"
                             >
-                              削除
+                              <Trash2 size={16} aria-hidden="true" />
                             </button>
                           </>
                         )}
