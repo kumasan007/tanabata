@@ -18,6 +18,7 @@ export const subcompanySchema = z.object({
 
 export const scheduleSubmitSchema = z
   .object({
+    dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(180).optional(),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "開始日を入力してください。"),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "終了日を入力してください。"),
     excludeWeekends: z.boolean().default(false),
@@ -29,10 +30,20 @@ export const scheduleSubmitSchema = z
     workContent: z.string().default(""),
     aerialWorkVehicleCount: countSchema.default(null),
     aerialWorkVehicleFloor: z.string().max(100, "高所作業車の使用フロアは100文字以内で入力してください。").default(""),
+    aerialWorkVehicles: z.array(z.object({
+      workArea: z.string().trim().min(1, "高所作業車の使用場所を入力してください。").max(100),
+      vehicleCount: countSchema.refine((value) => value !== null && value >= 1, "台数は1以上で入力してください。"),
+    })).optional().default([]),
     notes: z.string().max(2000, "備考は2000文字以内で入力してください。").default(""),
     overwriteExisting: z.boolean().optional().default(false),
+    skipExisting: z.boolean().optional().default(false),
   })
   .superRefine((value, ctx) => {
+    if (value.dates?.length) {
+      value.dates.forEach((date, index) => {
+        if (!isWorkingDate(date)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["dates", index], message: "日曜日は入力できません。" });
+      });
+    }
     for (const field of ["startDate", "endDate"] as const) {
       if (!isWorkingDate(value[field])) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: "日曜日は入力できません。月曜〜土曜を選択してください。" });
     }

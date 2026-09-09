@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-  getNextScheduleForCopy,
-  getPreviousScheduleForCopy,
-} from "@/lib/schedule-service";
+import { getPreviousScheduleForCopy } from "@/lib/schedule-service";
 import {
   addDays,
   parseLocalDate,
@@ -15,6 +12,7 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const company = new URL(request.url).searchParams.get("primaryCompany") ?? "";
+  const workDate = new URL(request.url).searchParams.get("workDate") ?? "";
   if (!company.trim())
     return NextResponse.json(
       { error: "一次会社を選択してください。" },
@@ -22,11 +20,10 @@ export async function GET(request: Request) {
     );
   try {
     const today = todayInTokyoString();
-    // Prefer the latest work day up to today, then fall back to the nearest future plan.
-    const tomorrow = toDateString(addDays(parseLocalDate(today)!, 1));
-    const previous = await getPreviousScheduleForCopy(company, tomorrow);
-    const row =
-      previous ?? await getNextScheduleForCopy(company, tomorrow);
+    const target = parseLocalDate(workDate)
+      ? workDate
+      : toDateString(addDays(parseLocalDate(today)!, 1));
+    const row = await getPreviousScheduleForCopy(company, target);
     const source: PreviousSchedule | null = row
       ? {
           workDate: row.work_date,
@@ -35,6 +32,7 @@ export async function GET(request: Request) {
           workContent: row.work_content,
           aerialWorkVehicleCount: row.aerial_work_vehicle_count,
           aerialWorkVehicleFloor: row.aerial_work_vehicle_floor,
+          aerialWorkVehicles: row.aerialWorkVehicles?.map((vehicle) => ({ workArea: vehicle.work_area, vehicleCount: vehicle.vehicle_count })),
           subcompanies: row.subcompanies.map((sub) => ({
               secondaryCompany: sub.secondary_company ?? "",
               workerCount: sub.worker_count,

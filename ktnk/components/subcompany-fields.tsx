@@ -122,6 +122,7 @@ export function SubcompanyFields({
                       min={0}
                       step={1}
                       type="number"
+                      placeholder="0"
                       value={row.workerCount ?? ""}
                       onChange={(event) => updateRow(index, {
                         usePreviousWorkerCount: false,

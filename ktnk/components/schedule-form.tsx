@@ -1,18 +1,18 @@
 "use client";
 
 import { ExistingEntryCheck } from "@/components/existing-entry-check";
-import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
 import { LoadingIndicator } from "@/components/loading-indicator";
-import type { ScheduleWithSubcompanies } from "@/lib/types";
 import { CopyButton } from "@/components/copy-button";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { SubcompanyFields } from "@/components/subcompany-fields";
 import { AddSecondaryCompany } from "@/components/add-secondary-company";
+import { MultiDateCalendar } from "@/components/multi-date-calendar";
 import type {
   CompanyMaster,
   PreviousSchedule,
   ScheduleSubmitInput,
   ScheduleSummary,
+  ScheduleWithSubcompanies,
 } from "@/lib/types";
 import { isWorkingDate, workingDateOptions, shortDateWithWeekday, parseLocalDate } from "@/lib/utils";
 
@@ -22,6 +22,7 @@ type SubmitState =
   | { status: "success"; dates: string[] }
   | { status: "error"; message: string };
 const emptyForm = (date: string): ScheduleSubmitInput => ({
+  dates: date ? [date] : [],
   startDate: date,
   endDate: date,
   excludeWeekends: false,
@@ -33,6 +34,7 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   workContent: "",
   aerialWorkVehicleCount: null,
   aerialWorkVehicleFloor: "",
+  aerialWorkVehicles: [],
   notes: "",
 });
 
@@ -50,6 +52,20 @@ function displayDate(value: string) {
 function displayDateRange(startDate: string, endDate: string) {
   if (!endDate || startDate === endDate) return displayDate(startDate);
   return `${displayDate(startDate)}〜${displayDate(endDate)}`;
+}
+
+function displaySelectedDates(dates: string[] | undefined, startDate: string, endDate: string) {
+  if (!dates?.length) return displayDateRange(startDate, endDate);
+  return dates.map(displayDate).join("、");
+}
+
+function sourceQuestion(workDate: string, today: string) {
+  const current = parseLocalDate(today);
+  const tomorrow = current ? new Date(current.getFullYear(), current.getMonth(), current.getDate() + 1) : null;
+  const tomorrowText = tomorrow ? `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}` : "";
+  if (workDate === today) return "今日の作業と同じですか？";
+  if (workDate === tomorrowText) return "明日の作業と同じですか？";
+  return `${displayDate(workDate)}の作業と同じですか？`;
 }
 
 function SectionHeading({ title }: { title: string }) {
@@ -167,11 +183,14 @@ function WorkField({
           }}
         />
       </div>
-      {multiline ? (
-        <textarea className="textarea" rows={3} {...inputProps} />
-      ) : (
-        <input className="input" {...inputProps} />
-      )}
+      <div className="relative">
+        {multiline ? (
+          <textarea className="textarea pr-11" rows={3} {...inputProps} />
+        ) : (
+          <input className="input pr-11" {...inputProps} />
+        )}
+        {value && <button type="button" className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full text-xl text-slate-500 hover:bg-slate-100" aria-label={`${label}を消す`} onClick={() => { setSame(false); onChange(""); }}>×</button>}
+      </div>
     </div>
   );
 }
@@ -262,7 +281,6 @@ export function ScheduleForm({
   initialCompanyMaster: CompanyMaster;
 }) {
   const [form, setForm] = useState<ScheduleSubmitInput>(() => emptyForm(""));
-  const [aerialWorkVehicleCountInput, setAerialWorkVehicleCountInput] = useState("");
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(
     initialCompanyMaster,
   );
@@ -270,10 +288,9 @@ export function ScheduleForm({
   const [companyRetry, setCompanyRetry] = useState(0);
   const [choosingCompany, setChoosingCompany] = useState(true);
   const [choice, setChoice] = useState<"same" | "new" | null>(null);
-  const [editingExisting, setEditingExisting] = useState<ScheduleWithSubcompanies | null>(null);
   const [customDate, setCustomDate] = useState(false);
-  const [dateRange, setDateRange] = useState(false);
   const [continuingInput, setContinuingInput] = useState(false);
+  const [overwriteExisting, setOverwriteExisting] = useState(false);
   const [step, setStep] = useState<
     "existing" | "date" | "copy" | "edit" | "confirm" | "copyContent"
   >("date");
@@ -286,6 +303,7 @@ export function ScheduleForm({
   const [sourceRetry, setSourceRetry] = useState(0);
   const [sourceResult, setSourceResult] = useState<{
     company: string;
+    date: string;
     source: PreviousSchedule | null;
     today: string;
     error: string;
@@ -305,40 +323,30 @@ export function ScheduleForm({
   const [summaryVersion, setSummaryVersion] = useState(0);
   const submitting = useRef(false);
   const resultRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    setAerialWorkVehicleCountInput(
-      form.aerialWorkVehicleCount === null ? "" : String(form.aerialWorkVehicleCount),
-    );
-  }, [form.aerialWorkVehicleCount]);
-  const source =
-    sourceResult?.company === form.primaryCompany ? sourceResult.source : null;
+  const source = sourceResult?.company === form.primaryCompany && sourceResult?.date === form.startDate ? sourceResult.source : null;
   const sourceLoading = Boolean(
-    form.primaryCompany && sourceResult?.company !== form.primaryCompany,
+    form.primaryCompany && form.startDate && (sourceResult?.company !== form.primaryCompany || sourceResult?.date !== form.startDate),
   );
   const sourceError =
-    sourceResult?.company === form.primaryCompany ? sourceResult.error : "";
-  const sourceIsToday = source?.workDate === sourceResult?.today;
-  const sourceIsFuture = Boolean(
-    source?.workDate && sourceResult?.today && source.workDate > sourceResult.today,
-  );
+    sourceResult?.company === form.primaryCompany && sourceResult?.date === form.startDate ? sourceResult.error : "";
   useEffect(() => {
     if (step !== "copy" || choice !== null || sourceLoading || sourceError || source) return;
     setForm((current) => ({
       ...emptyForm(current.startDate),
       endDate: current.endDate,
+      dates: current.dates,
       primaryCompany: current.primaryCompany,
+      primaryCount: null,
+      currentSubcompanies: (companyMaster?.secondariesByPrimary[current.primaryCompany] ?? []).map((secondaryCompany) => ({ secondaryCompany, workerCount: null, usePreviousWorkerCount: false })),
     }));
-    setSecondaryWorkChoice(null);
+    setSecondaryWorkChoice((companyMaster?.secondariesByPrimary[form.primaryCompany] ?? []).length > 0);
     setChoice("new");
     setStep("edit");
     setEditorPart("people");
     setCopyVersion((version) => version + 1);
     setSubmitState({ status: "idle" });
-  }, [step, choice, sourceLoading, sourceError, source]);
-  const validDate =
-    isWorkingDate(form.startDate) &&
-    isWorkingDate(form.endDate) &&
-    form.startDate <= form.endDate;
+  }, [step, choice, sourceLoading, sourceError, source, companyMaster, form.primaryCompany]);
+  const validDate = Boolean(form.dates?.length) && form.dates!.every(isWorkingDate);
   const ready = Boolean(
     form.primaryCompany &&
     choice &&
@@ -353,11 +361,9 @@ export function ScheduleForm({
   const totalCount =
     (activeCount ?? 0) +
     activeRows.reduce((sum, row) => sum + (row.workerCount ?? 0), 0);
-  const secondaryRowsComplete =
-    activeRows.length > 0 &&
-    activeRows.every(
-      (row) => row.secondaryCompany.trim() && (row.workerCount ?? 0) >= 1,
-    );
+  const secondaryRowsComplete = activeRows.every(
+    (row) => row.secondaryCompany.trim() && (row.workerCount ?? 0) >= 0,
+  );
   const area = form.workArea;
   const content = form.workContent;
   const secondaryOptions = useMemo(
@@ -375,12 +381,6 @@ export function ScheduleForm({
       row.workerCount,
     ]) ?? [],
   );
-  const previousAerialWorkVehicleCount = previous?.aerialWorkVehicleCount ?? 0;
-  const previousAerialWorkVehicleFloor = previous?.aerialWorkVehicleFloor ?? "";
-  const aerialWorkVehicleCopied =
-    previousAerialWorkVehicleCount > 0 &&
-    form.aerialWorkVehicleCount === previousAerialWorkVehicleCount &&
-    form.aerialWorkVehicleFloor === previousAerialWorkVehicleFloor;
   const dateOptions = workingDateOptions(today);
 
   useEffect(() => {
@@ -402,12 +402,12 @@ export function ScheduleForm({
   }, [companyRetry]);
 
   useEffect(() => {
-    if (!form.primaryCompany) return;
+    if (!form.primaryCompany || !form.startDate) return;
     const controller = new AbortController();
     setSourceResult(null);
     fetch(
       "/api/schedules/copy-source?" +
-        new URLSearchParams({ primaryCompany: form.primaryCompany }),
+        new URLSearchParams({ primaryCompany: form.primaryCompany, workDate: form.startDate }),
       { signal: controller.signal, cache: "no-store" },
     )
       .then(async (response) => {
@@ -416,6 +416,7 @@ export function ScheduleForm({
         if (!controller.signal.aborted)
           setSourceResult({
             company: form.primaryCompany,
+            date: form.startDate,
             source: body.source,
             today: body.today,
             error: "",
@@ -425,13 +426,14 @@ export function ScheduleForm({
         if (!controller.signal.aborted)
           setSourceResult({
             company: form.primaryCompany,
+            date: form.startDate,
             source: null,
             today: "",
             error: "前回の作業を取得できませんでした。",
           });
       });
     return () => controller.abort();
-  }, [form.primaryCompany, sourceRetry]);
+  }, [form.primaryCompany, form.startDate, sourceRetry]);
 
   useEffect(() => {
     if (!showEditor) return;
@@ -522,8 +524,8 @@ export function ScheduleForm({
       setChoice(null);
       setStep("date");
       setCustomDate(false);
-      setDateRange(false);
       setContinuingInput(false);
+      setOverwriteExisting(false);
       setSummaryOpen(false);
       setCopyVersion((v) => v + 1);
       setSubmitState({ status: "idle" });
@@ -535,9 +537,10 @@ export function ScheduleForm({
     const next = {
       ...emptyForm(form.startDate),
       endDate: form.endDate,
+      dates: form.dates,
       primaryCompany: form.primaryCompany,
     };
-    if (source) {
+    if (source && same) {
       const copiedRows = source.subcompanies
         .filter((row) => row.secondaryCompany)
         .map((row) => ({
@@ -551,28 +554,54 @@ export function ScheduleForm({
       next.currentSubcompanies = copiedRows;
       next.aerialWorkVehicleCount = source.aerialWorkVehicleCount ?? 0;
       next.aerialWorkVehicleFloor = source.aerialWorkVehicleFloor ?? "";
+      next.aerialWorkVehicles = source.aerialWorkVehicles?.length
+        ? source.aerialWorkVehicles
+        : (source.aerialWorkVehicleCount ?? 0) > 0
+          ? [{ workArea: source.aerialWorkVehicleFloor ?? "", vehicleCount: source.aerialWorkVehicleCount ?? 1 }]
+          : [];
+    } else {
+      next.primaryCount = null;
+      next.currentSubcompanies = secondaryOptions.map((secondaryCompany) => ({
+        secondaryCompany,
+        workerCount: null,
+        usePreviousWorkerCount: false,
+      }));
+      next.workArea = source?.workArea ?? "";
+      next.workContent = source?.workContent ?? "";
+      next.aerialWorkVehicleCount = source?.aerialWorkVehicleCount ?? null;
+      next.aerialWorkVehicleFloor = source?.aerialWorkVehicleFloor ?? "";
+      next.aerialWorkVehicles = source?.aerialWorkVehicles?.length
+        ? source.aerialWorkVehicles
+        : (source?.aerialWorkVehicleCount ?? 0) > 0
+          ? [{ workArea: source?.aerialWorkVehicleFloor ?? "", vehicleCount: source?.aerialWorkVehicleCount ?? 1 }]
+          : [];
     }
     setForm(next);
-    setSecondaryWorkChoice(same ? next.currentSubcompanies.length > 0 : null);
+    setSecondaryWorkChoice(next.currentSubcompanies.length > 0);
     setChoice(same ? "same" : "new");
-    setStep(same ? "copyContent" : "edit");
+    setStep(same ? "confirm" : "edit");
     setEditorPart("people");
     setCopyVersion((v) => v + 1);
     setSubmitState({ status: "idle" });
   }
   function selectDate(startDate: string, endDate = startDate) {
-    patch({ startDate, endDate });
+    const dates: string[] = [];
+    const start = parseLocalDate(startDate);
+    const end = parseLocalDate(endDate);
+    if (start && end) {
+      for (let cursor = start; cursor <= end; cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1)) {
+        const value = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+        if (isWorkingDate(value)) dates.push(value);
+      }
+    }
+    patch({ startDate, endDate, dates });
+    setOverwriteExisting(false);
     if (!isWorkingDate(startDate) || !isWorkingDate(endDate)) {
       if (startDate && endDate) setSubmitState({ status: "error", message: "開始日と終了日は月曜〜土曜を選択してください。" });
       return;
     }
     if (startDate > endDate) {
       setSubmitState({ status: "error", message: "終了日は開始日以降を選択してください。" });
-      return;
-    }
-    if (startDate !== endDate) {
-      setStep(continuingInput ? "confirm" : "copy");
-      setContinuingInput(false);
       return;
     }
     setStep("existing");
@@ -584,11 +613,42 @@ export function ScheduleForm({
     setChoosingCompany(true);
     setStep("date");
     setCustomDate(false);
-    setDateRange(false);
     setContinuingInput(false);
+    setOverwriteExisting(false);
     setSummaryOpen(false);
     setSubmitState({ status: "idle" });
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function editExisting(row: ScheduleWithSubcompanies) {
+    const vehicles = row.aerialWorkVehicles?.length
+      ? row.aerialWorkVehicles.map((vehicle) => ({ workArea: vehicle.work_area, vehicleCount: vehicle.vehicle_count }))
+      : (row.aerial_work_vehicle_count ?? 0) > 0
+        ? [{ workArea: row.aerial_work_vehicle_floor ?? "", vehicleCount: row.aerial_work_vehicle_count }]
+        : [];
+    setForm({
+      ...emptyForm(row.work_date),
+      primaryCompany: row.primary_company,
+      primaryCount: row.primary_count ?? 0,
+      currentSubcompanies: row.subcompanies.map((sub) => ({ secondaryCompany: sub.secondary_company ?? "", workerCount: sub.worker_count ?? 0 })),
+      workArea: row.work_area ?? "",
+      workContent: row.work_content ?? "",
+      aerialWorkVehicleCount: row.aerial_work_vehicle_count ?? 0,
+      aerialWorkVehicleFloor: row.aerial_work_vehicle_floor ?? "",
+      aerialWorkVehicles: vehicles,
+      notes: row.notes ?? "",
+    });
+    setOverwriteExisting(true);
+    setChoice("new");
+    setSecondaryWorkChoice(row.subcompanies.length > 0);
+    setEditorPart("people");
+    setStep("edit");
+  }
+  function setAerialVehicles(vehicles: NonNullable<ScheduleSubmitInput["aerialWorkVehicles"]>) {
+    patch({
+      aerialWorkVehicles: vehicles,
+      aerialWorkVehicleCount: vehicles.length ? vehicles.reduce((sum, row) => sum + (row.vehicleCount ?? 0), 0) : 0,
+      aerialWorkVehicleFloor: vehicles.map((row) => row.workArea).filter(Boolean).join("、"),
+    });
   }
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -637,16 +697,13 @@ export function ScheduleForm({
       setSubmitState({ status: "error", message: "高所作業車を使用するか選択してください。" });
       return;
     }
-    if (
-      (form.aerialWorkVehicleCount ?? 0) > 0 &&
-      (!/^\d+$/.test(aerialWorkVehicleCountInput) || Number(aerialWorkVehicleCountInput) < 1)
-    ) {
+    if ((form.aerialWorkVehicles ?? []).some((row) => (row.vehicleCount ?? 0) < 1)) {
       setStep("edit");
       setEditorPart("content");
       setSubmitState({ status: "error", message: "高所作業車の希望台数を1以上の整数で入力してください。" });
       return;
     }
-    if ((form.aerialWorkVehicleCount ?? 0) > 0 && !form.aerialWorkVehicleFloor.trim()) {
+    if ((form.aerialWorkVehicles ?? []).some((row) => !row.workArea.trim())) {
       setStep("edit");
       setEditorPart("content");
       setSubmitState({ status: "error", message: "高所作業車の使用フロアを入力してください。" });
@@ -667,17 +724,19 @@ export function ScheduleForm({
     submitting.current = true;
     setSubmitState({ status: "submitting" });
     try {
-      const submit = async (overwriteExisting: boolean) => {
+      const submit = async (overwrite: boolean) => {
         const response = await fetch("/api/schedules", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             ...form,
+            primaryCount: form.primaryCount ?? 0,
             excludeWeekends: false,
             usePreviousPrimaryCount: false,
-            overwriteExisting,
+            overwriteExisting: overwrite,
             currentSubcompanies: form.currentSubcompanies.map((row) => ({
               ...row,
+              workerCount: row.workerCount ?? 0,
               usePreviousWorkerCount: false,
             })),
           }),
@@ -685,19 +744,13 @@ export function ScheduleForm({
         return { response, body: await response.json() };
       };
 
-      let { response, body } = await submit(false);
+      const { response, body } = await submit(overwriteExisting);
       if (
         response.status === 409 &&
         body.code === "SCHEDULE_ALREADY_EXISTS"
       ) {
-        const confirmed = window.confirm(
-          `${(body.dates ?? [form.startDate]).map(displayDate).join("、")}の「${form.primaryCompany}」の予定は既に入力されています。変更しますか？`,
-        );
-        if (!confirmed) {
-          setSubmitState({ status: "idle" });
-          return;
-        }
-        ({ response, body } = await submit(true));
+        setSubmitState({ status: "error", message: "入力中に同じ日付の予定が登録されました。日付選択へ戻って確認してください。" });
+        return;
       }
       if (!response.ok)
         throw new Error(
@@ -761,7 +814,7 @@ export function ScheduleForm({
               <p className="min-w-0 text-right break-words">
                 {form.primaryCompany}
                 {validDate && (
-                  <span className="block">{displayDateRange(form.startDate, form.endDate)}</span>
+                  <span className="block">{displaySelectedDates(form.dates, form.startDate, form.endDate)}</span>
                 )}
               </p>
             </div>
@@ -841,7 +894,25 @@ export function ScheduleForm({
 
             {form.primaryCompany && !choosingCompany && (
               <>
-                {step === "existing" && <ExistingEntryCheck key={`${form.primaryCompany}-${form.startDate}`} date={form.startDate} company={form.primaryCompany} kind="schedule" onNew={() => { setStep(continuingInput ? "confirm" : "copy"); setContinuingInput(false); }} onOtherDate={() => setStep("date")} onSchedule={setEditingExisting} />}
+                {step === "existing" && <ExistingEntryCheck
+                  key={`${form.primaryCompany}-${form.dates?.join(",")}`}
+                  date={form.startDate}
+                  dates={form.dates}
+                  company={form.primaryCompany}
+                  kind="schedule"
+                  onNew={() => { setStep(continuingInput ? "confirm" : "copy"); setContinuingInput(false); }}
+                  onOtherDate={() => setStep("date")}
+                  onSchedule={editExisting}
+                  onOverwrite={() => { setOverwriteExisting(true); setStep("copy"); }}
+                  onSkip={(existingDates) => {
+                    const blocked = new Set(existingDates);
+                    const remaining = (form.dates ?? []).filter((date) => !blocked.has(date));
+                    if (!remaining.length) { setStep("date"); return; }
+                    patch({ dates: remaining, startDate: remaining[0], endDate: remaining.at(-1)! });
+                    setOverwriteExisting(false);
+                    setStep("copy");
+                  }}
+                />}
                 {step === "date" && (
                   <section className="panel p-5 sm:p-6">
                     <SectionHeading title="入力する日付を選んでください" />
@@ -856,7 +927,6 @@ export function ScheduleForm({
                           }
                           onClick={() => {
                             setCustomDate(false);
-                            setDateRange(false);
                             selectDate(option.date);
                           }}
                         >
@@ -875,93 +945,23 @@ export function ScheduleForm({
                       onClick={() => {
                         if (!customDate) {
                           setCustomDate(true);
-                          setDateRange(false);
-                          patch({ startDate: "", endDate: "" });
+                          patch({ startDate: "", endDate: "", dates: [] });
                         }
                       }}
                     >
-                      任意の日付を選ぶ
+                      別日・複数日選択
                     </button>
                     {customDate && (
                       <div
                         className="mt-3 min-w-0 w-full space-y-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4"
                         id="custom-work-date"
                       >
-                        <fieldset className="min-w-0">
-                          <legend className="mb-2 text-sm font-semibold text-slate-600">
-                            日付の指定方法
-                          </legend>
-                          <div className="grid min-w-0 grid-cols-2 gap-1 rounded-lg bg-slate-200/70 p-1">
-                            <button
-                              type="button"
-                              className="date-shortcut min-w-0"
-                              aria-pressed={!dateRange}
-                              onClick={() => {
-                                setDateRange(false);
-                                patch({ endDate: form.startDate });
-                              }}
-                            >
-                              1日だけ
-                            </button>
-                            <button
-                              type="button"
-                              className="date-shortcut min-w-0"
-                              aria-pressed={dateRange}
-                              onClick={() => setDateRange(true)}
-                            >
-                              期間指定
-                            </button>
-                          </div>
-                        </fieldset>
-                        <div className={dateRange ? "grid min-w-0 gap-3 sm:grid-cols-2" : "min-w-0"}>
-                          <label className="field min-w-0">
-                            <span className="label">{dateRange ? "開始日" : "作業日"}（月曜〜土曜）</span>
-                            <input
-                              className="input max-w-full"
-                              type="date"
-                              value={form.startDate}
-                              onChange={(event) => {
-                                const startDate = event.target.value;
-                                patch({
-                                  startDate,
-                                  endDate:
-                                    !dateRange || !form.endDate || form.endDate < startDate
-                                      ? startDate
-                                      : form.endDate,
-                                });
-                              }}
-                              required
-                            />
-                          </label>
-                          {dateRange && (
-                            <label className="field min-w-0">
-                              <span className="label">終了日（月曜〜土曜）</span>
-                              <input
-                                className="input max-w-full"
-                                type="date"
-                                min={form.startDate}
-                                value={form.endDate}
-                                onChange={(event) => patch({ endDate: event.target.value })}
-                                required
-                              />
-                            </label>
-                          )}
-                        </div>
-                        {dateRange && (
-                          <p className="text-sm leading-6 text-slate-600">
-                            選択した期間の月曜〜土曜へ同じ内容を入力します。日曜は除きます。
-                          </p>
-                        )}
-                        <button
-                          type="button"
-                          className="btn btn-primary w-full"
-                          disabled={!validDate}
-                          onClick={() => {
-                            selectDate(form.startDate, form.endDate);
-                          }}
-                        >
-                          次へ
-                        </button>
+                        <MultiDateCalendar
+                          today={today}
+                          value={form.dates ?? []}
+                          onChange={(dates) => patch({ dates, startDate: dates[0] ?? "", endDate: dates.at(-1) ?? "" })}
+                          onConfirm={() => { setOverwriteExisting(false); setStep("existing"); }}
+                        />
                       </div>
                     )}
                   </section>
@@ -1005,15 +1005,7 @@ export function ScheduleForm({
                         </>
                       ) : source ? (
                         <>
-                          <SectionHeading
-                            title={
-                              sourceIsToday
-                                ? "今日と同じ人員ですか？"
-                                : sourceIsFuture
-                                  ? `${displayDate(source.workDate)}と同じ人員ですか？`
-                                : "前回と同じ人員ですか？"
-                            }
-                          />
+                          <SectionHeading title={sourceQuestion(source.workDate, sourceResult?.today ?? today)} />
                           <p className="mb-4 text-sm text-slate-500">
                             {displayDate(source.workDate)}の作業
                           </p>
@@ -1069,15 +1061,7 @@ export function ScheduleForm({
 
                 {step === "copyContent" && source && (
                   <section className="panel p-5 sm:p-6">
-                    <SectionHeading
-                      title={
-                        sourceIsToday
-                          ? "今日と同じ作業内容ですか？"
-                          : sourceIsFuture
-                            ? `${displayDate(source.workDate)}と同じ作業内容ですか？`
-                          : "前回と同じ作業内容ですか？"
-                      }
-                    />
+                    <SectionHeading title={sourceQuestion(source.workDate, sourceResult?.today ?? today)} />
                     <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3 rounded-xl bg-slate-50 p-4 text-base">
                       <dt className="text-slate-500">エリア</dt>
                       <dd className="whitespace-pre-wrap break-words">
@@ -1128,7 +1112,7 @@ export function ScheduleForm({
                   <section className="panel p-5 sm:p-6">
                     <SectionHeading title="この内容で送信します" />
                     <p className="mb-4 font-semibold text-primary">
-                      {displayDateRange(form.startDate, form.endDate)}
+                      {displaySelectedDates(form.dates, form.startDate, form.endDate)}
                     </p>
                     <SchedulePreview
                       primaryCompany={form.primaryCompany}
@@ -1192,51 +1176,13 @@ export function ScheduleForm({
                           : "hidden"
                       }
                     >
-                      <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
-                        <p className="font-semibold text-slate-900">
-                          二次会社は作業しますか？ <span className="required-mark">必須</span>
-                        </p>
-                        <div className="mt-3 grid grid-cols-2 gap-3">
-                          <button
-                            type="button"
-                            className="status-option min-h-14 text-lg"
-                            aria-pressed={secondaryWorkChoice === true}
-                            onClick={() => {
-                              setSecondaryWorkChoice(true);
-                              if (activeRows.length === 0) {
-                                patch({
-                                  currentSubcompanies: [{
-                                    secondaryCompany: "",
-                                    workerCount: 0,
-                                    usePreviousWorkerCount: false,
-                                  }],
-                                });
-                              }
-                            }}
-                          >
-                            はい
-                          </button>
-                          <button
-                            type="button"
-                            className="status-option min-h-14 text-lg"
-                            aria-pressed={secondaryWorkChoice === false}
-                            onClick={() => {
-                              setSecondaryWorkChoice(false);
-                              patch({ currentSubcompanies: [] });
-                            }}
-                          >
-                            いいえ
-                          </button>
-                        </div>
-                      </div>
-
                       {secondaryWorkChoice === true && (
                         <div className="border-y border-border py-5">
                           <SubcompanyFields
                             title="作業する二次会社"
                             rows={activeRows}
                             options={secondaryOptions}
-                            countRequired
+                            countRequired={false}
                             optional={false}
                             previousCounts={previousCounts}
                             onChange={(rows) =>
@@ -1291,7 +1237,7 @@ export function ScheduleForm({
                             </div>
                             <CountField
                               value={activeCount}
-                              required
+                              required={false}
                               previous={Boolean(form.usePreviousPrimaryCount)}
                               previousValue={previous?.primaryCount}
                               onChange={(count) =>
@@ -1340,66 +1286,19 @@ export function ScheduleForm({
                         />
                       </>
                       <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-x-3">
-                            <p className="font-semibold text-slate-900">高所作業車を使用しますか？ <span className="required-mark">必須</span></p>
-                            {(form.aerialWorkVehicleCount ?? 0) > 0 && (
-                              <CopyButton
-                                label="高所作業車を前回からコピー"
-                                copied={aerialWorkVehicleCopied}
-                                disabled={previousAerialWorkVehicleCount <= 0}
-                                onCopy={() => {
-                                  setAerialWorkVehicleCountInput(String(previousAerialWorkVehicleCount));
-                                  patch({
-                                    aerialWorkVehicleCount: previousAerialWorkVehicleCount,
-                                    aerialWorkVehicleFloor: previousAerialWorkVehicleFloor,
-                                  });
-                                }}
-                              />
-                            )}
-                          </div>
+                          <p className="font-semibold text-slate-900">高所作業車を使用しますか？ <span className="required-mark">必須</span></p>
                           <div className="mt-3 grid grid-cols-2 gap-3">
-                            <button type="button" className="status-option" aria-pressed={(form.aerialWorkVehicleCount ?? 0) > 0} onClick={() => {
-                              const count = Math.max(1, form.aerialWorkVehicleCount ?? 1);
-                              setAerialWorkVehicleCountInput(String(count));
-                              patch({ aerialWorkVehicleCount: count });
+                            <button type="button" className="status-option" aria-pressed={(form.aerialWorkVehicles?.length ?? 0) > 0} onClick={() => {
+                              if (!form.aerialWorkVehicles?.length) setAerialVehicles([{ workArea: "", vehicleCount: 1 }]);
                             }}>使用する</button>
-                            <button type="button" className="status-option" aria-pressed={form.aerialWorkVehicleCount === 0} onClick={() => patch({ aerialWorkVehicleCount: 0, aerialWorkVehicleFloor: "" })}>使用しない</button>
+                            <button type="button" className="status-option" aria-pressed={form.aerialWorkVehicleCount === 0} onClick={() => setAerialVehicles([])}>使用しない</button>
                           </div>
-                          {(form.aerialWorkVehicleCount ?? 0) > 0 && <div className="mt-3 grid gap-3 sm:grid-cols-[9rem_1fr]">
-                            <label className="field">
-                              <span className="label">希望台数</span>
-                              <div className="relative">
-                                <input
-                                  className="input pr-10 tabular-nums"
-                                  type="number"
-                                  inputMode="numeric"
-                                  min={1}
-                                  step={1}
-                                  required
-                                  value={aerialWorkVehicleCountInput}
-                                  onChange={(event) => {
-                                    const value = event.target.value;
-                                    setAerialWorkVehicleCountInput(value);
-                                    if (/^\d+$/.test(value) && Number(value) >= 1) {
-                                      patch({ aerialWorkVehicleCount: Number(value) });
-                                    }
-                                  }}
-                                />
-                                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">台</span>
-                              </div>
-                            </label>
-                            <label className="field">
-                              <span className="label">使用フロア <span className="required-mark">必須</span></span>
-                              <input
-                                className="input"
-                                required
-                                value={form.aerialWorkVehicleFloor}
-                                maxLength={100}
-                                placeholder="例：10階、12階"
-                                onChange={(event) => patch({ aerialWorkVehicleFloor: event.target.value })}
-                              />
-                            </label>
-                          </div>}
+                          {(form.aerialWorkVehicles ?? []).map((vehicle, index) => <div key={index} className="mt-3 grid gap-2 rounded-lg border border-sky-200 bg-white p-3 sm:grid-cols-[1fr_7rem_auto]">
+                            <label className="field"><span className="label">使用場所 <span className="required-mark">必須</span></span><input className="input" value={vehicle.workArea} placeholder="例：10階" onChange={(event) => setAerialVehicles((form.aerialWorkVehicles ?? []).map((row, rowIndex) => rowIndex === index ? { ...row, workArea: event.target.value } : row))} /></label>
+                            <label className="field"><span className="label">台数</span><input className="input" type="number" inputMode="numeric" min={1} value={vehicle.vehicleCount ?? ""} onChange={(event) => setAerialVehicles((form.aerialWorkVehicles ?? []).map((row, rowIndex) => rowIndex === index ? { ...row, vehicleCount: event.target.value === "" ? null : Math.max(1, Number(event.target.value)) } : row))} /></label>
+                            <button type="button" className="btn btn-secondary self-end px-4 text-xl" aria-label={`${index + 1}件目の高所作業車を削除`} onClick={() => setAerialVehicles((form.aerialWorkVehicles ?? []).filter((_, rowIndex) => rowIndex !== index))}>×</button>
+                          </div>)}
+                          {(form.aerialWorkVehicles?.length ?? 0) > 0 && <button type="button" className="btn btn-secondary mt-3 w-full" onClick={() => setAerialVehicles([...(form.aerialWorkVehicles ?? []), { workArea: "", vehicleCount: 1 }])}>使用場所を追加</button>}
                       </div>
                       <WorkField
                         key={`${previousKey}-${copyVersion}-notes`}
@@ -1469,13 +1368,12 @@ export function ScheduleForm({
                         }
                         if (
                           editorPart === "content" &&
-                          (form.aerialWorkVehicleCount ?? 0) > 0 &&
-                          (!/^\d+$/.test(aerialWorkVehicleCountInput) || Number(aerialWorkVehicleCountInput) < 1)
+                          (form.aerialWorkVehicles ?? []).some((row) => (row.vehicleCount ?? 0) < 1)
                         ) {
                           setSubmitState({ status: "error", message: "高所作業車の希望台数を1以上の整数で入力してください。" });
                           return;
                         }
-                        if (editorPart === "content" && (form.aerialWorkVehicleCount ?? 0) > 0 && !form.aerialWorkVehicleFloor.trim()) {
+                        if (editorPart === "content" && (form.aerialWorkVehicles ?? []).some((row) => !row.workArea.trim())) {
                           setSubmitState({ status: "error", message: "高所作業車の使用フロアを入力してください。" });
                           return;
                         }
@@ -1517,7 +1415,6 @@ export function ScheduleForm({
                       setSubmitState({ status: "idle" });
                       setContinuingInput(true);
                       setCustomDate(false);
-                      setDateRange(false);
                       setStep("date");
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
@@ -1548,7 +1445,7 @@ export function ScheduleForm({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold">
-                      {displayDateRange(form.startDate, form.endDate)}
+                      {displaySelectedDates(form.dates, form.startDate, form.endDate)}
                     </p>
                     <p className="mt-1 text-sm text-slate-600">
                       合計 {totalCount} 人
@@ -1621,7 +1518,6 @@ export function ScheduleForm({
           )}
         </form>
       </main>
-      {editingExisting && <AdminScheduleEditor schedule={editingExisting} master={companyMaster} workerMode onClose={() => setEditingExisting(null)} onSaved={() => { setEditingExisting(null); setStep("date"); setSummaryVersion((v) => v + 1); setSubmitState({ status: "idle" }); }} />}
     </div>
   );
 }

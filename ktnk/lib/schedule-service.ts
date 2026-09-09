@@ -3,6 +3,7 @@ import type {
   ScheduleListRow,
   ScheduleGroupRow,
   ScheduleSummary,
+  ScheduleAerialWorkVehicleRow,
   ScheduleSubcompanyRow,
   ScheduleWithSubcompanies,
   SubcompanyInput,
@@ -22,12 +23,14 @@ export class ScheduleAlreadyExistsError extends Error {
 }
 
 export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
-  const dates = expandDateRange(input.startDate, input.endDate, input.excludeWeekends);
+  const dates = input.dates?.length
+    ? [...new Set(input.dates)].sort()
+    : expandDateRange(input.startDate, input.endDate, input.excludeWeekends);
   if (dates.length === 0) {
     throw new Error("登録対象の日付がありません。");
   }
 
-  const targetDates = dates;
+  let targetDates = dates;
   const supabase = createServerClient();
   const { data: existingSchedules, error: existingError } = await supabase
     .from("schedule_groups")
@@ -38,13 +41,21 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
     throwSupabaseError(existingError, "既存予定の確認に失敗しました。");
   }
   if (!input.overwriteExisting && existingSchedules?.length) {
+    if (input.skipExisting) {
+      const existingDates = new Set(existingSchedules.map((row) => row.work_date));
+      targetDates = dates.filter((date) => !existingDates.has(date));
+      if (targetDates.length === 0) {
+        throw new ScheduleAlreadyExistsError([...existingDates]);
+      }
+    } else {
     throw new ScheduleAlreadyExistsError(
       existingSchedules.map((row) => row.work_date),
     );
+    }
   }
 
   const previous = usesPreviousValue(input)
-    ? await getPreviousScheduleForCopy(input.primaryCompany, dates[0])
+    ? await getPreviousScheduleForCopy(input.primaryCompany, targetDates[0])
     : null;
   const resolvedSubcompanies = resolveSubcompanyInputs(
     input.currentSubcompanies,
@@ -55,15 +66,22 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
     0,
   );
 
-  const payloads = dates.map((workDate) => {
+  const payloads = targetDates.map((workDate) => {
+    const aerialVehicles = input.aerialWorkVehicles ?? [];
+    const aerialCount = aerialVehicles.length
+      ? aerialVehicles.reduce((sum, row) => sum + (row.vehicleCount ?? 0), 0)
+      : input.aerialWorkVehicleCount;
+    const aerialAreas = aerialVehicles.length
+      ? aerialVehicles.map((row) => row.workArea).join("、")
+      : input.aerialWorkVehicleFloor;
     const payload = {
       work_date: workDate,
       primary_company: input.primaryCompany,
       primary_count: resolvePreviousNumber(input.primaryCount, input.usePreviousPrimaryCount, previous?.primary_count, "一次会社人数"),
       work_area: emptyToNull(resolvePreviousText(input.workArea, previous?.work_area, "作業エリア")),
       work_content: emptyToNull(resolvePreviousText(input.workContent, previous?.work_content, "作業内容")),
-      aerial_work_vehicle_count: input.aerialWorkVehicleCount,
-      aerial_work_vehicle_floor: emptyToNull(input.aerialWorkVehicleFloor),
+      aerial_work_vehicle_count: aerialCount,
+      aerial_work_vehicle_floor: emptyToNull(aerialAreas),
       notes: emptyToNull(input.notes),
     };
 
@@ -91,6 +109,11 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
       .delete()
       .in("schedule_group_id", savedIds);
     if (deleteError) throwSupabaseError(deleteError, "二次会社予定の削除に失敗しました。");
+    const { error: vehicleDeleteError } = await supabase
+      .from("schedule_aerial_work_vehicles")
+      .delete()
+      .in("schedule_group_id", savedIds);
+    if (vehicleDeleteError) throwSupabaseError(vehicleDeleteError, "高所作業車の削除に失敗しました。");
   }
 
   const subcompanyRows = targetDates.flatMap((date) => {
@@ -101,6 +124,20 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
   if (subcompanyRows.length > 0) {
     const { error: insertError } = await supabase.from("schedule_subcompanies").insert(subcompanyRows);
     if (insertError) throwSupabaseError(insertError, "二次会社予定の保存に失敗しました。");
+  }
+  const vehicleRows = targetDates.flatMap((date) => {
+    const id = savedByDate.get(date);
+    if (!id) return [];
+    return (input.aerialWorkVehicles ?? []).map((vehicle, index) => ({
+      schedule_group_id: id,
+      work_area: vehicle.workArea.trim(),
+      vehicle_count: vehicle.vehicleCount,
+      sort_order: index,
+    }));
+  });
+  if (vehicleRows.length) {
+    const { error: vehicleInsertError } = await supabase.from("schedule_aerial_work_vehicles").insert(vehicleRows);
+    if (vehicleInsertError) throwSupabaseError(vehicleInsertError, "高所作業車の保存に失敗しました。");
   }
 
   invalidateScheduleData();
@@ -130,6 +167,9 @@ async function querySchedules(params: ScheduleSearchParams) {
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
+      ),
+      schedule_aerial_work_vehicles (
+        id, schedule_group_id, work_area, vehicle_count, sort_order
       )
     `,
     )
@@ -198,6 +238,9 @@ async function queryPreviousScheduleForCopy(primaryCompany: string, workDate: st
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
+      ),
+      schedule_aerial_work_vehicles (
+        id, schedule_group_id, work_area, vehicle_count, sort_order
       )
     `,
     )
@@ -232,6 +275,9 @@ async function queryNextScheduleForCopy(primaryCompany: string, workDate: string
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
+      ),
+      schedule_aerial_work_vehicles (
+        id, schedule_group_id, work_area, vehicle_count, sort_order
       )
     `,
     )
@@ -264,6 +310,9 @@ async function queryWorkScheduleOnDate(primaryCompany: string, workDate: string)
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
+      ),
+      schedule_aerial_work_vehicles (
+        id, schedule_group_id, work_area, vehicle_count, sort_order
       )
     `)
     .eq("primary_company", primaryCompany)
@@ -298,6 +347,9 @@ async function queryScheduleSummariesByPrimaryCompany(primaryCompany: string): P
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
+      ),
+      schedule_aerial_work_vehicles (
+        id, schedule_group_id, work_area, vehicle_count, sort_order
       )
     `,
     )
@@ -430,11 +482,15 @@ function resolvePreviousNumber(
 }
 
 function normalizeScheduleRow(
-  row: ScheduleGroupRow & { schedule_subcompanies?: ScheduleSubcompanyRow[] },
+  row: ScheduleGroupRow & {
+    schedule_subcompanies?: ScheduleSubcompanyRow[];
+    schedule_aerial_work_vehicles?: ScheduleAerialWorkVehicleRow[];
+  },
 ): ScheduleWithSubcompanies {
   return {
     ...row,
     subcompanies: (row.schedule_subcompanies ?? []).sort((a, b) => a.sort_order - b.sort_order),
+    aerialWorkVehicles: (row.schedule_aerial_work_vehicles ?? []).sort((a, b) => a.sort_order - b.sort_order),
   };
 }
 

@@ -53,6 +53,7 @@ function toCopyData(row: ScheduleWithSubcompanies | null): PreviousSchedule | nu
         workContent: row.work_content,
         aerialWorkVehicleCount: row.aerial_work_vehicle_count,
         aerialWorkVehicleFloor: row.aerial_work_vehicle_floor,
+        aerialWorkVehicles: row.aerialWorkVehicles?.map((vehicle) => ({ workArea: vehicle.work_area, vehicleCount: vehicle.vehicle_count })),
         subcompanies: row.subcompanies.map((sub) => ({
             secondaryCompany: sub.secondary_company ?? "",
             workerCount: sub.worker_count,

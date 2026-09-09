@@ -179,7 +179,7 @@ test("コピー元取得は会社未選択でDBを呼ばない", async () => {
   assert.equal(calls.length, 0);
 });
 
-test("今日以前の作業がない場合は最も近い未来の予定を返す", async () => {
+test("指定日より前の作業がない場合は未来の予定を返さない", async () => {
   const previousCalls = [];
   const futureCalls = [];
   const get = copySourceRoute(null, previousCalls, false, {
@@ -188,10 +188,9 @@ test("今日以前の作業がない場合は最も近い未来の予定を返�
   }, futureCalls);
   const response = await get({ url: "http://localhost/api/schedules/copy-source?primaryCompany=A" });
   assert.equal(response.status, 200);
-  assert.equal(response.body.source.workDate, "2026-09-10");
-  assert.equal(response.body.source.primaryCount, 5);
+  assert.equal(response.body.source, null);
   assert.deepEqual(previousCalls, [["A", "work", "2026-09-07"]]);
-  assert.deepEqual(futureCalls, [["A", "work", "2026-09-07"]]);
+  assert.deepEqual(futureCalls, []);
 });
 
 test("今日以前の作業がある場合は未来の予定を検索しない", async () => {

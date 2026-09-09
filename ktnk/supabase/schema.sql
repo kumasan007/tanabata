@@ -90,6 +90,14 @@ create table if not exists public.schedule_subcompanies (
   sort_order integer not null default 0
 );
 
+create table if not exists public.schedule_aerial_work_vehicles (
+  id uuid primary key default gen_random_uuid(),
+  schedule_group_id uuid not null references public.schedule_groups(id) on delete cascade,
+  work_area text not null check (btrim(work_area) <> ''),
+  vehicle_count integer not null check (vehicle_count > 0),
+  sort_order integer not null default 0
+);
+
 alter table public.schedule_groups add column if not exists notes text;
 alter table public.schedule_groups add column if not exists aerial_work_vehicle_count integer
   check (aerial_work_vehicle_count is null or aerial_work_vehicle_count >= 0);
@@ -125,12 +133,16 @@ create index if not exists schedule_subcompanies_group_id_idx
 create index if not exists schedule_subcompanies_secondary_company_idx
   on public.schedule_subcompanies (secondary_company);
 
+create index if not exists schedule_aerial_work_vehicles_group_idx
+  on public.schedule_aerial_work_vehicles (schedule_group_id, sort_order);
+
 create index if not exists new_entrant_records_primary_date_idx
   on public.new_entrant_records (primary_company, entry_date);
 
 alter table public.company_master enable row level security;
 alter table public.schedule_groups enable row level security;
 alter table public.schedule_subcompanies enable row level security;
+alter table public.schedule_aerial_work_vehicles enable row level security;
 alter table public.new_entrant_records enable row level security;
 
 grant usage on schema public to anon, authenticated, service_role;
@@ -138,6 +150,7 @@ grant usage on schema public to anon, authenticated, service_role;
 grant select, insert, update, delete on public.company_master to anon, authenticated, service_role;
 grant select, insert, update, delete on public.schedule_groups to anon, authenticated, service_role;
 grant select, insert, update, delete on public.schedule_subcompanies to anon, authenticated, service_role;
+grant select, insert, update, delete on public.schedule_aerial_work_vehicles to anon, authenticated, service_role;
 grant select, insert, update, delete on public.new_entrant_records to anon, authenticated, service_role;
 
 -- Next.js API routesはservice roleとanonキーのどちらでも利用できる。
@@ -164,6 +177,10 @@ for all
 to anon, authenticated
 using (true)
 with check (true);
+
+drop policy if exists schedule_aerial_work_vehicles_app_all on public.schedule_aerial_work_vehicles;
+create policy schedule_aerial_work_vehicles_app_all on public.schedule_aerial_work_vehicles
+for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists new_entrant_records_app_all on public.new_entrant_records;
 create policy new_entrant_records_app_all on public.new_entrant_records

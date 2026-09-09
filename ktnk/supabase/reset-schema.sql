@@ -2,6 +2,7 @@
 -- Supabase SQL Editorで実行すると、既存データを削除して必要なテーブルを作り直します。
 
 drop trigger if exists schedule_groups_set_updated_at on public.schedule_groups;
+drop table if exists public.schedule_aerial_work_vehicles;
 drop table if exists public.schedule_subcompanies;
 drop table if exists public.schedule_groups;
 drop table if exists public.new_entrant_records;
@@ -93,6 +94,14 @@ create table public.schedule_subcompanies (
   sort_order integer not null default 0
 );
 
+create table public.schedule_aerial_work_vehicles (
+  id uuid primary key default gen_random_uuid(),
+  schedule_group_id uuid not null references public.schedule_groups(id) on delete cascade,
+  work_area text not null check (btrim(work_area) <> ''),
+  vehicle_count integer not null check (vehicle_count > 0),
+  sort_order integer not null default 0
+);
+
 create table public.new_entrant_records (
   id uuid primary key default gen_random_uuid(), entry_date date not null,
   primary_company text not null, secondary_company text not null,
@@ -117,9 +126,13 @@ create index schedule_subcompanies_group_id_idx
 create index schedule_subcompanies_secondary_company_idx
   on public.schedule_subcompanies (secondary_company);
 
+create index schedule_aerial_work_vehicles_group_idx
+  on public.schedule_aerial_work_vehicles (schedule_group_id, sort_order);
+
 alter table public.company_master enable row level security;
 alter table public.schedule_groups enable row level security;
 alter table public.schedule_subcompanies enable row level security;
+alter table public.schedule_aerial_work_vehicles enable row level security;
 alter table public.new_entrant_records enable row level security;
 
 grant usage on schema public to anon, authenticated, service_role;
@@ -127,6 +140,7 @@ grant usage on schema public to anon, authenticated, service_role;
 grant select, insert, update, delete on public.company_master to anon, authenticated, service_role;
 grant select, insert, update, delete on public.schedule_groups to anon, authenticated, service_role;
 grant select, insert, update, delete on public.schedule_subcompanies to anon, authenticated, service_role;
+grant select, insert, update, delete on public.schedule_aerial_work_vehicles to anon, authenticated, service_role;
 grant select, insert, update, delete on public.new_entrant_records to anon, authenticated, service_role;
 
 drop policy if exists company_master_app_all on public.company_master;
@@ -150,6 +164,9 @@ for all
 to anon, authenticated
 using (true)
 with check (true);
+
+create policy schedule_aerial_work_vehicles_app_all on public.schedule_aerial_work_vehicles
+for all to anon, authenticated using (true) with check (true);
 
 create policy new_entrant_records_app_all on public.new_entrant_records
 for all to anon, authenticated using (true) with check (true);
