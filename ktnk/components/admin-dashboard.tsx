@@ -1,6 +1,7 @@
 "use client";
 
 import { LoadingIndicator } from "@/components/loading-indicator";
+import { CopyValue } from "@/components/copy-value";
 
 import {
   GripVertical,
@@ -56,6 +57,7 @@ type BackupRow = {
 };
 type CompanyGroup = {
   primaryCompany: string;
+  primaryTradeRoles: string[];
   rows: CompanyMasterRow[];
 };
 type ScheduleSummaryRow = {
@@ -236,6 +238,9 @@ export function AdminDashboard() {
     }
     return [...groups].map(([primaryCompanyName, rows]) => ({
       primaryCompany: primaryCompanyName,
+      primaryTradeRoles:
+        rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)
+          ?.primary_trade_roles ?? [],
       rows,
     }));
   }, [companyRows]);
@@ -1199,10 +1204,10 @@ export function AdminDashboard() {
                       label="一次会社"
                       stopPropagation
                     />
-                    {(group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []).length > 0 && (
+                    {group.primaryTradeRoles.length > 0 && (
                       <span className="text-sm font-normal text-slate-500">
                         <CopyValue
-                          value={(group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []).join("・")}
+                          value={group.primaryTradeRoles.join("・")}
                           label="職種"
                           stopPropagation
                         />
@@ -1271,8 +1276,8 @@ export function AdminDashboard() {
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-semibold text-slate-500">一次会社の職種</p>
                           <p className="mt-1 break-words text-sm text-slate-800">
-                            {(group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []).length > 0
-                              ? <CopyValue value={(group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []).join("・")} label="職種" />
+                            {group.primaryTradeRoles.length > 0
+                              ? <CopyValue value={group.primaryTradeRoles.join("・")} label="職種" />
                               : "未登録"}
                           </p>
                         </div>
@@ -1281,9 +1286,8 @@ export function AdminDashboard() {
                           className="btn btn-secondary"
                           disabled={companyLoading || !!editingPrimaryRoles}
                           onClick={() => {
-                            const roles = group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? [];
                             setEditingPrimaryRoles(group.primaryCompany);
-                            setEditPrimaryRoles(roles.join("、"));
+                            setEditPrimaryRoles(group.primaryTradeRoles.join("、"));
                             setMessage("");
                           }}
                         >
@@ -1840,58 +1844,6 @@ export function AdminDashboard() {
         onSaved={() => { setEditingSchedule(null); void search(); }}
       />}
     </main>
-  );
-}
-
-function CopyValue({
-  value,
-  label,
-  children,
-  stopPropagation = false,
-}: {
-  value: string | number;
-  label: string;
-  children?: ReactNode;
-  stopPropagation?: boolean;
-}) {
-  const [notice, setNotice] = useState("");
-  useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 2400);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
-  if (value === "") return <span className="text-slate-400">—</span>;
-  return (
-    <>
-      <button
-        type="button"
-        className="min-h-9 max-w-full rounded px-1 text-left whitespace-pre-wrap break-words underline-offset-4 hover:bg-emerald-50 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700"
-        title={`${label}をコピー`}
-        aria-label={`${label}をコピー：${value}`}
-        onClick={async (event) => {
-          if (stopPropagation) {
-            event.preventDefault();
-            event.stopPropagation();
-          }
-          try {
-            await navigator.clipboard.writeText(String(value));
-            setNotice(`${label}をコピーしました`);
-          } catch {
-            setNotice("コピーできませんでした。もう一度お試しください。");
-          }
-        }}
-      >
-        {children ?? value}
-      </button>
-      {notice && (
-        <span
-          role="status"
-          className="fixed bottom-5 left-1/2 z-50 w-max max-w-[90vw] -translate-x-1/2 rounded-md bg-slate-800 px-4 py-3 text-sm font-medium text-white shadow-lg"
-        >
-          {notice}
-        </span>
-      )}
-    </>
   );
 }
 

@@ -17,14 +17,14 @@ export function ExistingEntryCheck({ date, company, kind, onNew, onOtherDate, on
   useEffect(() => {
     const controller = new AbortController();
     setResult(null); setError("");
-    fetch(`/api/calendar?${new URLSearchParams({ from: date, to: date, primaryCompany: company })}`, { signal: controller.signal, cache: "no-store" })
+    fetch(`/api/calendar?${new URLSearchParams({ from: date, to: date, primaryCompany: company, kind })}`, { signal: controller.signal, cache: "no-store" })
       .then(async (response) => {
         const body = await response.json();
         if (!response.ok || body.warning) throw new Error(body.error ?? body.warning ?? "取得できませんでした。");
         if (!controller.signal.aborted) setResult(body);
       }).catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "取得できませんでした。"); });
     return () => controller.abort();
-  }, [date, company, retry]);
+  }, [date, company, kind, retry]);
   useEffect(() => {
     if (!result) return;
     const exists = kind === "schedule"
@@ -49,14 +49,14 @@ export function ExistingEntryCheck({ date, company, kind, onNew, onOtherDate, on
       <button type="button" className="btn btn-primary w-full" onClick={() => onSchedule?.(row)}>変更する</button>
     </article>)}
     {entrants.map((row) => <article key={row.id} className="space-y-2 rounded-md bg-slate-50 p-4">
-      <p className="font-semibold">{row.secondary_company}・{row.person_count}人</p>
+      <p className="font-semibold">{row.secondary_company || "一次会社所属"}・{row.person_count}人</p>
       <p className="text-sm text-slate-600">{row.nationality_status === "includes_foreign" ? "外国籍を含む" : row.nationality_status === "japanese_only" ? "日本籍のみ" : "国籍未確認"}</p>
       {row.person_names && <p className="whitespace-pre-wrap">{row.person_names}</p>}
       {row.notes && <p className="whitespace-pre-wrap">備考：{row.notes}</p>}
       <button type="button" className="btn btn-primary w-full" onClick={() => onEntrant?.(row)}>変更する</button>
     </article>)}
     {!exists && <button type="button" className="btn btn-primary w-full" onClick={onNew}>入力へ進む</button>}
-    {exists && kind === "entrant" && <button type="button" className="btn btn-secondary w-full" onClick={onNew}>同じ日に別の二次会社を入力</button>}
+    {exists && kind === "entrant" && <button type="button" className="btn btn-secondary w-full" onClick={onNew}>同じ日に別の所属会社を入力</button>}
     <button type="button" className="btn btn-secondary w-full" onClick={onOtherDate}>別日を入力</button>
   </section>;
 }

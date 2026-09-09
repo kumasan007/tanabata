@@ -10,9 +10,16 @@ export async function GET(request: Request) {
     const dateFrom = url.searchParams.get("from");
     const dateTo = url.searchParams.get("to");
     const primaryCompany = url.searchParams.get("primaryCompany");
+    const kind = url.searchParams.get("kind");
+    const includeSchedules = kind !== "entrant";
+    const includeEntrants = kind !== "schedule";
     const [schedules, entrants] = await Promise.all([
-      getSchedules({ dateFrom, dateTo, primaryCompany }),
-      getNewEntrants(dateFrom, dateTo, primaryCompany),
+      includeSchedules
+        ? getSchedules({ dateFrom, dateTo, primaryCompany, exactPrimaryCompany: Boolean(primaryCompany) })
+        : Promise.resolve([]),
+      includeEntrants
+        ? getNewEntrants(dateFrom, dateTo, primaryCompany)
+        : Promise.resolve([]),
     ]);
     return NextResponse.json({
       schedules,

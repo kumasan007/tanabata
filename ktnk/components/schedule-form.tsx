@@ -1168,13 +1168,9 @@ export function ScheduleForm({
 
                 {showEditor && (
                   <section className="panel p-5 sm:p-6">
-                    <SectionHeading
-                      title={
-                        editorPart === "people"
-                          ? "人数を入力してください"
-                          : "作業内容を入力してください"
-                      }
-                    />
+                    {editorPart === "content" && (
+                      <SectionHeading title="作業内容を入力してください" />
+                    )}
                     {previousResult?.key !== previousKey && <LoadingIndicator label="前回の値を読み込み中…" />}
                     {previousResult?.key === previousKey &&
                       previousResult.error && (

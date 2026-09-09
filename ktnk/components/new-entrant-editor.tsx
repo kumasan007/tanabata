@@ -14,6 +14,8 @@ type EntrantForm = {
   notes: string;
 };
 
+type Affiliation = "primary" | "secondary";
+
 export function NewEntrantEditor({ record, master, onClose, onSaved }: {
   record: NewEntrantRecord;
   master: CompanyMaster;
@@ -32,6 +34,7 @@ export function NewEntrantEditor({ record, master, onClose, onSaved }: {
     nationalityStatus: record.nationality_status ?? "",
     notes: record.notes ?? "",
   }));
+  const [affiliation, setAffiliation] = useState<Affiliation>(record.secondary_company ? "secondary" : "primary");
   const secondaryOptions = useMemo(
     () => [...new Set([...(master.secondariesByPrimary[record.primary_company] ?? []), record.secondary_company])],
     [master, record.primary_company, record.secondary_company],
@@ -41,7 +44,11 @@ export function NewEntrantEditor({ record, master, onClose, onSaved }: {
 
   async function submit(remove = false) {
     if (busy) return;
-    if (remove && !window.confirm(`${record.entry_date}「${record.secondary_company}」の新規入場を削除しますか？`)) return;
+    if (remove && !window.confirm(`${record.entry_date}「${record.secondary_company || "一次会社所属"}」の新規入場を削除しますか？`)) return;
+    if (!remove && affiliation === "secondary" && !form.secondaryCompany.trim()) {
+      setError("二次会社を選択または入力してください。");
+      return;
+    }
     if (!remove && (form.personCount == null || form.personCount < 1)) {
       setError("新規入場者を1人以上入力してください。");
       return;
@@ -89,7 +96,8 @@ export function NewEntrantEditor({ record, master, onClose, onSaved }: {
       </div>
       <p className="mb-4 text-sm text-slate-600">{record.entry_date} / {record.primary_company}</p>
       <fieldset disabled={busy} className="grid gap-3">
-        <label className="field"><span className="label">二次会社（必須）</span><input className="input" required list="entrant-editor-secondary-options" value={form.secondaryCompany} onChange={(event) => setForm({ ...form, secondaryCompany: event.target.value })} /><datalist id="entrant-editor-secondary-options">{secondaryOptions.map((company) => <option key={company} value={company} />)}</datalist></label>
+        <fieldset className="field"><legend className="label">所属会社（必須）</legend><div className="grid grid-cols-2 gap-2"><button type="button" className="status-option" aria-pressed={affiliation === "primary"} onClick={() => { setAffiliation("primary"); setForm({ ...form, secondaryCompany: "" }); }}>一次会社所属</button><button type="button" className="status-option" aria-pressed={affiliation === "secondary"} onClick={() => setAffiliation("secondary")}>二次会社所属</button></div></fieldset>
+        {affiliation === "secondary" && <label className="field"><span className="label">二次会社（必須）</span><input className="input" required list="entrant-editor-secondary-options" value={form.secondaryCompany} onChange={(event) => setForm({ ...form, secondaryCompany: event.target.value })} /><datalist id="entrant-editor-secondary-options">{secondaryOptions.filter(Boolean).map((company) => <option key={company} value={company} />)}</datalist></label>}
         <label className="field"><span className="label">初めて入る人数（必須）</span><input className="input" type="number" inputMode="numeric" min={1} step={1} required value={form.personCount ?? ""} onChange={(event) => setForm({ ...form, personCount: event.target.value === "" ? null : Number(event.target.value) })} /></label>
         <fieldset className="field"><legend className="label">国籍確認（必須）</legend><div className="grid grid-cols-2 gap-2"><button type="button" className="status-option" aria-pressed={form.nationalityStatus === "japanese_only"} onClick={() => setForm({ ...form, nationalityStatus: "japanese_only" })}>日本籍のみ</button><button type="button" className="status-option" aria-pressed={form.nationalityStatus === "includes_foreign"} onClick={() => setForm({ ...form, nationalityStatus: "includes_foreign" })}>外国籍を含む</button></div></fieldset>
         <label className="field"><span className="label">氏名（必須）</span><textarea className="textarea" rows={3} required maxLength={1000} value={form.personNames} onChange={(event) => setForm({ ...form, personNames: event.target.value })} /></label>

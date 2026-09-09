@@ -9,7 +9,7 @@ import { invalidateEntrantData } from "@/lib/data-cache";
 const inputSchema = z.object({
   entryDate: z.string().refine(isWorkingDate, "日曜日は入力できません。月曜〜土曜を選択してください。"),
   primaryCompany: z.string().trim().min(1, "一次会社を選択してください。"),
-  secondaryCompany: z.string().trim().min(1, "新規入場する会社を選択してください。"),
+  secondaryCompany: z.string().trim().max(200, "会社名は200文字以内で入力してください。"),
   personCount: z.number().int().min(1, "新規入場者を1人以上入力してください。"),
   personNames: z.string().trim().min(1, "氏名を入力してください。").max(1000, "氏名は1000文字以内で入力してください。"),
   nationalityStatus: z.enum(["japanese_only", "includes_foreign"], {

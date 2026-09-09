@@ -50,6 +50,10 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
     input.currentSubcompanies,
     previous?.subcompanies ?? [],
   );
+  const secondaryTotal = resolvedSubcompanies.reduce(
+    (sum, subcompany) => sum + (subcompany.workerCount ?? 0),
+    0,
+  );
 
   const payloads = dates.map((workDate) => {
     const payload = {
@@ -63,7 +67,6 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
       notes: emptyToNull(input.notes),
     };
 
-    const secondaryTotal = resolvedSubcompanies.reduce((sum, subcompany) => sum + (subcompany.workerCount ?? 0), 0);
     if (payload.primary_count === 0 && secondaryTotal < 1) {
       throw new Error("一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。");
     }
@@ -112,6 +115,7 @@ export type ScheduleSearchParams = {
   dateTo?: string | null;
   primaryCompany?: string | null;
   secondaryCompany?: string | null;
+  exactPrimaryCompany?: boolean;
 };
 
 async function querySchedules(params: ScheduleSearchParams) {
@@ -141,7 +145,9 @@ async function querySchedules(params: ScheduleSearchParams) {
   }
 
   if (params.primaryCompany) {
-    query = query.ilike("primary_company", `%${escapeLike(params.primaryCompany)}%`);
+    query = params.exactPrimaryCompany
+      ? query.eq("primary_company", params.primaryCompany)
+      : query.ilike("primary_company", `%${escapeLike(params.primaryCompany)}%`);
   }
 
   const { data, error } = await query;
@@ -165,7 +171,8 @@ const getCachedSchedules = unstable_cache(
     dateTo: string,
     primaryCompany: string,
     secondaryCompany: string,
-  ) => querySchedules({ dateFrom, dateTo, primaryCompany, secondaryCompany }),
+    exactPrimaryCompany: boolean,
+  ) => querySchedules({ dateFrom, dateTo, primaryCompany, secondaryCompany, exactPrimaryCompany }),
   ["schedules-v1"],
   { tags: [DATA_CACHE_TAGS.schedules], revalidate: 5 * 60 },
 );
@@ -176,6 +183,7 @@ export async function getSchedules(params: ScheduleSearchParams) {
     params.dateTo ?? "",
     params.primaryCompany?.trim() ?? "",
     params.secondaryCompany?.trim() ?? "",
+    params.exactPrimaryCompany ?? false,
   );
 }
 

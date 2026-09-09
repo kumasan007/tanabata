@@ -1,9 +1,10 @@
 "use client";
 
 import { LoadingIndicator } from "@/components/loading-indicator";
+import { CopyValue } from "@/components/copy-value";
 import { isWorkingDate } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Pencil } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
 import { NewEntrantEditor } from "@/components/new-entrant-editor";
 import type { CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
@@ -24,7 +25,6 @@ function datesInMonth(month: string) {
   for (let day = 1; day <= Number(range.to.slice(-2)); day++) result.push(`${month}-${String(day).padStart(2, "0")}`);
   return result.filter(isWorkingDate);
 }
-
 export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: string; initialMaster: CompanyMaster }) {
   const [month, setMonth] = useState(initialDate.slice(0, 7));
   const [selectedDate, setSelectedDate] = useState(isWorkingDate(initialDate) ? initialDate : datesInMonth(initialDate.slice(0, 7)).find((date) => date > initialDate) ?? datesInMonth(initialDate.slice(0, 7))[0]);
@@ -142,7 +142,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                   {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="truncate font-semibold text-sky-800">高車：{row.aerial_work_vehicle_count}台</p>}
                 </div>;
               })}
-              {company && dayEntrants.map((row) => <div key={row.id} className="relative mt-1 min-w-0 rounded bg-amber-100 p-1 pr-6 text-[10px] leading-4 text-amber-900 sm:text-xs"><button type="button" className="absolute right-0.5 top-0.5 rounded p-0.5 hover:bg-white/70" onClick={(event) => { event.stopPropagation(); setSelectedDate(date); setEditingEntrant(row); }} aria-label={`${row.secondary_company}の新規入場を編集`} title="新規入場を編集"><Pencil size={12} aria-hidden="true" /></button><p className="truncate font-semibold" title={row.secondary_company}>新規：<CopyValue value={row.secondary_company} label="二次会社名" /></p><p><CopyValue value={row.person_count} label="新規入場人数">{row.person_count}人</CopyValue>・{row.nationality_status === "includes_foreign" ? "外国籍含む" : row.nationality_status === "japanese_only" ? "日本籍" : "未確認"}</p></div>)}
+              {company && dayEntrants.map((row) => <div key={row.id} className="relative mt-1 min-w-0 rounded bg-amber-100 p-1 pr-6 text-[10px] leading-4 text-amber-900 sm:text-xs"><button type="button" className="absolute right-0.5 top-0.5 rounded p-0.5 hover:bg-white/70" onClick={(event) => { event.stopPropagation(); setSelectedDate(date); setEditingEntrant(row); }} aria-label={`${row.secondary_company || "一次会社所属"}の新規入場を編集`} title="新規入場を編集"><Pencil size={12} aria-hidden="true" /></button><p className="truncate font-semibold" title={row.secondary_company || "一次会社所属"}>新規：{row.secondary_company ? <CopyValue value={row.secondary_company} label="二次会社名" compact stopPropagation /> : "一次会社所属"}</p><p><CopyValue value={row.person_count} label="新規入場人数" compact stopPropagation>{row.person_count}人</CopyValue>・{row.nationality_status === "includes_foreign" ? "外国籍含む" : row.nationality_status === "japanese_only" ? "日本籍" : "未確認"}</p></div>)}
             </div>;
           })}
         </div>
@@ -158,87 +158,58 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
             const subs = row.subcompanies;
             const area = row.work_area;
             const content = row.work_content;
+            const tradeRoles = master.primaryTradeRolesByPrimary[row.primary_company] ?? [];
+            const totalWorkerCount = totalWorkers(row);
             return <article key={row.id} className="panel relative min-w-0 p-3 pr-11 text-sm">
               <button type="button" className="btn btn-secondary absolute right-2 top-2 h-8 min-h-8 w-8 p-0" onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
               <div className="flex min-w-0 items-center gap-2 pr-1">
                 <p className="min-w-0 truncate font-bold" title={row.primary_company}>
-                  <CopyValue value={row.primary_company} label="一次会社" />
+                  <CopyValue value={row.primary_company} label="一次会社" compact stopPropagation />
                 </p>
-                {(master?.primaryTradeRolesByPrimary[row.primary_company] ?? []).length > 0 && (
-                  <span className="shrink-0 truncate text-xs font-normal text-slate-400" title={(master?.primaryTradeRolesByPrimary[row.primary_company] ?? []).join("・")}>
-                    <CopyValue value={(master?.primaryTradeRolesByPrimary[row.primary_company] ?? []).join("・")} label="職種" />
+                {tradeRoles.length > 0 && (
+                  <span className="shrink-0 truncate text-xs font-normal text-slate-400" title={tradeRoles.join("・")}>
+                    <CopyValue value={tradeRoles.join("・")} label="職種" compact stopPropagation />
                   </span>
                 )}
               </div>
               <details className="mt-2 rounded-md border border-border bg-slate-50">
                   <summary className="cursor-pointer px-2.5 py-2 font-semibold text-slate-700 marker:text-emerald-700">
-                    合計 <CopyValue value={totalWorkers(row)} label="合計人数">{totalWorkers(row)}人</CopyValue>
+                    合計 <CopyValue value={totalWorkerCount} label="合計人数" compact stopPropagation>{totalWorkerCount}人</CopyValue>
                   </summary>
                   <div className="grid gap-1.5 border-t border-border p-2.5">
                     <div className="flex min-w-0 items-baseline justify-between gap-3">
                       <span className="min-w-0 break-words">
-                        <CopyValue value={row.primary_company} label="一次会社名" />
+                        <CopyValue value={row.primary_company} label="一次会社名" compact stopPropagation />
                         <span className="ml-1 text-xs text-slate-400">一次</span>
                       </span>
                       <span className="shrink-0 font-semibold text-primary">
-                        <CopyValue value={row.primary_count ?? 0} label="一次会社人数">{row.primary_count ?? 0}人</CopyValue>
+                        <CopyValue value={row.primary_count ?? 0} label="一次会社人数" compact stopPropagation>{row.primary_count ?? 0}人</CopyValue>
                       </span>
                     </div>
                     {subs.map((sub) => (
                       <div key={sub.id} className="flex min-w-0 items-baseline justify-between gap-3">
                         <span className="min-w-0 break-words">
-                          {sub.secondary_company ? <CopyValue value={sub.secondary_company} label="二次会社名" /> : "会社名未入力"}
+                          {sub.secondary_company ? <CopyValue value={sub.secondary_company} label="二次会社名" compact stopPropagation /> : "会社名未入力"}
                           <span className="ml-1 text-xs text-slate-400">二次</span>
                         </span>
                         <span className="shrink-0 font-semibold text-primary">
-                          <CopyValue value={sub.worker_count ?? 0} label="二次会社人数">{sub.worker_count ?? 0}人</CopyValue>
+                          <CopyValue value={sub.worker_count ?? 0} label="二次会社人数" compact stopPropagation>{sub.worker_count ?? 0}人</CopyValue>
                         </span>
                       </div>
                     ))}
                   </div>
               </details>
-              <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label="作業エリア" /> : "エリア未入力"}</p>
-              <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" /> : "作業内容未入力"}</p>
-              <p className="mt-1 text-sky-800">高車：{(row.aerial_work_vehicle_count ?? 0) > 0 ? <><CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数">{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" />）</>}</> : "使用なし"}</p>
-              {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" /></p>}
+              <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label="作業エリア" compact stopPropagation /> : "エリア未入力"}</p>
+              <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" compact stopPropagation /> : "作業内容未入力"}</p>
+              <p className="mt-1 text-sky-800">高車：{(row.aerial_work_vehicle_count ?? 0) > 0 ? <><CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数" compact stopPropagation>{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" compact stopPropagation />）</>}</> : "使用なし"}</p>
+              {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" compact stopPropagation /></p>}
             </article>;
           })}
-          {selectedEntrants.map((row) => <article key={row.id} className="relative rounded-md border border-amber-200 bg-amber-50 p-3 pr-11 text-sm"><button type="button" className="btn btn-secondary absolute right-2 top-2 h-8 min-h-8 w-8 p-0" onClick={() => setEditingEntrant(row)} aria-label={`${row.secondary_company}の新規入場を編集`} title="新規入場を編集"><Pencil size={15} aria-hidden="true" /></button><p className="font-bold">新規入場</p><p className="mt-1 break-words"><span className="font-semibold"><CopyValue value={row.primary_company} label="一次会社名" /></span><span className="mx-1 text-slate-400">→</span><CopyValue value={row.secondary_company} label="二次会社名" /></p><p><CopyValue value={row.person_count} label="新規入場人数">{row.person_count}人</CopyValue>・{row.nationality_status === "includes_foreign" ? "外国籍を含む" : row.nationality_status === "japanese_only" ? "日本籍のみ" : "国籍未確認"}</p></article>)}
+          {selectedEntrants.map((row) => <article key={row.id} className="relative rounded-md border border-amber-200 bg-amber-50 p-3 pr-11 text-sm"><button type="button" className="btn btn-secondary absolute right-2 top-2 h-8 min-h-8 w-8 p-0" onClick={() => setEditingEntrant(row)} aria-label={`${row.secondary_company || "一次会社所属"}の新規入場を編集`} title="新規入場を編集"><Pencil size={15} aria-hidden="true" /></button><p className="font-bold">新規入場</p><p className="mt-1 break-words"><span className="font-semibold"><CopyValue value={row.primary_company} label="一次会社名" compact stopPropagation /></span>{row.secondary_company ? <><span className="mx-1 text-slate-400">→</span><CopyValue value={row.secondary_company} label="二次会社名" compact stopPropagation /></> : <span className="ml-2 text-slate-500">（一次会社所属）</span>}</p><p><CopyValue value={row.person_count} label="新規入場人数" compact stopPropagation>{row.person_count}人</CopyValue>・{row.nationality_status === "includes_foreign" ? "外国籍を含む" : row.nationality_status === "japanese_only" ? "日本籍のみ" : "国籍未確認"}</p></article>)}
         </div>}
       </section>
     </main>
     {editing && <AdminScheduleEditor schedule={editing} master={master} workerMode onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setVersion((v) => v + 1); }} />}
     {editingEntrant && <NewEntrantEditor record={editingEntrant} master={master} onClose={() => setEditingEntrant(null)} onSaved={() => { setEditingEntrant(null); setVersion((v) => v + 1); }} />}
   </div>;
-}
-
-function CopyValue({ value, label, children }: { value: string | number; label: string; children?: ReactNode }) {
-  const [notice, setNotice] = useState("");
-  useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 2400);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
-
-  return <>
-    <button
-      type="button"
-      className="max-w-full rounded px-0.5 text-left underline-offset-4 hover:bg-emerald-50 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700"
-      title={`${label}をコピー`}
-      aria-label={`${label}をコピー：${value}`}
-      onClick={async (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        try {
-          await navigator.clipboard.writeText(String(value));
-          setNotice(`${label}をコピーしました`);
-        } catch {
-          setNotice("コピーできませんでした。もう一度お試しください。");
-        }
-      }}
-    >
-      {children ?? value}
-    </button>
-    {notice && <span role="status" className="fixed bottom-5 left-1/2 z-50 w-max max-w-[90vw] -translate-x-1/2 rounded-md bg-slate-800 px-4 py-3 text-sm font-medium text-white shadow-lg">{notice}</span>}
-  </>;
 }

@@ -40,6 +40,9 @@ export async function ensureSecondaryCompany(primaryCompany: string, secondaryCo
   if (error) throw error;
   if (!rows?.length) return false;
 
+  // 空欄は一次会社所属を表すため、会社マスタへの二次会社追加は不要。
+  if (!secondaryCompany.trim()) return true;
+
   if (!rows.some((row) => row.secondary_company === secondaryCompany)) {
     const { error: insertError } = await db.from("company_master").insert({
       primary_company: primaryCompany,
