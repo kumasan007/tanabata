@@ -112,8 +112,8 @@ export function NewEntrantForm({ today, initialMaster }: { today: string; initia
         {step === "date" && <section className="panel p-5 sm:p-6">
           <SectionHeading title="入場日を選んでください" />
           <div className="grid grid-cols-3 gap-2">{dateOptions.map((option) => <button key={option.label} type="button" className="status-option flex-col gap-1 px-2" aria-pressed={!customDate && form.entryDate === option.date} onClick={() => { setCustomDate(false); chooseDate(option.date); }}><span>{option.label}</span><span className="text-sm font-normal">{shortDateWithWeekday(option.date)}</span></button>)}</div>
-          <button type="button" className="btn btn-secondary mt-3 w-full" aria-expanded={customDate} onClick={() => setCustomDate(true)}>任意の日付を選ぶ</button>
-          {customDate && <div className="mt-3 space-y-3"><label className="field"><span className="label">入場日（月曜〜土曜）</span><input autoFocus className="input" type="date" value={form.entryDate} onChange={(event) => setForm({ ...form, entryDate: event.target.value })} /></label><button type="button" className="btn btn-primary w-full" disabled={!isWorkingDate(form.entryDate)} onClick={() => chooseDate(form.entryDate)}>次へ</button></div>}
+          <button type="button" className="btn btn-secondary mt-3 w-full" aria-expanded={customDate} aria-controls="custom-entry-date" onClick={() => setCustomDate(true)}>任意の日付を選ぶ</button>
+          {customDate && <div id="custom-entry-date" className="mt-3 min-w-0 w-full space-y-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4"><label className="field min-w-0"><span className="label">入場日（月曜〜土曜）</span><input autoFocus className="input max-w-full" type="date" value={form.entryDate} onChange={(event) => setForm({ ...form, entryDate: event.target.value })} /></label><button type="button" className="btn btn-primary w-full" disabled={!isWorkingDate(form.entryDate)} onClick={() => chooseDate(form.entryDate)}>次へ</button></div>}
         </section>}
 
         {step === "details" && <section className="panel p-5 sm:p-6">

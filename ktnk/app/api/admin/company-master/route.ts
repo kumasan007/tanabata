@@ -172,6 +172,8 @@ export async function PATCH(request: Request) {
       primaryCompany?: string;
       secondaryCompany?: string;
       orderedIds?: string[];
+      tradeRolesPrimaryCompany?: string;
+      primaryTradeRoles?: string[];
     };
     const supabase = createServerClient();
 
@@ -217,6 +219,32 @@ export async function PATCH(request: Request) {
         { onConflict: "id" },
       );
       if (updateError) throw updateError;
+
+      invalidateCompanyData();
+      return NextResponse.json({ ok: true });
+    }
+
+    if (typeof body.tradeRolesPrimaryCompany === "string") {
+      const tradeRolesPrimaryCompany = body.tradeRolesPrimaryCompany.trim();
+      if (!tradeRolesPrimaryCompany || !Array.isArray(body.primaryTradeRoles)) {
+        return NextResponse.json(
+          { error: "一次会社と職種を正しく入力してください。" },
+          { status: 400 },
+        );
+      }
+
+      const { data, error } = await supabase
+        .from("company_master")
+        .update({ primary_trade_roles: normalizeTradeRoles(body.primaryTradeRoles) })
+        .eq("primary_company", tradeRolesPrimaryCompany)
+        .select("id");
+      if (error) throw error;
+      if (!data?.length) {
+        return NextResponse.json(
+          { error: "更新対象の一次会社が見つかりません。" },
+          { status: 404 },
+        );
+      }
 
       invalidateCompanyData();
       return NextResponse.json({ ok: true });

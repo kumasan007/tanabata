@@ -10,6 +10,7 @@ type Props = {
   options: string[];
   onChange: (rows: SubcompanyInput[]) => void;
   countRequired?: boolean;
+  optional?: boolean;
   previousCounts?: Map<string, number | null>;
 };
 
@@ -19,6 +20,7 @@ export function SubcompanyFields({
   options,
   onChange,
   countRequired = true,
+  optional = true,
   previousCounts,
 }: Props) {
   const fieldId = useId();
@@ -44,9 +46,11 @@ export function SubcompanyFields({
         >
           {title}
         </h2>
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-sm font-medium text-slate-500">
-          任意
-        </span>
+        {optional && (
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-sm font-medium text-slate-500">
+            任意
+          </span>
+        )}
       </div>
 
       {rows.length === 0 ? (

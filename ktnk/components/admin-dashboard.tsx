@@ -124,6 +124,8 @@ export function AdminDashboard() {
   const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
   const [editPrimaryCompany, setEditPrimaryCompany] = useState("");
   const [editSecondaryCompany, setEditSecondaryCompany] = useState("");
+  const [editingPrimaryRoles, setEditingPrimaryRoles] = useState<string | null>(null);
+  const [editPrimaryRoles, setEditPrimaryRoles] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [companyFetching, setCompanyFetching] = useState(true);
@@ -578,6 +580,35 @@ export function AdminDashboard() {
         error instanceof Error
           ? error.message
           : "会社マスタの更新に失敗しました。",
+      );
+    } finally {
+      setCompanyLoading(false);
+    }
+  }
+
+  async function savePrimaryTradeRoles() {
+    if (!editingPrimaryRoles) return;
+
+    setMessage("");
+    setCompanyLoading(true);
+    try {
+      const response = await fetch("/api/admin/company-master", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tradeRolesPrimaryCompany: editingPrimaryRoles,
+          primaryTradeRoles: parseRoleText(editPrimaryRoles),
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok)
+        throw new Error(body.error ?? "職種の更新に失敗しました。");
+
+      setEditingPrimaryRoles(null);
+      await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "職種の更新に失敗しました。",
       );
     } finally {
       setCompanyLoading(false);
@@ -1168,9 +1199,15 @@ export function AdminDashboard() {
                       label="一次会社"
                       stopPropagation
                     />
-                    <span className="text-sm font-normal text-slate-500">
-                      {(group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []).join("・")}
-                    </span>
+                    {(group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []).length > 0 && (
+                      <span className="text-sm font-normal text-slate-500">
+                        <CopyValue
+                          value={(group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []).join("・")}
+                          label="職種"
+                          stopPropagation
+                        />
+                      </span>
+                    )}
                     <span className="text-sm font-normal text-slate-500">
                       二次：{group.rows.filter((row) => row.secondary_company).length}社
                     </span>
@@ -1209,6 +1246,52 @@ export function AdminDashboard() {
                   </span>
                 </summary>
                 <div className="grid gap-3 border-t border-border p-3 sm:p-4">
+                  <div className="flex flex-wrap items-end gap-3 rounded-md bg-slate-50 p-3">
+                    {editingPrimaryRoles === group.primaryCompany ? (
+                      <>
+                        <label className="field min-w-0 flex-1 sm:min-w-72">
+                          <span className="label">一次会社の職種</span>
+                          <input
+                            className="input"
+                            value={editPrimaryRoles}
+                            onChange={(event) => setEditPrimaryRoles(event.target.value)}
+                            placeholder="例：多能工、設備工"
+                            aria-label={`${group.primaryCompany}の職種を編集`}
+                          />
+                        </label>
+                        <button type="button" className="btn btn-primary" disabled={companyLoading} onClick={() => void savePrimaryTradeRoles()}>
+                          保存
+                        </button>
+                        <button type="button" className="btn btn-secondary" disabled={companyLoading} onClick={() => setEditingPrimaryRoles(null)}>
+                          キャンセル
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-slate-500">一次会社の職種</p>
+                          <p className="mt-1 break-words text-sm text-slate-800">
+                            {(group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []).length > 0
+                              ? <CopyValue value={(group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? []).join("・")} label="職種" />
+                              : "未登録"}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={companyLoading || !!editingPrimaryRoles}
+                          onClick={() => {
+                            const roles = group.rows.find((row) => (row.primary_trade_roles?.length ?? 0) > 0)?.primary_trade_roles ?? [];
+                            setEditingPrimaryRoles(group.primaryCompany);
+                            setEditPrimaryRoles(roles.join("、"));
+                            setMessage("");
+                          }}
+                        >
+                          職種を変更
+                        </button>
+                      </>
+                    )}
+                  </div>
                   {group.rows.map((row, rowIndex) => (
                     <div
                       key={row.id}

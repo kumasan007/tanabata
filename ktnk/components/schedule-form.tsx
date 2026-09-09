@@ -278,6 +278,7 @@ export function ScheduleForm({
     "existing" | "date" | "copy" | "edit" | "confirm" | "copyContent"
   >("date");
   const [editorPart, setEditorPart] = useState<"people" | "content">("people");
+  const [secondaryWorkChoice, setSecondaryWorkChoice] = useState<boolean | null>(null);
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [step, choosingCompany, editorPart]);
@@ -327,6 +328,7 @@ export function ScheduleForm({
       endDate: current.endDate,
       primaryCompany: current.primaryCompany,
     }));
+    setSecondaryWorkChoice(null);
     setChoice("new");
     setStep("edit");
     setEditorPart("people");
@@ -351,6 +353,11 @@ export function ScheduleForm({
   const totalCount =
     (activeCount ?? 0) +
     activeRows.reduce((sum, row) => sum + (row.workerCount ?? 0), 0);
+  const secondaryRowsComplete =
+    activeRows.length > 0 &&
+    activeRows.every(
+      (row) => row.secondaryCompany.trim() && (row.workerCount ?? 0) >= 1,
+    );
   const area = form.workArea;
   const content = form.workContent;
   const secondaryOptions = useMemo(
@@ -511,6 +518,7 @@ export function ScheduleForm({
   function selectCompany(company: string) {
     if (company !== form.primaryCompany) {
       setForm({ ...emptyForm(""), primaryCompany: company });
+      setSecondaryWorkChoice(null);
       setChoice(null);
       setStep("date");
       setCustomDate(false);
@@ -545,6 +553,7 @@ export function ScheduleForm({
       next.aerialWorkVehicleFloor = source.aerialWorkVehicleFloor ?? "";
     }
     setForm(next);
+    setSecondaryWorkChoice(same ? next.currentSubcompanies.length > 0 : null);
     setChoice(same ? "same" : "new");
     setStep(same ? "copyContent" : "edit");
     setEditorPart("people");
@@ -570,6 +579,7 @@ export function ScheduleForm({
   }
   function resetForm() {
     setForm(emptyForm(""));
+    setSecondaryWorkChoice(null);
     setChoice(null);
     setChoosingCompany(true);
     setStep("date");
@@ -591,6 +601,24 @@ export function ScheduleForm({
         message: !area.trim()
           ? "作業エリアを入力してください。"
           : "作業内容を入力してください。",
+      });
+      return;
+    }
+    if (secondaryWorkChoice === null) {
+      setStep("edit");
+      setEditorPart("people");
+      setSubmitState({
+        status: "error",
+        message: "二次会社が作業するか選択してください。",
+      });
+      return;
+    }
+    if (secondaryWorkChoice && !secondaryRowsComplete) {
+      setStep("edit");
+      setEditorPart("people");
+      setSubmitState({
+        status: "error",
+        message: "作業する二次会社を選び、人数を1人以上で入力してください。",
       });
       return;
     }
@@ -706,6 +734,7 @@ export function ScheduleForm({
                   setSubmitState({ status: "idle" });
                   if (step === "date") {
                     setForm(emptyForm(""));
+                    setSecondaryWorkChoice(null);
                     setChoice(null);
                     setCustomDate(false);
                     setContinuingInput(false);
@@ -854,25 +883,41 @@ export function ScheduleForm({
                       任意の日付を選ぶ
                     </button>
                     {customDate && (
-                      <div className="mt-3 space-y-3" id="custom-work-date">
-                        <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 font-semibold">
-                          <input
-                            type="checkbox"
-                            className="h-6 w-6 shrink-0 accent-primary"
-                            checked={dateRange}
-                            onChange={(event) => {
-                              const checked = event.target.checked;
-                              setDateRange(checked);
-                              if (!checked) patch({ endDate: form.startDate });
-                            }}
-                          />
-                          期間で入力する
-                        </label>
-                        <div className={dateRange ? "grid gap-3 sm:grid-cols-2" : ""}>
-                          <label className="field">
+                      <div
+                        className="mt-3 min-w-0 w-full space-y-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4"
+                        id="custom-work-date"
+                      >
+                        <fieldset className="min-w-0">
+                          <legend className="mb-2 text-sm font-semibold text-slate-600">
+                            日付の指定方法
+                          </legend>
+                          <div className="grid min-w-0 grid-cols-2 gap-1 rounded-lg bg-slate-200/70 p-1">
+                            <button
+                              type="button"
+                              className="date-shortcut min-w-0"
+                              aria-pressed={!dateRange}
+                              onClick={() => {
+                                setDateRange(false);
+                                patch({ endDate: form.startDate });
+                              }}
+                            >
+                              1日だけ
+                            </button>
+                            <button
+                              type="button"
+                              className="date-shortcut min-w-0"
+                              aria-pressed={dateRange}
+                              onClick={() => setDateRange(true)}
+                            >
+                              期間指定
+                            </button>
+                          </div>
+                        </fieldset>
+                        <div className={dateRange ? "grid min-w-0 gap-3 sm:grid-cols-2" : "min-w-0"}>
+                          <label className="field min-w-0">
                             <span className="label">{dateRange ? "開始日" : "作業日"}（月曜〜土曜）</span>
                             <input
-                              className="input"
+                              className="input max-w-full"
                               type="date"
                               value={form.startDate}
                               onChange={(event) => {
@@ -889,10 +934,10 @@ export function ScheduleForm({
                             />
                           </label>
                           {dateRange && (
-                            <label className="field">
+                            <label className="field min-w-0">
                               <span className="label">終了日（月曜〜土曜）</span>
                               <input
-                                className="input"
+                                className="input max-w-full"
                                 type="date"
                                 min={form.startDate}
                                 value={form.endDate}
@@ -1130,40 +1175,6 @@ export function ScheduleForm({
                           : "作業内容を入力してください"
                       }
                     />
-                    <div
-                      className={
-                        editorPart === "people"
-                          ? "grid grid-cols-[minmax(0,1fr)_112px] gap-3 sm:grid-cols-[minmax(0,1fr)_170px]"
-                          : "hidden"
-                      }
-                    >
-                      <div className="field">
-                        <span className="label" id="selected-company-label">
-                          一次会社
-                        </span>
-                        <div
-                          role="textbox"
-                          aria-readonly="true"
-                          aria-labelledby="selected-company-label"
-                          className="input flex h-auto min-h-14 items-center break-all bg-slate-50 py-3"
-                        >
-                          {form.primaryCompany}
-                        </div>
-                      </div>
-                      <CountField
-                        value={activeCount}
-                        required
-                        previous={Boolean(form.usePreviousPrimaryCount)}
-                        previousValue={previous?.primaryCount}
-                        onChange={(count) =>
-                          patch({ primaryCount: count, usePreviousPrimaryCount: false })
-                        }
-                        onPreviousChange={() => {
-                          if (previous?.primaryCount != null)
-                            patch({ primaryCount: previous.primaryCount, usePreviousPrimaryCount: true });
-                        }}
-                      />
-                    </div>
                     {previousResult?.key !== previousKey && <LoadingIndicator label="前回の値を読み込み中…" />}
                     {previousResult?.key === previousKey &&
                       previousResult.error && (
@@ -1181,44 +1192,126 @@ export function ScheduleForm({
                     <div
                       className={
                         editorPart === "people"
-                          ? "my-5 border-y border-border py-5"
+                          ? "space-y-5"
                           : "hidden"
                       }
                     >
-                      <SubcompanyFields
-                        title="二次会社"
-                        rows={activeRows}
-                        options={secondaryOptions}
-                        countRequired
-                        previousCounts={previousCounts}
-                        onChange={(rows) =>
-                          patch({ currentSubcompanies: rows })
-                        }
-                      />
-                      <AddSecondaryCompany
-                        key={form.primaryCompany}
-                        primaryCompany={form.primaryCompany}
-                        onAdded={(company) => {
-                          const primary = form.primaryCompany;
-                          setCompanyMaster((master) => master ? {
-                            ...master,
-                            secondariesByPrimary: {
-                              ...master.secondariesByPrimary,
-                              [primary]: [...new Set([...(master.secondariesByPrimary[primary] ?? []), company])],
-                            },
-                          } : master);
-                          setForm((current) => {
-                            if (current.primaryCompany !== primary) return current;
-                            const rows = current.currentSubcompanies;
-                            if (rows.some((row) => row.secondaryCompany === company)) return current;
-                            const blank = rows.findIndex((row) => !row.secondaryCompany);
-                            return { ...current, currentSubcompanies: blank >= 0
-                              ? rows.map((row, index) => index === blank ? { ...row, secondaryCompany: company, usePreviousWorkerCount: false } : row)
-                              : [...rows, { secondaryCompany: company, workerCount: 0, usePreviousWorkerCount: false }],
-                            };
-                          });
-                        }}
-                      />
+                      <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+                        <p className="font-semibold text-slate-900">
+                          二次会社は作業しますか？ <span className="required-mark">必須</span>
+                        </p>
+                        <div className="mt-3 grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            className="status-option min-h-14 text-lg"
+                            aria-pressed={secondaryWorkChoice === true}
+                            onClick={() => {
+                              setSecondaryWorkChoice(true);
+                              if (activeRows.length === 0) {
+                                patch({
+                                  currentSubcompanies: [{
+                                    secondaryCompany: "",
+                                    workerCount: 0,
+                                    usePreviousWorkerCount: false,
+                                  }],
+                                });
+                              }
+                            }}
+                          >
+                            はい
+                          </button>
+                          <button
+                            type="button"
+                            className="status-option min-h-14 text-lg"
+                            aria-pressed={secondaryWorkChoice === false}
+                            onClick={() => {
+                              setSecondaryWorkChoice(false);
+                              patch({ currentSubcompanies: [] });
+                            }}
+                          >
+                            いいえ
+                          </button>
+                        </div>
+                      </div>
+
+                      {secondaryWorkChoice === true && (
+                        <div className="border-y border-border py-5">
+                          <SubcompanyFields
+                            title="作業する二次会社"
+                            rows={activeRows}
+                            options={secondaryOptions}
+                            countRequired
+                            optional={false}
+                            previousCounts={previousCounts}
+                            onChange={(rows) =>
+                              patch({ currentSubcompanies: rows })
+                            }
+                          />
+                          <AddSecondaryCompany
+                            key={form.primaryCompany}
+                            primaryCompany={form.primaryCompany}
+                            onAdded={(company) => {
+                              const primary = form.primaryCompany;
+                              setCompanyMaster((master) => master ? {
+                                ...master,
+                                secondariesByPrimary: {
+                                  ...master.secondariesByPrimary,
+                                  [primary]: [...new Set([...(master.secondariesByPrimary[primary] ?? []), company])],
+                                },
+                              } : master);
+                              setForm((current) => {
+                                if (current.primaryCompany !== primary) return current;
+                                const rows = current.currentSubcompanies;
+                                if (rows.some((row) => row.secondaryCompany === company)) return current;
+                                const blank = rows.findIndex((row) => !row.secondaryCompany);
+                                return { ...current, currentSubcompanies: blank >= 0
+                                  ? rows.map((row, index) => index === blank ? { ...row, secondaryCompany: company, usePreviousWorkerCount: false } : row)
+                                  : [...rows, { secondaryCompany: company, workerCount: 0, usePreviousWorkerCount: false }],
+                                };
+                              });
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {secondaryWorkChoice !== null && (
+                        <div>
+                          <p className="mb-3 font-semibold text-slate-900">
+                            次に、一次会社所属の人数を入力してください
+                          </p>
+                          <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-3 sm:grid-cols-[minmax(0,1fr)_170px]">
+                            <div className="field">
+                              <span className="label" id="selected-company-label">
+                                一次会社
+                              </span>
+                              <div
+                                role="textbox"
+                                aria-readonly="true"
+                                aria-labelledby="selected-company-label"
+                                className="input flex h-auto min-h-14 items-center break-all bg-slate-50 py-3"
+                              >
+                                {form.primaryCompany}
+                              </div>
+                            </div>
+                            <CountField
+                              value={activeCount}
+                              required
+                              previous={Boolean(form.usePreviousPrimaryCount)}
+                              previousValue={previous?.primaryCount}
+                              onChange={(count) =>
+                                patch({ primaryCount: count, usePreviousPrimaryCount: false })
+                              }
+                              onPreviousChange={() => {
+                                if (previous?.primaryCount != null)
+                                  patch({ primaryCount: previous.primaryCount, usePreviousPrimaryCount: true });
+                              }}
+                            />
+                          </div>
+                          <p className="mt-2 text-sm text-slate-500">
+                            一次会社所属の作業者がいない場合は0人のままで進めます。
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <div
                       className={
@@ -1331,6 +1424,24 @@ export function ScheduleForm({
                       type="button"
                       className="btn btn-primary mt-5 w-full"
                       onClick={() => {
+                        if (editorPart === "people" && secondaryWorkChoice === null) {
+                          setSubmitState({
+                            status: "error",
+                            message: "二次会社が作業するか選択してください。",
+                          });
+                          return;
+                        }
+                        if (
+                          editorPart === "people" &&
+                          secondaryWorkChoice === true &&
+                          !secondaryRowsComplete
+                        ) {
+                          setSubmitState({
+                            status: "error",
+                            message: "作業する二次会社を選び、人数を1人以上で入力してください。",
+                          });
+                          return;
+                        }
                         if (
                           totalCount < 1 ||
                           activeRows.some(

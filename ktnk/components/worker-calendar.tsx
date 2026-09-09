@@ -166,7 +166,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                 </p>
                 {(master?.primaryTradeRolesByPrimary[row.primary_company] ?? []).length > 0 && (
                   <span className="shrink-0 truncate text-xs font-normal text-slate-400" title={(master?.primaryTradeRolesByPrimary[row.primary_company] ?? []).join("・")}>
-                    {(master?.primaryTradeRolesByPrimary[row.primary_company] ?? []).join("・")}
+                    <CopyValue value={(master?.primaryTradeRolesByPrimary[row.primary_company] ?? []).join("・")} label="職種" />
                   </span>
                 )}
               </div>
