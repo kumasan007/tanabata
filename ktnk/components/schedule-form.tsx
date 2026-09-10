@@ -4,8 +4,6 @@ import { ExistingEntryCheck } from "@/components/existing-entry-check";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { CopyButton } from "@/components/copy-button";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { SubcompanyFields } from "@/components/subcompany-fields";
-import { AddSecondaryCompany } from "@/components/add-secondary-company";
 import { MultiDateCalendar } from "@/components/multi-date-calendar";
 import type {
   CompanyMaster,
@@ -72,60 +70,89 @@ function SectionHeading({ title }: { title: string }) {
   return <h2 className="mb-5 text-lg font-bold text-slate-900">{title}</h2>;
 }
 
-function CountField({
-  value,
-  previous,
-  previousValue,
-  onChange,
-  onPreviousChange,
-  required = true,
+function CompanyPeopleFields({
+  primaryCompany,
+  primaryCount,
+  primaryCountCopied,
+  previousPrimaryCount,
+  subcompanies,
+  previousCounts,
+  onPrimaryCountChange,
+  onSubcompaniesChange,
 }: {
-  value: number | null;
-  previous: boolean;
-  previousValue: number | null | undefined;
-  onChange: (value: number | null) => void;
-  onPreviousChange: (value: boolean) => void;
-  required?: boolean;
+  primaryCompany: string;
+  primaryCount: number | null;
+  primaryCountCopied: boolean;
+  previousPrimaryCount: number | null | undefined;
+  subcompanies: ScheduleSubmitInput["currentSubcompanies"];
+  previousCounts: Map<string, number | null>;
+  onPrimaryCountChange: (count: number | null, copied: boolean) => void;
+  onSubcompaniesChange: (rows: ScheduleSubmitInput["currentSubcompanies"]) => void;
 }) {
   const id = useId();
+  const rows = [
+    { company: primaryCompany, count: primaryCount, copied: primaryCountCopied, previous: previousPrimaryCount, primary: true },
+    ...subcompanies.map((row) => ({
+      company: row.secondaryCompany,
+      count: row.workerCount,
+      copied: Boolean(row.usePreviousWorkerCount),
+      previous: previousCounts.get(row.secondaryCompany),
+      primary: false,
+    })),
+  ];
+
   return (
-    <div className="field">
-      <label className="label" htmlFor={id}>
-        <span className="sm:hidden">人数</span>
-        <span className="hidden sm:inline">一次会社人数</span>
-        {required ? (
-          <span className="required-mark">*</span>
-        ) : (
-          <span className="ml-2 text-sm font-normal text-slate-600">任意</span>
-        )}
-      </label>
-      <div className="relative">
-        <input
-          id={id}
-          aria-label="一次会社人数"
-          className="input pr-10 tabular-nums"
-          inputMode="numeric"
-          type="number"
-          min={0}
-          step={1}
-          placeholder="0"
-          value={value ?? ""}
-          onChange={(event) => onChange(
-            event.target.value === "" ? null : Math.max(0, Number(event.target.value)),
-          )}
-          required={required}
-        />
-        <span className="pointer-events-none absolute right-4 top-4 text-sm text-slate-600">
-          人
-        </span>
+    <section className="overflow-hidden rounded-md border border-border" aria-labelledby={`${id}-title`}>
+      <h2 id={`${id}-title`} className="border-b border-border bg-slate-50 px-3 py-2 font-bold text-slate-800">
+        作業する会社
+      </h2>
+      <div className="grid grid-cols-[minmax(0,1fr)_76px_52px] items-center gap-2 border-b border-border bg-slate-50/60 px-3 py-1.5 text-sm font-semibold text-slate-500">
+        <span>会社名</span><span>人数</span><span className="sr-only">前回値</span>
       </div>
-      <CopyButton
-        label="前回の一次会社人数をコピー"
-        copied={previous}
-        disabled={previousValue == null}
-        onCopy={() => onPreviousChange(true)}
-      />
-    </div>
+      <div className="divide-y divide-slate-100">
+        {rows.map((row, index) => (
+          <div key={`${row.primary}-${row.company}`} className="grid grid-cols-[minmax(0,1fr)_76px_52px] items-center gap-2 px-3 py-2">
+            <span className="min-w-0 break-words text-sm font-medium text-slate-800">{row.company}</span>
+            <div className="relative">
+              <input
+                id={`${id}-${index}`}
+                aria-label={`${row.company}の人数`}
+                className="input h-10 px-2 pr-5 text-base tabular-nums"
+                inputMode="numeric"
+                type="number"
+                min={0}
+                step={1}
+                placeholder="0"
+                value={row.count ?? ""}
+                onChange={(event) => {
+                  const count = event.target.value === "" ? null : Math.max(0, Number(event.target.value));
+                  if (row.primary) onPrimaryCountChange(count, false);
+                  else onSubcompaniesChange(subcompanies.map((item) => item.secondaryCompany === row.company
+                    ? { ...item, workerCount: count, usePreviousWorkerCount: false }
+                    : item));
+                }}
+              />
+              <span className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-xs text-slate-500">人</span>
+            </div>
+            <button
+              type="button"
+              className="min-h-9 rounded border border-border bg-white px-1 text-xs font-semibold text-slate-600 disabled:opacity-35"
+              disabled={row.previous == null}
+              aria-label={`${row.company}の前回人数をコピー`}
+              onClick={() => {
+                if (row.previous == null) return;
+                if (row.primary) onPrimaryCountChange(row.previous, true);
+                else onSubcompaniesChange(subcompanies.map((item) => item.secondaryCompany === row.company
+                  ? { ...item, workerCount: row.previous ?? null, usePreviousWorkerCount: true }
+                  : item));
+              }}
+            >
+              {row.copied ? "済" : "前回"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -1176,83 +1203,17 @@ export function ScheduleForm({
                           : "hidden"
                       }
                     >
-                      {secondaryWorkChoice === true && (
-                        <div className="border-y border-border py-5">
-                          <SubcompanyFields
-                            title="作業する二次会社"
-                            rows={activeRows}
-                            options={secondaryOptions}
-                            countRequired={false}
-                            optional={false}
-                            previousCounts={previousCounts}
-                            onChange={(rows) =>
-                              patch({ currentSubcompanies: rows })
-                            }
-                          />
-                          <AddSecondaryCompany
-                            key={form.primaryCompany}
-                            primaryCompany={form.primaryCompany}
-                            onAdded={(company) => {
-                              const primary = form.primaryCompany;
-                              setCompanyMaster((master) => master ? {
-                                ...master,
-                                secondariesByPrimary: {
-                                  ...master.secondariesByPrimary,
-                                  [primary]: [...new Set([...(master.secondariesByPrimary[primary] ?? []), company])],
-                                },
-                              } : master);
-                              setForm((current) => {
-                                if (current.primaryCompany !== primary) return current;
-                                const rows = current.currentSubcompanies;
-                                if (rows.some((row) => row.secondaryCompany === company)) return current;
-                                const blank = rows.findIndex((row) => !row.secondaryCompany);
-                                return { ...current, currentSubcompanies: blank >= 0
-                                  ? rows.map((row, index) => index === blank ? { ...row, secondaryCompany: company, usePreviousWorkerCount: false } : row)
-                                  : [...rows, { secondaryCompany: company, workerCount: 0, usePreviousWorkerCount: false }],
-                                };
-                              });
-                            }}
-                          />
-                        </div>
-                      )}
-
                       {secondaryWorkChoice !== null && (
-                        <div>
-                          <p className="mb-3 font-semibold text-slate-900">
-                            次に、一次会社所属の人数を入力してください
-                          </p>
-                          <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-3 sm:grid-cols-[minmax(0,1fr)_170px]">
-                            <div className="field">
-                              <span className="label" id="selected-company-label">
-                                一次会社
-                              </span>
-                              <div
-                                role="textbox"
-                                aria-readonly="true"
-                                aria-labelledby="selected-company-label"
-                                className="input flex h-auto min-h-14 items-center break-all bg-slate-50 py-3"
-                              >
-                                {form.primaryCompany}
-                              </div>
-                            </div>
-                            <CountField
-                              value={activeCount}
-                              required={false}
-                              previous={Boolean(form.usePreviousPrimaryCount)}
-                              previousValue={previous?.primaryCount}
-                              onChange={(count) =>
-                                patch({ primaryCount: count, usePreviousPrimaryCount: false })
-                              }
-                              onPreviousChange={() => {
-                                if (previous?.primaryCount != null)
-                                  patch({ primaryCount: previous.primaryCount, usePreviousPrimaryCount: true });
-                              }}
-                            />
-                          </div>
-                          <p className="mt-2 text-sm text-slate-500">
-                            一次会社所属の作業者がいない場合は0人のままで進めます。
-                          </p>
-                        </div>
+                        <CompanyPeopleFields
+                          primaryCompany={form.primaryCompany}
+                          primaryCount={activeCount}
+                          primaryCountCopied={Boolean(form.usePreviousPrimaryCount)}
+                          previousPrimaryCount={previous?.primaryCount}
+                          subcompanies={secondaryWorkChoice ? activeRows : []}
+                          previousCounts={previousCounts}
+                          onPrimaryCountChange={(count, copied) => patch({ primaryCount: count, usePreviousPrimaryCount: copied })}
+                          onSubcompaniesChange={(rows) => patch({ currentSubcompanies: rows })}
+                        />
                       )}
                     </div>
                     <div
