@@ -1,7 +1,7 @@
 "use client";
 
-import { Pencil, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import type { CompanyMaster } from "@/lib/types";
 import { isWorkingDate, workingDateOptions, shortDateWithWeekday, parseLocalDate } from "@/lib/utils";
 
@@ -29,6 +29,7 @@ export function NewEntrantForm({ today, initialDate = "", initialCompany = "", i
   const [customDate, setCustomDate] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const personNameInput = useRef<HTMLInputElement>(null);
   const secondaryOptions = useMemo(() => master.secondariesByPrimary[primaryCompany] ?? [], [master, primaryCompany]);
   const dateOptions = useMemo(() => workingDateOptions(today), [today]);
 
@@ -50,7 +51,11 @@ export function NewEntrantForm({ today, initialDate = "", initialCompany = "", i
     if (!draft.nationalityStatus) { setMessage("日本人か外国人かを選択してください。"); return; }
     const person: Person = { id: editingId ?? crypto.randomUUID(), secondaryCompany: company, personName: draft.personName.trim(), nationalityStatus: draft.nationalityStatus, notes: draft.notes.trim() };
     setPeople((current) => editingId ? current.map((item) => item.id === editingId ? person : item) : [...current, person]);
-    setDraft(emptyDraft()); setEditingId(null); setMessage("");
+    if (company && !secondaryOptions.includes(company)) {
+      setMaster((current) => ({ ...current, secondariesByPrimary: { ...current.secondariesByPrimary, [primaryCompany]: [...secondaryOptions, company] } }));
+    }
+    setDraft({ ...emptyDraft(), companyChoice: company ? company : PRIMARY }); setEditingId(null); setMessage("");
+    requestAnimationFrame(() => personNameInput.current?.focus());
   }
 
   function editPerson(person: Person) {
@@ -86,9 +91,9 @@ export function NewEntrantForm({ today, initialDate = "", initialCompany = "", i
     {step === "date" && <section className="panel p-5 sm:p-6"><h2 className="mb-5 text-lg font-bold">入場日を選んでください</h2><div className="grid grid-cols-3 gap-2">{dateOptions.map((option) => <button key={option.label} type="button" className="status-option flex-col gap-1 px-2" aria-pressed={!customDate && entryDate === option.date} onClick={() => { setCustomDate(false); chooseDate(option.date); }}><span>{option.label}</span><span className="text-sm font-normal">{shortDateWithWeekday(option.date)}</span></button>)}</div><button type="button" className="btn btn-secondary mt-3 w-full" aria-expanded={customDate} onClick={() => setCustomDate(true)}>任意の日付を選ぶ</button>{customDate && <div className="mt-3 min-w-0 w-full space-y-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 p-3"><label className="field min-w-0"><span className="label">入場日（月曜〜土曜）</span><input className="input max-w-full" type="date" value={entryDate} onChange={(event) => setEntryDate(event.target.value)} /></label><button type="button" className="btn btn-primary w-full" disabled={!isWorkingDate(entryDate)} onClick={() => chooseDate(entryDate)}>次へ</button></div>}</section>}
 
     {step === "details" && <><section className="panel p-5 sm:p-6"><h2 className="mb-5 text-lg font-bold">新規入場者を一人ずつ追加</h2><div className="grid gap-5">
-      <label className="field"><span className="label">所属会社<span className="required-mark">必須</span></span><select autoFocus className="input" value={draft.companyChoice} onChange={(event) => setDraft({ ...draft, companyChoice: event.target.value, newCompany: "" })}><option value="" disabled>所属会社を選択</option>{secondaryOptions.map((company) => <option key={company} value={company}>{company}</option>)}<option value={NEW_COMPANY}>新しい二次会社名を入力</option><option value={PRIMARY}>一次会社所属：{primaryCompany}</option></select></label>
-      {draft.companyChoice === NEW_COMPANY && <label className="field"><span className="label">新しい二次会社名<span className="required-mark">必須</span></span><input className="input" value={draft.newCompany} maxLength={200} onChange={(event) => setDraft({ ...draft, newCompany: event.target.value })} placeholder="会社名を入力" /></label>}
-      <label className="field"><span className="label">氏名<span className="required-mark">必須</span></span><input className="input" value={draft.personName} maxLength={200} onChange={(event) => setDraft({ ...draft, personName: event.target.value })} placeholder="氏名を入力" /></label>
+      <div className="field"><span className="label">所属会社<span className="required-mark">必須</span></span><div className="flex flex-col gap-2 sm:flex-row"><select autoFocus className="input min-w-0 flex-1" value={draft.companyChoice === NEW_COMPANY ? "" : draft.companyChoice} onChange={(event) => setDraft({ ...draft, companyChoice: event.target.value, newCompany: "" })} disabled={draft.companyChoice === NEW_COMPANY}><option value="" disabled>所属会社を選択</option>{secondaryOptions.map((company) => <option key={company} value={company}>{company}</option>)}<option value={PRIMARY}>{primaryCompany}</option></select><button type="button" className="btn btn-secondary h-[46px] min-h-[46px] shrink-0 px-3" onClick={() => setDraft({ ...draft, companyChoice: NEW_COMPANY, newCompany: "" })}><Plus size={18} aria-hidden="true" />新しい二次会社を追加</button></div>
+      {draft.companyChoice === NEW_COMPANY && <div className="mt-2 flex gap-2"><input autoFocus className="input min-w-0 flex-1" aria-label="新しい二次会社名" value={draft.newCompany} maxLength={200} onChange={(event) => setDraft({ ...draft, newCompany: event.target.value })} placeholder="新しい二次会社名" /><button type="button" className="btn btn-secondary h-[46px] min-h-[46px] w-[46px] shrink-0 p-0" onClick={() => setDraft({ ...draft, companyChoice: "", newCompany: "" })} aria-label="追加を取り消す"><X size={18} /></button></div>}</div>
+      <label className="field"><span className="label">氏名<span className="required-mark">必須</span></span><input ref={personNameInput} className="input" value={draft.personName} maxLength={200} onChange={(event) => setDraft({ ...draft, personName: event.target.value })} placeholder="氏名を入力" />{!editingId && draft.companyChoice && <span className="text-sm text-slate-500">追加後も所属会社を引き継ぎます</span>}</label>
       <fieldset className="field"><legend className="label">国籍<span className="required-mark">必須</span></legend><div className="grid grid-cols-2 gap-3"><button type="button" className="status-option" aria-pressed={draft.nationalityStatus === "japanese_only"} onClick={() => setDraft({ ...draft, nationalityStatus: "japanese_only" })}>日本人</button><button type="button" className="status-option" aria-pressed={draft.nationalityStatus === "includes_foreign"} onClick={() => setDraft({ ...draft, nationalityStatus: "includes_foreign" })}>外国人</button></div></fieldset>
       <label className="field"><span className="label">備考<span className="ml-2 text-sm font-normal text-slate-600">任意</span></span><textarea className="textarea" rows={2} value={draft.notes} maxLength={2000} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label>
     </div>{message && <p role="alert" className="mt-4 text-red-700">{message}</p>}<div className="mt-5 flex gap-2"><button type="button" className="btn btn-primary flex-1" onClick={savePerson}>{editingId ? "変更を保存" : "この人を追加"}</button>{editingId && <button type="button" className="btn btn-secondary" onClick={() => { setDraft(emptyDraft()); setEditingId(null); }}>取消</button>}</div></section>

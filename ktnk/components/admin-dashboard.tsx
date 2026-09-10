@@ -1886,7 +1886,7 @@ function AdminStat({
 function ScheduleEmpty({ loading }: { loading: boolean }) {
   return (
     <div
-      className="flex flex-col items-center px-5 py-14 text-center"
+      className={`flex flex-col items-center px-5 py-14 text-center ${loading ? "loading-reveal" : ""}`}
       role="status"
     >
       <span className="grid size-12 place-items-center rounded-md bg-slate-50 text-slate-400">

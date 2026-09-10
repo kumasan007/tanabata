@@ -620,8 +620,8 @@ export function ScheduleForm({
         workerCount: null,
         usePreviousWorkerCount: false,
       }));
-      next.workArea = source?.workArea ?? "";
-      next.workContent = source?.workContent ?? "";
+      next.workArea = "";
+      next.workContent = "";
       next.aerialWorkVehicleCount = source?.aerialWorkVehicleCount ?? null;
       next.aerialWorkVehicleFloor = source?.aerialWorkVehicleFloor ?? "";
       next.aerialWorkVehicles = source?.aerialWorkVehicles?.length
@@ -854,6 +854,10 @@ export function ScheduleForm({
                     setStep("date");
                   } else if (step === "edit" && editorPart === "content")
                     setEditorPart("people");
+                  else if (step === "edit" && !source) {
+                    setChoice(null);
+                    setStep("date");
+                  }
                   else {
                     setChoice(null);
                     setStep("copy");
