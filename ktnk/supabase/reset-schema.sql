@@ -110,8 +110,7 @@ create table public.new_entrant_records (
   nationality_status text
     check (nationality_status in ('japanese_only', 'includes_foreign')),
   notes text,
-  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
-  unique (entry_date, primary_company, secondary_company)
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
 
 create index schedule_groups_work_date_idx
@@ -128,6 +127,9 @@ create index schedule_subcompanies_secondary_company_idx
 
 create index schedule_aerial_work_vehicles_group_idx
   on public.schedule_aerial_work_vehicles (schedule_group_id, sort_order);
+
+create index new_entrant_records_company_date_idx
+  on public.new_entrant_records (entry_date, primary_company, secondary_company);
 
 alter table public.company_master enable row level security;
 alter table public.schedule_groups enable row level security;

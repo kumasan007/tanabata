@@ -114,8 +114,7 @@ create table if not exists public.new_entrant_records (
     check (nationality_status in ('japanese_only', 'includes_foreign')),
   notes text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (entry_date, primary_company, secondary_company)
+  updated_at timestamptz not null default now()
 );
 
 create index if not exists schedule_groups_work_date_idx
@@ -138,6 +137,9 @@ create index if not exists schedule_aerial_work_vehicles_group_idx
 
 create index if not exists new_entrant_records_primary_date_idx
   on public.new_entrant_records (primary_company, entry_date);
+
+create index if not exists new_entrant_records_company_date_idx
+  on public.new_entrant_records (entry_date, primary_company, secondary_company);
 
 alter table public.company_master enable row level security;
 alter table public.schedule_groups enable row level security;

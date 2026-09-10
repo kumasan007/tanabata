@@ -119,7 +119,7 @@ export type NewEntrantRecord = {
   id: string;
   entry_date: string;
   primary_company: string;
-  secondary_company: string;
+  secondary_company: string | null;
   person_count: number;
   person_names: string | null;
   nationality_status: "japanese_only" | "includes_foreign" | null;
