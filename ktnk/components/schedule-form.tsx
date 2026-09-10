@@ -92,7 +92,6 @@ function CompanyPeopleFields({
 }) {
   const id = useId();
   const rows = [
-    { company: primaryCompany, count: primaryCount, copied: primaryCountCopied, previous: previousPrimaryCount, primary: true },
     ...subcompanies.map((row) => ({
       company: row.secondaryCompany,
       count: row.workerCount,
@@ -100,6 +99,7 @@ function CompanyPeopleFields({
       previous: previousCounts.get(row.secondaryCompany),
       primary: false,
     })),
+    { company: primaryCompany, count: primaryCount, copied: primaryCountCopied, previous: previousPrimaryCount, primary: true },
   ];
 
   return (
@@ -345,7 +345,7 @@ export function ScheduleForm({
   const [continuingInput, setContinuingInput] = useState(false);
   const [overwriteExisting, setOverwriteExisting] = useState(false);
   const [step, setStep] = useState<
-    "existing" | "date" | "copy" | "edit" | "confirm" | "copyContent"
+    "existing" | "date" | "copy" | "edit" | "confirm"
   >(initialDate && initialCompany ? "existing" : "date");
   const [editorPart, setEditorPart] = useState<"people" | "content">("people");
   const [secondaryWorkChoice, setSecondaryWorkChoice] = useState<boolean | null>(null);
@@ -849,10 +849,7 @@ export function ScheduleForm({
                     setChoosingCompany(true);
                   }
                   else if (step === "existing") setStep("date");
-                  else if (step === "copyContent") {
-                    setEditorPart("people");
-                    setStep("edit");
-                  } else if (step === "copy") {
+                  else if (step === "copy") {
                     setChoice(null);
                     setStep("date");
                   } else if (step === "edit" && editorPart === "content")
@@ -1112,55 +1109,6 @@ export function ScheduleForm({
                   </section>
                 )}
 
-                {step === "copyContent" && source && (
-                  <section className="panel p-5 sm:p-6">
-                    <SectionHeading title={sourceQuestion(source.workDate, sourceResult?.today ?? today)} />
-                    <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3 rounded-xl bg-slate-50 p-4 text-base">
-                      <dt className="text-slate-500">エリア</dt>
-                      <dd className="whitespace-pre-wrap break-words">
-                        {source.workArea || "未入力"}
-                      </dd>
-                      <dt className="text-slate-500">作業内容</dt>
-                      <dd className="whitespace-pre-wrap break-words">
-                        {source.workContent || "未入力"}
-                      </dd>
-                      <dt className="text-slate-500">高所作業車</dt>
-                      <dd>
-                        {(source.aerialWorkVehicleCount ?? 0) > 0
-                          ? `${source.aerialWorkVehicleCount}台・${source.aerialWorkVehicleFloor || "使用フロア未入力"}`
-                          : "使用しない"}
-                      </dd>
-                    </dl>
-                    <div className="mt-5 grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        className="btn btn-primary min-h-14"
-                        onClick={() => {
-                          patch({
-                            workArea: source.workArea ?? "",
-                            workContent: source.workContent ?? "",
-                            aerialWorkVehicleCount: source.aerialWorkVehicleCount ?? 0,
-                            aerialWorkVehicleFloor: source.aerialWorkVehicleFloor ?? "",
-                          });
-                          setStep("confirm");
-                        }}
-                      >
-                        はい
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary min-h-14"
-                        onClick={() => {
-                          setEditorPart("content");
-                          setStep("edit");
-                        }}
-                      >
-                        いいえ・変更
-                      </button>
-                    </div>
-                  </section>
-                )}
-
                 {ready && !showEditor && submitState.status !== "success" && (
                   <section className="panel p-5 sm:p-6">
                     <SectionHeading title="この内容で送信します" />
@@ -1362,8 +1310,7 @@ export function ScheduleForm({
                         }
                         setSubmitState({ status: "idle" });
                         if (editorPart === "people") {
-                          if (source) setStep("copyContent");
-                          else setEditorPart("content");
+                          setEditorPart("content");
                         } else setStep("confirm");
                       }}
                     >

@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes loading-reveal {
+  to {
+    opacity: 1;
+  }
+}
+
+.loading-reveal {
+  opacity: 0;
+  animation: loading-reveal 120ms ease-out 180ms forwards;
+}
+
 :root {
   color-scheme: light;
   --background: 150 14% 97%;
@@ -140,6 +151,9 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .loading-reveal {
+    opacity: 1;
+  }
   html {
     scroll-behavior: auto;
   }

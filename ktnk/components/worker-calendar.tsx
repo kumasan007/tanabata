@@ -1,6 +1,6 @@
 "use client";
 
-import { LoadingIndicator } from "@/components/loading-indicator";
+import { LoadingIndicator, LoadingOverlay } from "@/components/loading-indicator";
 import { CopyValue } from "@/components/copy-value";
 import { isWorkingDate } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Pencil } from "lucide-react";
@@ -57,8 +57,9 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
     return () => controller.abort();
   }, [month, company, version, range.from, range.to, requestKey]);
   const days = useMemo(() => datesInMonth(month), [month]);
-  const scheduleMap = useMemo(() => Object.groupBy(loading ? [] : schedules.filter((row) => !company || row.primary_company === company), (row) => row.work_date), [schedules, company, loading]);
-  const entrantMap = useMemo(() => Object.groupBy(loading ? [] : entrants.filter((row) => !company || row.primary_company === company), (row) => row.entry_date), [entrants, company, loading]);
+  const hasLoaded = loadedKey !== "";
+  const scheduleMap = useMemo(() => Object.groupBy(schedules.filter((row) => !company || row.primary_company === company), (row) => row.work_date), [schedules, company]);
+  const entrantMap = useMemo(() => Object.groupBy(entrants.filter((row) => !company || row.primary_company === company), (row) => row.entry_date), [entrants, company]);
   const companyPriority = useMemo(
     () => new Map(master.primaryCompanies.map((primaryCompany, index) => [primaryCompany, index])),
     [master],
@@ -123,7 +124,8 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
         <label className="flex w-full min-w-0 items-center gap-2 sm:ml-auto sm:w-64"><span className="shrink-0 text-sm font-semibold text-slate-700">一次会社</span><select className="input h-10 min-h-0 px-3 text-base" value={company} onChange={(e) => setCompany(e.target.value)}><option value="">すべて</option>{master?.primaryCompanies.map((item) => <option key={item}>{item}</option>)}</select></label>
       </div>
       {message && <p role="alert" className="mt-4 text-red-700">{message}</p>}
-      {loading ? <div className="panel mt-4"><LoadingIndicator label="カレンダーを読み込み中…" /></div> : <section className="panel mt-4 overflow-x-auto">
+      {!hasLoaded && loading ? <div className="panel mt-4 min-h-80"><LoadingIndicator label="カレンダーを読み込み中…" className="min-h-80" /></div> : <section className="panel relative mt-4 overflow-x-auto" aria-busy={loading}>
+        {loading && <LoadingOverlay label="カレンダーを更新中…" />}
         <div className={`grid grid-cols-6 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500 ${company ? "min-w-[56rem]" : ""}`}>
           {weekdays.map((weekday, index) => <div key={weekday} className={`py-2 ${index === 5 ? "bg-sky-50/70 text-sky-700" : ""}`}>{weekday}</div>)}
         </div>
@@ -174,7 +176,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
             ))}
           </div>
         </div>
-        {loading ? <LoadingIndicator label="予定を読み込み中…" /> : selectedSchedules.length === 0 && selectedEntrants.length === 0 ? <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {!hasLoaded && loading ? <LoadingIndicator label="予定を読み込み中…" className="min-h-32" /> : selectedSchedules.length === 0 && selectedEntrants.length === 0 ? <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className={`grid gap-2 transition-opacity sm:grid-cols-2 lg:grid-cols-3 ${loading ? "pointer-events-none opacity-60" : ""}`} aria-busy={loading}>
           {selectedSchedules.map((row) => {
             const subs = row.subcompanies;
             const area = row.work_area;
