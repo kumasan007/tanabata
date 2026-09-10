@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isWorkingDate } from "@/lib/utils";
-import { ensureSecondaryCompany } from "@/lib/companies";
+import { ensureSecondaryCompanies, ensureSecondaryCompany } from "@/lib/companies";
 import { createServerClient } from "@/lib/supabase";
 import { getNewEntrants } from "@/lib/new-entrants";
 import { invalidateEntrantData } from "@/lib/data-cache";
@@ -39,17 +39,13 @@ export async function POST(request: Request) {
     const parsed = createSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 });
     const value = parsed.data;
-    const companies = new Set(value.people.map((person) => person.secondaryCompany).filter(Boolean));
-    if (companies.size === 0) companies.add("");
-    for (const secondaryCompany of companies) {
-      if (!await ensureSecondaryCompany(value.primaryCompany, secondaryCompany)) {
-        return NextResponse.json({ error: "一次会社が見つかりません。会社一覧を読み込み直してください。" }, { status: 404 });
-      }
+    if (!await ensureSecondaryCompanies(value.primaryCompany, value.people.map((person) => person.secondaryCompany))) {
+      return NextResponse.json({ error: "一次会社が見つかりません。会社一覧を読み込み直してください。" }, { status: 404 });
     }
     const { data, error } = await createServerClient().from("new_entrant_records").insert(value.people.map((person) => ({
       entry_date: value.entryDate, primary_company: value.primaryCompany, secondary_company: person.secondaryCompany,
       person_count: 1, person_names: person.personName, nationality_status: person.nationalityStatus, notes: person.notes || null,
-    }))).select("*");
+    }))).select("id,entry_date,primary_company,secondary_company,person_count,person_names,nationality_status,notes,created_at,updated_at");
     if (error) throw error;
     invalidateEntrantData();
     return NextResponse.json({ records: data });
@@ -69,7 +65,7 @@ export async function PATCH(request: Request) {
     const { data, error } = await createServerClient().from("new_entrant_records").update({
       entry_date: value.entryDate, primary_company: value.primaryCompany, secondary_company: value.secondaryCompany,
       person_count: 1, person_names: value.personName, nationality_status: value.nationalityStatus, notes: value.notes || null,
-    }).eq("id", value.id).select("*").single();
+    }).eq("id", value.id).select("id,entry_date,primary_company,secondary_company,person_count,person_names,nationality_status,notes,created_at,updated_at").single();
     if (error) throw error;
     invalidateEntrantData();
     return NextResponse.json({ record: data });

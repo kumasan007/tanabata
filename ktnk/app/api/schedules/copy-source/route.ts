@@ -6,7 +6,7 @@ import {
   todayInTokyoString,
   toDateString,
 } from "@/lib/utils";
-import type { PreviousSchedule } from "@/lib/types";
+import { scheduleToCopyData } from "@/lib/schedule-copy";
 
 export const runtime = "nodejs";
 
@@ -24,21 +24,7 @@ export async function GET(request: Request) {
       ? workDate
       : toDateString(addDays(parseLocalDate(today)!, 1));
     const row = await getPreviousScheduleForCopy(company, target);
-    const source: PreviousSchedule | null = row
-      ? {
-          workDate: row.work_date,
-          primaryCount: row.primary_count,
-          workArea: row.work_area,
-          workContent: row.work_content,
-          aerialWorkVehicleCount: row.aerial_work_vehicle_count,
-          aerialWorkVehicleFloor: row.aerial_work_vehicle_floor,
-          aerialWorkVehicles: row.aerialWorkVehicles?.map((vehicle) => ({ workArea: vehicle.work_area, vehicleCount: vehicle.vehicle_count })),
-          subcompanies: row.subcompanies.map((sub) => ({
-              secondaryCompany: sub.secondary_company ?? "",
-              workerCount: sub.worker_count,
-          })),
-        }
-      : null;
+    const source = scheduleToCopyData(row);
     return NextResponse.json(
       { source, today },
       { headers: { "Cache-Control": "no-store" } },

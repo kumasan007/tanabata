@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { isWorkingDate } from "@/lib/utils";
+import { expandDateRange, isWorkingDate } from "@/lib/utils";
+
+const MAX_SUBMISSION_DATES = 180;
 
 const countSchema = z
   .union([z.number(), z.string(), z.null(), z.undefined()])
@@ -18,7 +20,7 @@ export const subcompanySchema = z.object({
 
 export const scheduleSubmitSchema = z
   .object({
-    dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(180).optional(),
+    dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(MAX_SUBMISSION_DATES).optional(),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "開始日を入力してください。"),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "終了日を入力してください。"),
     excludeWeekends: z.boolean().default(false),
@@ -48,6 +50,9 @@ export const scheduleSubmitSchema = z
       if (!isWorkingDate(value[field])) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: "日曜日は入力できません。月曜〜土曜を選択してください。" });
     }
     if (value.startDate > value.endDate) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: "終了日は開始日以降にしてください。" });
+    if (!value.dates?.length && expandDateRange(value.startDate, value.endDate, false).length > MAX_SUBMISSION_DATES) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: `登録期間は${MAX_SUBMISSION_DATES}日以内にしてください。` });
+    }
 
     for (const [field, label] of [["workArea", "作業エリア"], ["workContent", "作業内容"]] as const) {
       if (!value[field].trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${label}を入力してください。` });

@@ -147,6 +147,18 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
   };
 }
 
+export async function deleteSchedule(id: string) {
+  const { data, error } = await createServerClient()
+    .from("schedule_groups")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throwSupabaseError(error, "予定の削除に失敗しました。");
+  if (!data?.length) return false;
+  invalidateScheduleData();
+  return true;
+}
+
 export type ScheduleSearchParams = {
   dateFrom?: string | null;
   dateTo?: string | null;
@@ -264,43 +276,6 @@ export async function getPreviousScheduleForCopy(primaryCompany: string, workDat
   return getCachedPreviousSchedule(primaryCompany, workDate);
 }
 
-async function queryNextScheduleForCopy(primaryCompany: string, workDate: string) {
-  const supabase = createServerClient();
-  const { data, error } = await supabase
-    .from("schedule_groups")
-    .select(
-      `
-      id, work_date, primary_company, primary_count, work_area,
-      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
-      notes, created_at, updated_at,
-      schedule_subcompanies (
-        id, schedule_group_id, secondary_company, worker_count, sort_order
-      ),
-      schedule_aerial_work_vehicles (
-        id, schedule_group_id, work_area, vehicle_count, sort_order
-      )
-    `,
-    )
-    .eq("primary_company", primaryCompany)
-    .gte("work_date", workDate)
-    .order("work_date", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) throwSupabaseError(error, "次回の予定取得に失敗しました。");
-  return data ? normalizeScheduleRow(data) : null;
-}
-
-const getCachedNextSchedule = unstable_cache(
-  queryNextScheduleForCopy,
-  ["next-schedule-v1"],
-  { tags: [DATA_CACHE_TAGS.schedules], revalidate: 5 * 60 },
-);
-
-export async function getNextScheduleForCopy(primaryCompany: string, workDate: string) {
-  return getCachedNextSchedule(primaryCompany, workDate);
-}
-
 async function queryWorkScheduleOnDate(primaryCompany: string, workDate: string) {
   const { data, error } = await createServerClient()
     .from("schedule_groups")
@@ -397,7 +372,7 @@ export function schedulesToListRows(schedules: ScheduleWithSubcompanies[]): Sche
   const rows: ScheduleListRow[] = [];
 
   for (const schedule of schedules) {
-    const currentSubs = schedule.subcompanies.sort((a, b) => a.sort_order - b.sort_order);
+    const currentSubs = [...schedule.subcompanies].sort((a, b) => a.sort_order - b.sort_order);
     const subs = currentSubs.length > 0 ? currentSubs : [null];
     for (const sub of subs) {
       rows.push({

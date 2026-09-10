@@ -4,7 +4,7 @@ import {
   getWorkScheduleOnDate,
 } from "@/lib/schedule-service";
 import { parseLocalDate, todayInTokyoString } from "@/lib/utils";
-import type { PreviousSchedule, ScheduleWithSubcompanies } from "@/lib/types";
+import { scheduleToCopyData } from "@/lib/schedule-copy";
 
 export const runtime = "nodejs";
 
@@ -31,8 +31,8 @@ export async function GET(request: Request) {
     ]);
     return NextResponse.json(
       {
-        previous: toCopyData(row),
-        today: toCopyData(todayRow),
+        previous: scheduleToCopyData(row),
+        today: scheduleToCopyData(todayRow),
       },
       { headers: { "Cache-Control": "no-store" } },
     );
@@ -42,22 +42,4 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   }
-}
-
-function toCopyData(row: ScheduleWithSubcompanies | null): PreviousSchedule | null {
-  return row
-    ? {
-        workDate: row.work_date,
-        primaryCount: row.primary_count,
-        workArea: row.work_area,
-        workContent: row.work_content,
-        aerialWorkVehicleCount: row.aerial_work_vehicle_count,
-        aerialWorkVehicleFloor: row.aerial_work_vehicle_floor,
-        aerialWorkVehicles: row.aerialWorkVehicles?.map((vehicle) => ({ workArea: vehicle.work_area, vehicleCount: vehicle.vehicle_count })),
-        subcompanies: row.subcompanies.map((sub) => ({
-            secondaryCompany: sub.secondary_company ?? "",
-            workerCount: sub.worker_count,
-        })),
-      }
-    : null;
 }

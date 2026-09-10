@@ -31,6 +31,10 @@ export async function getCompanyMaster(): Promise<CompanyMaster> {
 }
 
 export async function ensureSecondaryCompany(primaryCompany: string, secondaryCompany: string) {
+  return ensureSecondaryCompanies(primaryCompany, [secondaryCompany]);
+}
+
+export async function ensureSecondaryCompanies(primaryCompany: string, secondaryCompanies: string[]) {
   const db = createServerClient();
   const { data: rows, error } = await db
     .from("company_master")
@@ -40,16 +44,18 @@ export async function ensureSecondaryCompany(primaryCompany: string, secondaryCo
   if (error) throw error;
   if (!rows?.length) return false;
 
-  // 空欄は一次会社所属を表すため、会社マスタへの二次会社追加は不要。
-  if (!secondaryCompany.trim()) return true;
+  const requested = [...new Set(secondaryCompanies.map((company) => company.trim()).filter(Boolean))];
+  const existing = new Set(rows.map((row) => row.secondary_company ?? ""));
+  const missing = requested.filter((company) => !existing.has(company));
 
-  if (!rows.some((row) => row.secondary_company === secondaryCompany)) {
-    const { error: insertError } = await db.from("company_master").insert({
+  if (missing.length) {
+    const firstSortOrder = Math.max(...rows.map((row) => row.sort_order)) + 1;
+    const { error: insertError } = await db.from("company_master").insert(missing.map((secondaryCompany, index) => ({
       primary_company: primaryCompany,
       secondary_company: secondaryCompany,
       primary_trade_roles: rows[0].primary_trade_roles ?? [],
-      sort_order: Math.max(...rows.map((row) => row.sort_order)) + 1,
-    });
+      sort_order: firstSortOrder + index,
+    })));
     // 同時登録は会社ペアのユニーク制約に任せる。
     if (insertError && insertError.code !== "23505") throw insertError;
     invalidateCompanyData();
