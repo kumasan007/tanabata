@@ -7,19 +7,30 @@ export const revalidate = 3600;
 export default async function SchedulePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string | string[] }>;
+  searchParams: Promise<{
+    date?: string | string[];
+    primaryCompany?: string | string[];
+  }>;
 }) {
   const today = todayInTokyoString();
-  const requestedDate = (await searchParams).date;
+  const params = await searchParams;
+  const companyMaster = await getCompanyMaster();
+  const requestedDate = params.date;
   const initialDate =
     typeof requestedDate === "string" && isWorkingDate(requestedDate)
       ? requestedDate
+      : "";
+  const initialCompany =
+    typeof params.primaryCompany === "string" &&
+    companyMaster.primaryCompanies.includes(params.primaryCompany)
+      ? params.primaryCompany
       : "";
   return (
     <ScheduleForm
       today={today}
       initialDate={initialDate}
-      initialCompanyMaster={await getCompanyMaster()}
+      initialCompany={initialCompany}
+      initialCompanyMaster={companyMaster}
     />
   );
 }

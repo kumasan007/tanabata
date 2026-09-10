@@ -322,26 +322,31 @@ function SchedulePreview({
 export function ScheduleForm({
   today,
   initialDate = "",
+  initialCompany = "",
   initialCompanyMaster,
 }: {
   today: string;
   initialDate?: string;
+  initialCompany?: string;
   initialCompanyMaster: CompanyMaster;
 }) {
-  const [form, setForm] = useState<ScheduleSubmitInput>(() => emptyForm(initialDate));
+  const [form, setForm] = useState<ScheduleSubmitInput>(() => ({
+    ...emptyForm(initialDate),
+    primaryCompany: initialCompany,
+  }));
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(
     initialCompanyMaster,
   );
   const [companyError, setCompanyError] = useState("");
   const [companyRetry, setCompanyRetry] = useState(0);
-  const [choosingCompany, setChoosingCompany] = useState(true);
+  const [choosingCompany, setChoosingCompany] = useState(!initialCompany);
   const [choice, setChoice] = useState<"same" | "new" | null>(null);
   const [customDate, setCustomDate] = useState(false);
   const [continuingInput, setContinuingInput] = useState(false);
   const [overwriteExisting, setOverwriteExisting] = useState(false);
   const [step, setStep] = useState<
     "existing" | "date" | "copy" | "edit" | "confirm" | "copyContent"
-  >("date");
+  >(initialDate && initialCompany ? "existing" : "date");
   const [editorPart, setEditorPart] = useState<"people" | "content">("people");
   const [secondaryWorkChoice, setSecondaryWorkChoice] = useState<boolean | null>(null);
   useEffect(() => {

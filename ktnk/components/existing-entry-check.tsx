@@ -46,8 +46,7 @@ export function ExistingEntryCheck({ date, dates, company, kind, onNew, onOtherD
   const existingDates = schedules.map((row) => row.work_date);
 
   return <section className="panel space-y-4 p-5">
-    <h2 className="text-lg font-bold">すでに作業が入力されています</h2>
-    <p>{existingDates.map(shortDateWithWeekday).join("、")}には、すでに作業が入力されています。</p>
+    <p className="text-lg font-bold">{existingDates.map(shortDateWithWeekday).join("、")}には、すでに作業が入力されています。</p>
     {schedules.map((row) => <article key={row.id} className="space-y-2 rounded-md bg-slate-50 p-4">
       <p className="font-semibold">{shortDateWithWeekday(row.work_date)}・{row.primary_company}</p>
       <p>一次会社 {row.primary_count ?? 0}人</p>

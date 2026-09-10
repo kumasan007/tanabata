@@ -162,7 +162,16 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
       <section ref={selectedDaySectionRef} className="mt-4 scroll-mt-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="whitespace-nowrap text-lg font-bold">{Number(selectedDate.slice(5, 7))}月{Number(selectedDate.slice(8, 10))}日の予定</h2>
-          <Link className="btn btn-primary h-9 min-h-0 shrink-0 px-3 py-1 text-sm" href={`/schedule?date=${selectedDate}`}>
+          <Link
+            className="btn btn-primary h-9 min-h-0 shrink-0 px-3 py-1 text-sm"
+            href={{
+              pathname: "/schedule",
+              query: {
+                date: selectedDate,
+                ...(company ? { primaryCompany: company } : {}),
+              },
+            }}
+          >
             この日に作業を追加する
           </Link>
         </div>
