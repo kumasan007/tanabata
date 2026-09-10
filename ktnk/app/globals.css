@@ -77,6 +77,18 @@ input[type="date"]::-webkit-datetime-edit {
   min-inline-size: 0;
   text-align: left;
 }
+.date-input {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  overflow: hidden;
+}
+.date-input::-webkit-date-and-time-value,
+.date-input::-webkit-datetime-edit {
+  display: block;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
 input[type="checkbox"] {
   accent-color: hsl(var(--primary));
 }

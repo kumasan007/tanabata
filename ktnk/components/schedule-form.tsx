@@ -868,7 +868,7 @@ export function ScheduleForm({
               </button>
               <p className="min-w-0 text-right break-words">
                 {form.primaryCompany}
-                {validDate && (
+                {validDate && step !== "date" && (
                   <span className="block">{displaySelectedDates(form.dates, form.startDate, form.endDate)}</span>
                 )}
               </p>

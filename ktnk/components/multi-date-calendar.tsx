@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { isWorkingDate, parseLocalDate, shortDateWithWeekday, toDateString } from "@/lib/utils";
+import { isWorkingDate, parseLocalDate, toDateString } from "@/lib/utils";
 
 export function MultiDateCalendar({ value, today, onChange, onConfirm }: {
   value: string[];
@@ -60,7 +60,6 @@ export function MultiDateCalendar({ value, today, onChange, onConfirm }: {
         ) : <span key={`blank-${index}`} />)}
       </div>
       <p className="text-sm text-slate-600">日付をタップすると追加・解除できます。</p>
-      <p className="text-sm leading-6 text-slate-600">選択中：{value.length ? value.map(shortDateWithWeekday).join("、") : "なし"}</p>
       <div className="grid grid-cols-2 gap-2">
         <button type="button" className="btn btn-secondary" disabled={!value.length} onClick={() => onChange([])}>すべて解除</button>
         <button type="button" className="btn btn-primary" disabled={!value.length} onClick={onConfirm}>次へ</button>
