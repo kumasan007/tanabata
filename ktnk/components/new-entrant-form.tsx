@@ -18,11 +18,11 @@ function displayDate(value: string) {
   return date ? new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric", weekday: "short" }).format(date) : "日付未選択";
 }
 
-export function NewEntrantForm({ today, initialMaster }: { today: string; initialMaster: CompanyMaster }) {
+export function NewEntrantForm({ today, initialDate = "", initialCompany = "", initialMaster }: { today: string; initialDate?: string; initialCompany?: string; initialMaster: CompanyMaster }) {
   const [master, setMaster] = useState(initialMaster);
-  const [step, setStep] = useState<Step>("company");
-  const [entryDate, setEntryDate] = useState("");
-  const [primaryCompany, setPrimaryCompany] = useState("");
+  const [step, setStep] = useState<Step>(initialDate && initialCompany ? "details" : "company");
+  const [entryDate, setEntryDate] = useState(initialDate);
+  const [primaryCompany, setPrimaryCompany] = useState(initialCompany);
   const [people, setPeople] = useState<Person[]>([]);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -81,7 +81,7 @@ export function NewEntrantForm({ today, initialMaster }: { today: string; initia
   return <div className="simple-schedule min-h-screen pb-32 sm:pb-8"><main className="mx-auto max-w-2xl px-3 py-5 sm:px-4"><form onSubmit={submit} className="space-y-4">
     {step !== "company" && step !== "success" && <div className="flex items-center justify-between gap-3 text-sm text-slate-600"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setStep(step === "date" ? "company" : step === "details" ? "date" : "details")}>戻る</button><p className="min-w-0 text-right break-words">{primaryCompany}<span className="block">{displayDate(entryDate)}</span></p></div>}
 
-    {step === "company" && <section className="panel p-5 sm:p-6"><h2 className="mb-5 text-lg font-bold">一次会社を選んでください</h2><select autoFocus className="input" value={primaryCompany} onChange={(event) => { setPrimaryCompany(event.target.value); setPeople([]); setMessage(""); if (event.target.value) setStep("date"); }}><option value="" disabled>会社を選択</option>{master.primaryCompanies.map((company) => <option key={company}>{company}</option>)}</select></section>}
+    {step === "company" && <section className="panel p-5 sm:p-6"><h2 className="mb-5 text-lg font-bold">一次会社を選んでください</h2><select autoFocus className="input" value={primaryCompany} onChange={(event) => { setPrimaryCompany(event.target.value); setPeople([]); setMessage(""); if (event.target.value) setStep(isWorkingDate(entryDate) ? "details" : "date"); }}><option value="" disabled>会社を選択</option>{master.primaryCompanies.map((company) => <option key={company}>{company}</option>)}</select></section>}
 
     {step === "date" && <section className="panel p-5 sm:p-6"><h2 className="mb-5 text-lg font-bold">入場日を選んでください</h2><div className="grid grid-cols-3 gap-2">{dateOptions.map((option) => <button key={option.label} type="button" className="status-option flex-col gap-1 px-2" aria-pressed={!customDate && entryDate === option.date} onClick={() => { setCustomDate(false); chooseDate(option.date); }}><span>{option.label}</span><span className="text-sm font-normal">{shortDateWithWeekday(option.date)}</span></button>)}</div><button type="button" className="btn btn-secondary mt-3 w-full" aria-expanded={customDate} onClick={() => setCustomDate(true)}>任意の日付を選ぶ</button>{customDate && <div className="mt-3 min-w-0 w-full space-y-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 p-3"><label className="field min-w-0"><span className="label">入場日（月曜〜土曜）</span><input className="input max-w-full" type="date" value={entryDate} onChange={(event) => setEntryDate(event.target.value)} /></label><button type="button" className="btn btn-primary w-full" disabled={!isWorkingDate(entryDate)} onClick={() => chooseDate(entryDate)}>次へ</button></div>}</section>}
 

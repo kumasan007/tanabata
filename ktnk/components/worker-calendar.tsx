@@ -102,25 +102,25 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
 
   return <div className="min-h-screen pb-10">
     <main className="mx-auto max-w-6xl px-3 py-5 sm:px-4">
-      <div className="panel flex min-w-0 flex-wrap items-end gap-3 p-3 sm:p-4">
+      <div className="panel flex min-w-0 flex-wrap items-center gap-2 p-2 sm:p-3">
         <div className="min-w-0 w-full sm:w-auto">
           <label className="sr-only" htmlFor="calendar-month">表示月</label>
-          <div className="grid min-w-0 grid-cols-[3rem_minmax(0,1fr)_3rem] items-stretch gap-2 sm:grid-cols-[auto_11rem_auto]">
-            <button type="button" className="btn btn-secondary h-12 w-12 px-0 sm:h-14 sm:w-auto sm:px-4" onClick={() => selectMonth(shiftMonth(month, -1))} aria-label="前月を表示">
-              <ChevronLeft size={20} aria-hidden="true" />
+          <div className="grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-stretch gap-1.5 sm:grid-cols-[auto_10rem_auto]">
+            <button type="button" className="btn btn-secondary h-10 min-h-0 w-10 px-0 py-1 sm:w-auto sm:px-3" onClick={() => selectMonth(shiftMonth(month, -1))} aria-label="前月を表示">
+              <ChevronLeft size={18} aria-hidden="true" />
               <span className="hidden sm:inline">前月</span>
             </button>
-            <div className="relative h-12 min-w-0 overflow-hidden rounded-md border border-input bg-white sm:h-14">
-              <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center whitespace-nowrap px-2 text-base font-semibold text-slate-800">{Number(month.slice(0, 4))}年{Number(month.slice(5))}月</span>
+            <div className="relative h-10 min-w-0 overflow-hidden rounded-md border border-input bg-white">
+              <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center whitespace-nowrap px-2 text-sm font-semibold text-slate-800 sm:text-base">{Number(month.slice(0, 4))}年{Number(month.slice(5))}月</span>
               <input id="calendar-month" aria-label="表示する月" className="calendar-month" type="month" value={month} onChange={(e) => selectMonth(e.target.value)} />
             </div>
-            <button type="button" className="btn btn-secondary h-12 w-12 px-0 sm:h-14 sm:w-auto sm:px-4" onClick={() => selectMonth(shiftMonth(month, 1))} aria-label="次月を表示">
+            <button type="button" className="btn btn-secondary h-10 min-h-0 w-10 px-0 py-1 sm:w-auto sm:px-3" onClick={() => selectMonth(shiftMonth(month, 1))} aria-label="次月を表示">
               <span className="hidden sm:inline">次月</span>
-              <ChevronRight size={20} aria-hidden="true" />
+              <ChevronRight size={18} aria-hidden="true" />
             </button>
           </div>
         </div>
-        <label className="field w-full sm:ml-auto sm:w-56"><span className="label">一次会社</span><select className="input" value={company} onChange={(e) => setCompany(e.target.value)}><option value="">すべて</option>{master?.primaryCompanies.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label className="flex w-full min-w-0 items-center gap-2 sm:ml-auto sm:w-64"><span className="shrink-0 text-sm font-semibold text-slate-700">一次会社</span><select className="input h-10 min-h-0 px-3 text-base" value={company} onChange={(e) => setCompany(e.target.value)}><option value="">すべて</option>{master?.primaryCompanies.map((item) => <option key={item}>{item}</option>)}</select></label>
       </div>
       {message && <p role="alert" className="mt-4 text-red-700">{message}</p>}
       {loading ? <div className="panel mt-4"><LoadingIndicator label="カレンダーを読み込み中…" /></div> : <section className="panel mt-4 overflow-x-auto">
@@ -162,18 +162,17 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
       <section ref={selectedDaySectionRef} className="mt-4 scroll-mt-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="whitespace-nowrap text-lg font-bold">{Number(selectedDate.slice(5, 7))}月{Number(selectedDate.slice(8, 10))}日の予定</h2>
-          <Link
-            className="btn btn-primary h-9 min-h-0 shrink-0 px-3 py-1 text-sm"
-            href={{
-              pathname: "/schedule",
-              query: {
-                date: selectedDate,
-                ...(company ? { primaryCompany: company } : {}),
-              },
-            }}
-          >
-            この日に作業を追加する
-          </Link>
+          <div className="flex shrink-0 gap-1.5">
+            {[{ label: "作業入力", pathname: "/schedule" }, { label: "新規入場", pathname: "/new-entrants" }].map((item) => (
+              <Link
+                key={item.pathname}
+                className="btn btn-primary h-9 min-h-0 px-2.5 py-1 text-sm"
+                href={{ pathname: item.pathname, query: { date: selectedDate, ...(company ? { primaryCompany: company } : {}) } }}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
         </div>
         {loading ? <LoadingIndicator label="予定を読み込み中…" /> : selectedSchedules.length === 0 && selectedEntrants.length === 0 ? <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {selectedSchedules.map((row) => {
