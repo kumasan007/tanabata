@@ -3,6 +3,7 @@
 import { ExistingEntryCheck } from "@/components/existing-entry-check";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { CopyButton } from "@/components/copy-button";
+import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { MultiDateCalendar } from "@/components/multi-date-calendar";
 import type {
@@ -152,6 +153,12 @@ function CompanyPeopleFields({
           </div>
         ))}
       </div>
+      <div className="border-t border-border bg-slate-50 p-3 text-sm">
+        <p className="text-slate-600">ここにない二次会社は、新規入場から追加できます。</p>
+        <Link className="btn btn-secondary mt-2 w-full" href="/new-entrants">
+          新規入場から二次会社を追加
+        </Link>
+      </div>
     </section>
   );
 }
@@ -225,11 +232,9 @@ function WorkField({
 function SchedulePreview({
   schedule,
   primaryCompany,
-  peopleOnly = false,
 }: {
   schedule: PreviousSchedule;
   primaryCompany: string;
-  peopleOnly?: boolean;
 }) {
   const companies = [
     {
@@ -284,8 +289,7 @@ function SchedulePreview({
           </tr>
         </tfoot>
       </table>
-      {!peopleOnly && (
-        <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-3 border-t border-border px-4 py-3 text-sm leading-6">
+      <dl className="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-3 border-t border-border px-4 py-3 text-sm leading-6">
           <dt className="text-slate-500">作業エリア</dt>
           <dd className="whitespace-pre-wrap break-words">
             {schedule.workArea || "未入力"}
@@ -294,20 +298,37 @@ function SchedulePreview({
           <dd className="whitespace-pre-wrap break-words">
             {schedule.workContent || "未入力"}
           </dd>
+          <dt className="text-slate-500">高所作業車</dt>
+          <dd className="space-y-1">
+            {schedule.aerialWorkVehicles?.length ? (
+              schedule.aerialWorkVehicles.map((vehicle, index) => (
+                <p key={index} className="whitespace-pre-wrap break-words">
+                  {vehicle.workArea || "使用場所未入力"}・{vehicle.vehicleCount ?? 0}台
+                </p>
+              ))
+            ) : (schedule.aerialWorkVehicleCount ?? 0) > 0 ? (
+              <p className="whitespace-pre-wrap break-words">
+                {schedule.aerialWorkVehicleFloor || "使用場所未入力"}・{schedule.aerialWorkVehicleCount}台
+              </p>
+            ) : (
+              "使用しない"
+            )}
+          </dd>
         </dl>
-      )}
     </div>
   );
 }
 
 export function ScheduleForm({
   today,
+  initialDate = "",
   initialCompanyMaster,
 }: {
   today: string;
+  initialDate?: string;
   initialCompanyMaster: CompanyMaster;
 }) {
-  const [form, setForm] = useState<ScheduleSubmitInput>(() => emptyForm(""));
+  const [form, setForm] = useState<ScheduleSubmitInput>(() => emptyForm(initialDate));
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(
     initialCompanyMaster,
   );
@@ -546,10 +567,11 @@ export function ScheduleForm({
   }
   function selectCompany(company: string) {
     if (company !== form.primaryCompany) {
-      setForm({ ...emptyForm(""), primaryCompany: company });
+      const selectedDate = form.startDate;
+      setForm({ ...emptyForm(selectedDate), primaryCompany: company });
       setSecondaryWorkChoice(null);
       setChoice(null);
-      setStep("date");
+      setStep(isWorkingDate(selectedDate) ? "existing" : "date");
       setCustomDate(false);
       setContinuingInput(false);
       setOverwriteExisting(false);
@@ -1037,7 +1059,6 @@ export function ScheduleForm({
                             {displayDate(source.workDate)}の作業
                           </p>
                           <SchedulePreview
-                            peopleOnly
                             schedule={source}
                             primaryCompany={form.primaryCompany}
                           />
@@ -1148,16 +1169,12 @@ export function ScheduleForm({
                         primaryCount: activeCount,
                         workArea: area,
                         workContent: content,
+                        aerialWorkVehicleCount: form.aerialWorkVehicleCount,
+                        aerialWorkVehicleFloor: form.aerialWorkVehicleFloor,
+                        aerialWorkVehicles: form.aerialWorkVehicles,
                         subcompanies: activeRows,
                       }}
                     />
-                    <div className="mt-4 rounded-xl bg-sky-50 p-4 text-sm">
-                        <span className="font-semibold">高所作業車：</span>
-                        <span>{(form.aerialWorkVehicleCount ?? 0) > 0 ? `${form.aerialWorkVehicleCount}台` : "使用しない"}</span>
-                        {(form.aerialWorkVehicleCount ?? 0) > 0 && form.aerialWorkVehicleFloor && (
-                          <span className="ml-2 whitespace-pre-wrap">使用フロア：{form.aerialWorkVehicleFloor}</span>
-                        )}
-                    </div>
                     {form.notes && (
                       <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm">
                         <span className="font-semibold">備考：</span>

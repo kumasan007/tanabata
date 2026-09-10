@@ -4,6 +4,7 @@ import { LoadingIndicator } from "@/components/loading-indicator";
 import { CopyValue } from "@/components/copy-value";
 import { isWorkingDate } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Pencil } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
 import { NewEntrantEditor } from "@/components/new-entrant-editor";
@@ -149,10 +150,13 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
       </section>}
 
       <section ref={selectedDaySectionRef} className="mt-4 scroll-mt-4">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-lg font-bold">{Number(selectedDate.slice(5, 7))}月{Number(selectedDate.slice(8, 10))}日の予定</h2>
-          <span className="text-sm text-slate-500">{selectedSchedules.length}社</span>
+          <span className="shrink-0 text-sm text-slate-500">{selectedSchedules.length}社</span>
         </div>
+        <Link className="btn btn-primary mb-3 w-full sm:w-auto" href={`/schedule?date=${selectedDate}`}>
+          この日に作業を追加する
+        </Link>
         {loading ? <LoadingIndicator label="予定を読み込み中…" /> : selectedSchedules.length === 0 && selectedEntrants.length === 0 ? <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {selectedSchedules.map((row) => {
             const subs = row.subcompanies;
