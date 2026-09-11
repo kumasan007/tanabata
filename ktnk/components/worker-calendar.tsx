@@ -143,18 +143,22 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
             const isSaturday = new Date(`${date}T00:00:00`).getDay() === 6;
             return <div key={date} onClick={() => selectDate(date)} className={`min-h-20 min-w-0 cursor-pointer p-1.5 text-left align-top transition hover:bg-emerald-50 sm:min-h-24 sm:p-2 ${selectedDate === date ? "relative z-10 bg-emerald-50 ring-2 ring-inset ring-primary" : isSaturday ? "bg-sky-50/70" : "bg-white"}`}>
               <button type="button" onClick={(event) => { event.stopPropagation(); selectDate(date); }} aria-pressed={selectedDate === date} className="block w-full text-left text-sm font-bold">{Number(date.slice(-2))}</button>
-              {!company && daySchedules.length > 0 && <span className="mt-1 flex flex-col text-sm font-semibold leading-5 text-emerald-900"><span>{daySchedules.length}社</span><span>{total}人</span>{totalAerialVehicles > 0 && <span className="text-sky-800"><span className="hidden sm:inline">高車：</span>{totalAerialVehicles}台</span>}<span className="text-orange-700">火気：{fireCompanyCount}社</span></span>}
+              {!company && daySchedules.length > 0 && <span className="mt-1 flex flex-col text-sm font-semibold leading-5 text-emerald-900"><span>{daySchedules.length}社</span><span>{total}人</span>{totalAerialVehicles > 0 && <span className="text-sky-800"><span className="hidden sm:inline">高車：</span>{totalAerialVehicles}台</span>}{fireCompanyCount > 0 && <span className="text-red-700">火気：{fireCompanyCount}社</span>}</span>}
               {!company && dayEntrants.length > 0 && <span className="block text-xs font-semibold leading-5 text-amber-700 sm:text-sm">新規 {entrantSummary(dayEntrants).companies}社・{entrantSummary(dayEntrants).people}人</span>}
               {company && daySchedules.map((row) => {
                 const area = row.work_area;
                 const content = row.work_content;
-                return <div key={row.id} className="relative mt-1 min-w-0 rounded bg-emerald-100 p-1 pr-6 text-[10px] leading-4 text-emerald-950 sm:text-xs">
-                  <button type="button" className="absolute right-0.5 top-0.5 rounded p-0.5 hover:bg-white/70" onClick={(event) => { event.stopPropagation(); setSelectedDate(date); setEditing(row); }} aria-label={`${date}の予定を編集`} title="予定を編集"><Pencil size={12} aria-hidden="true" /></button>
+                return <div key={row.id} className={`relative mt-1 min-w-0 rounded bg-emerald-100 p-1 text-[10px] leading-4 text-emerald-950 sm:text-xs ${((row.aerial_work_vehicle_count ?? 0) > 0 || row.uses_fire) ? "pr-16" : "pr-6"}`}>
+                  <div className="absolute right-0.5 top-0.5 flex items-center gap-0.5">
+                    {(row.aerial_work_vehicle_count ?? 0) > 0 && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-600 font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
+                    {row.uses_fire && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-600 font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
+                    <button type="button" className="rounded p-0.5 hover:bg-white/70" onClick={(event) => { event.stopPropagation(); setSelectedDate(date); setEditing(row); }} aria-label={`${date}の予定を編集`} title="予定を編集"><Pencil size={12} aria-hidden="true" /></button>
+                  </div>
                   <p className="font-bold">{totalWorkers(row)}人</p>
                   <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
                   <p className="line-clamp-2 break-words" title={content ?? ""}>{content || "作業内容未入力"}</p>
                   {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="truncate font-semibold text-sky-800">高車：{row.aerial_work_vehicle_count}台</p>}
-                  <p className="truncate font-semibold text-orange-700">火気：{row.uses_fire ? "使用" : "なし"}</p>
+                  {row.uses_fire && <p className="truncate font-semibold text-red-700">火気：使用</p>}
                 </div>;
               })}
               {company && dayEntrants.length > 0 && <div className="mt-1 min-w-0 rounded bg-amber-100 p-1 text-[10px] leading-4 text-amber-900 sm:text-xs"><p className="truncate font-semibold">新規入場</p><p>{entrantSummary(dayEntrants).companies}社・{entrantSummary(dayEntrants).people}人</p></div>}
@@ -185,8 +189,12 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
             const content = row.work_content;
             const tradeRoles = master.primaryTradeRolesByPrimary[row.primary_company] ?? [];
             const totalWorkerCount = totalWorkers(row);
-            return <article key={row.id} className="panel relative min-w-0 p-3 pr-11 text-sm">
-              <button type="button" className="btn btn-secondary absolute right-2 top-2 h-8 min-h-8 w-8 p-0" onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
+            return <article key={row.id} className={`panel relative min-w-0 p-3 text-sm ${((row.aerial_work_vehicle_count ?? 0) > 0 || row.uses_fire) ? "pr-24" : "pr-11"}`}>
+              <div className="absolute right-2 top-2 flex items-center gap-1">
+                {(row.aerial_work_vehicle_count ?? 0) > 0 && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-sm font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
+                {row.uses_fire && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-sm font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
+                <button type="button" className="btn btn-secondary h-8 min-h-8 w-8 p-0" onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
+              </div>
               <div className="flex min-w-0 items-center gap-2 pr-1">
                 <p className="min-w-0 truncate font-bold" title={row.primary_company}>
                   <CopyValue value={row.primary_company} label="一次会社" compact stopPropagation />
@@ -226,8 +234,8 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
               </details>
               <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label="作業エリア" compact stopPropagation /> : "エリア未入力"}</p>
               <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" compact stopPropagation /> : "作業内容未入力"}</p>
-              <p className="mt-1 text-sky-800">高車：{(row.aerial_work_vehicle_count ?? 0) > 0 ? <><CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数" compact stopPropagation>{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" compact stopPropagation />）</>}</> : "使用なし"}</p>
-              <p className="text-orange-700">火気：{row.uses_fire ? "使用" : "なし"}</p>
+              {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="mt-1 text-sky-800">高車：<CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数" compact stopPropagation>{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" compact stopPropagation />）</>}</p>}
+              {row.uses_fire && <p className="text-red-700">火気：使用</p>}
               {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" compact stopPropagation /></p>}
             </article>;
           })}

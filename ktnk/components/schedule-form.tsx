@@ -31,7 +31,7 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   currentSubcompanies: [],
   workArea: "",
   workContent: "",
-  aerialWorkVehicleCount: null,
+  aerialWorkVehicleCount: 0,
   aerialWorkVehicleFloor: "",
   aerialWorkVehicles: [],
   usesFire: false,
@@ -72,7 +72,7 @@ function SectionHeading({ title }: { title: string }) {
   return <h2 className="mb-5 text-lg font-bold text-slate-900">{title}</h2>;
 }
 
-function CompanyPeopleFields({
+export function CompanyPeopleFields({
   primaryCompany,
   primaryCount,
   primaryCountCopied,
@@ -81,6 +81,7 @@ function CompanyPeopleFields({
   previousCounts,
   onPrimaryCountChange,
   onSubcompaniesChange,
+  showPrevious = true,
 }: {
   primaryCompany: string;
   primaryCount: number | null;
@@ -90,6 +91,7 @@ function CompanyPeopleFields({
   previousCounts: Map<string, number | null>;
   onPrimaryCountChange: (count: number | null, copied: boolean) => void;
   onSubcompaniesChange: (rows: ScheduleSubmitInput["currentSubcompanies"]) => void;
+  showPrevious?: boolean;
 }) {
   const id = useId();
   const rows = [
@@ -108,12 +110,12 @@ function CompanyPeopleFields({
       <h2 id={`${id}-title`} className="border-b border-border bg-slate-50 px-3 py-2 font-bold text-slate-800">
         作業する会社
       </h2>
-      <div className="grid grid-cols-[minmax(0,1fr)_76px_52px] items-center gap-2 border-b border-border bg-slate-50/60 px-3 py-1.5 text-sm font-semibold text-slate-500">
-        <span>会社名</span><span>人数</span><span className="sr-only">前回値</span>
+      <div className={`grid ${showPrevious ? "grid-cols-[minmax(0,1fr)_76px_52px]" : "grid-cols-[minmax(0,1fr)_76px]"} items-center gap-2 border-b border-border bg-slate-50/60 px-3 py-1.5 text-sm font-semibold text-slate-500`}>
+        <span>会社名</span><span>人数</span>{showPrevious && <span className="sr-only">前回値</span>}
       </div>
       <div className="divide-y divide-slate-100">
         {rows.map((row, index) => (
-          <div key={`${row.primary}-${row.company}`} className="grid grid-cols-[minmax(0,1fr)_76px_52px] items-center gap-2 px-3 py-2">
+          <div key={`${row.primary}-${row.company}`} className={`grid ${showPrevious ? "grid-cols-[minmax(0,1fr)_76px_52px]" : "grid-cols-[minmax(0,1fr)_76px]"} items-center gap-2 px-3 py-2`}>
             <span className="min-w-0 break-words text-sm font-medium text-slate-800">{row.company}</span>
             <div className="relative">
               <input
@@ -136,7 +138,7 @@ function CompanyPeopleFields({
               />
               <span className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-xs text-slate-500">人</span>
             </div>
-            <button
+            {showPrevious && <button
               type="button"
               className="min-h-9 rounded border border-border bg-white px-1 text-xs font-semibold text-slate-600 disabled:opacity-35"
               disabled={row.previous == null}
@@ -150,7 +152,7 @@ function CompanyPeopleFields({
               }}
             >
               {row.copied ? "済" : "前回"}
-            </button>
+            </button>}
           </div>
         ))}
       </div>
