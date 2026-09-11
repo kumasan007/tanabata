@@ -36,6 +36,7 @@ export const scheduleSubmitSchema = z
       workArea: z.string().trim().min(1, "高所作業車の使用場所を入力してください。").max(100),
       vehicleCount: countSchema.refine((value) => value !== null && value >= 1, "台数は1以上で入力してください。"),
     })).optional().default([]),
+    usesFire: z.boolean().default(false),
     notes: z.string().max(2000, "備考は2000文字以内で入力してください。").default(""),
     overwriteExisting: z.boolean().optional().default(false),
     skipExisting: z.boolean().optional().default(false),

@@ -10,6 +10,7 @@ export function scheduleToCopyData(row: ScheduleWithSubcompanies | null): Previo
     aerialWorkVehicleCount: row.aerial_work_vehicle_count,
     aerialWorkVehicleFloor: row.aerial_work_vehicle_floor,
     aerialWorkVehicles: row.aerialWorkVehicles?.map((vehicle) => ({ workArea: vehicle.work_area, vehicleCount: vehicle.vehicle_count })),
+    usesFire: row.uses_fire,
     subcompanies: row.subcompanies.map((subcompany) => ({
       secondaryCompany: subcompany.secondary_company ?? "",
       workerCount: subcompany.worker_count,

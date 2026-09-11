@@ -32,6 +32,7 @@ export type PreviousSchedule = {
   aerialWorkVehicleCount?: number | null;
   aerialWorkVehicleFloor?: string | null;
   aerialWorkVehicles?: AerialWorkVehicleInput[];
+  usesFire?: boolean;
   subcompanies: { secondaryCompany: string; workerCount: number | null }[];
 };
 
@@ -49,6 +50,7 @@ export type ScheduleSubmitInput = {
   aerialWorkVehicleCount: number | null;
   aerialWorkVehicleFloor: string;
   aerialWorkVehicles?: AerialWorkVehicleInput[];
+  usesFire: boolean;
   notes: string;
   overwriteExisting?: boolean;
   skipExisting?: boolean;
@@ -63,6 +65,7 @@ export type ScheduleGroupRow = {
   work_content: string | null;
   aerial_work_vehicle_count: number | null;
   aerial_work_vehicle_floor: string | null;
+  uses_fire: boolean;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -99,6 +102,7 @@ export type ScheduleListRow = {
   workContent: string;
   aerialWorkVehicleCount: number | "";
   aerialWorkVehicleFloor: string;
+  usesFire: boolean;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -111,6 +115,7 @@ export type ScheduleSummary = {
   workContent: string;
   aerialWorkVehicleCount: number;
   aerialWorkVehicleFloor: string;
+  usesFire: boolean;
   companyText: string;
   notes: string;
 };

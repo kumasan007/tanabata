@@ -34,6 +34,7 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   aerialWorkVehicleCount: null,
   aerialWorkVehicleFloor: "",
   aerialWorkVehicles: [],
+  usesFire: false,
   notes: "",
 });
 
@@ -314,6 +315,8 @@ function SchedulePreview({
               "使用しない"
             )}
           </dd>
+          <dt className="text-slate-500">火気の使用</dt>
+          <dd>{schedule.usesFire ? "する" : "しない"}</dd>
         </dl>
     </div>
   );
@@ -613,6 +616,7 @@ export function ScheduleForm({
         : (source.aerialWorkVehicleCount ?? 0) > 0
           ? [{ workArea: source.aerialWorkVehicleFloor ?? "", vehicleCount: source.aerialWorkVehicleCount ?? 1 }]
           : [];
+      next.usesFire = source.usesFire ?? false;
     } else {
       next.primaryCount = null;
       next.currentSubcompanies = secondaryOptions.map((secondaryCompany) => ({
@@ -629,6 +633,7 @@ export function ScheduleForm({
         : (source?.aerialWorkVehicleCount ?? 0) > 0
           ? [{ workArea: source?.aerialWorkVehicleFloor ?? "", vehicleCount: source?.aerialWorkVehicleCount ?? 1 }]
           : [];
+      next.usesFire = source?.usesFire ?? false;
     }
     setForm(next);
     setSecondaryWorkChoice(next.currentSubcompanies.length > 0);
@@ -689,6 +694,7 @@ export function ScheduleForm({
       aerialWorkVehicleCount: row.aerial_work_vehicle_count ?? 0,
       aerialWorkVehicleFloor: row.aerial_work_vehicle_floor ?? "",
       aerialWorkVehicles: vehicles,
+      usesFire: row.uses_fire,
       notes: row.notes ?? "",
     });
     setOverwriteExisting(true);
@@ -1129,6 +1135,7 @@ export function ScheduleForm({
                         aerialWorkVehicleCount: form.aerialWorkVehicleCount,
                         aerialWorkVehicleFloor: form.aerialWorkVehicleFloor,
                         aerialWorkVehicles: form.aerialWorkVehicles,
+                        usesFire: form.usesFire,
                         subcompanies: activeRows,
                       }}
                     />
@@ -1234,6 +1241,13 @@ export function ScheduleForm({
                             <button type="button" className="btn btn-secondary self-end px-4 text-xl" aria-label={`${index + 1}件目の高所作業車を削除`} onClick={() => setAerialVehicles((form.aerialWorkVehicles ?? []).filter((_, rowIndex) => rowIndex !== index))}>×</button>
                           </div>)}
                           {(form.aerialWorkVehicles?.length ?? 0) > 0 && <button type="button" className="btn btn-secondary mt-3 w-full" onClick={() => setAerialVehicles([...(form.aerialWorkVehicles ?? []), { workArea: "", vehicleCount: 1 }])}>使用場所を追加</button>}
+                      </div>
+                      <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-4">
+                        <p className="font-semibold text-slate-900">火気の使用 <span className="required-mark">必須</span></p>
+                        <div className="mt-3 grid grid-cols-2 gap-3">
+                          <button type="button" className="status-option" aria-pressed={form.usesFire} onClick={() => patch({ usesFire: true })}>する</button>
+                          <button type="button" className="status-option" aria-pressed={!form.usesFire} onClick={() => patch({ usesFire: false })}>しない</button>
+                        </div>
                       </div>
                       <WorkField
                         key={`${previousKey}-${copyVersion}-notes`}
@@ -1442,6 +1456,7 @@ export function ScheduleForm({
                         {summary.aerialWorkVehicleCount > 0 && (
                           <p>高所作業車：{summary.aerialWorkVehicleCount}台{summary.aerialWorkVehicleFloor ? `（使用フロア：${summary.aerialWorkVehicleFloor}）` : ""}</p>
                         )}
+                        <p>火気の使用：{summary.usesFire ? "する" : "しない"}</p>
                         {summary.notes && <p>備考：{summary.notes}</p>}
                       </div>
                     ))

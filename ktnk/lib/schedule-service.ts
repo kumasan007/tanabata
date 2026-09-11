@@ -82,6 +82,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed) {
       work_content: emptyToNull(resolvePreviousText(input.workContent, previous?.work_content, "作業内容")),
       aerial_work_vehicle_count: aerialCount,
       aerial_work_vehicle_floor: emptyToNull(aerialAreas),
+      uses_fire: input.usesFire,
       notes: emptyToNull(input.notes),
     };
 
@@ -175,7 +176,7 @@ async function querySchedules(params: ScheduleSearchParams) {
     .select(
       `
       id, work_date, primary_company, primary_count, work_area,
-      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
+      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor, uses_fire,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
@@ -246,7 +247,7 @@ async function queryPreviousScheduleForCopy(primaryCompany: string, workDate: st
     .select(
       `
       id, work_date, primary_company, primary_count, work_area,
-      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
+      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor, uses_fire,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
@@ -281,7 +282,7 @@ async function queryWorkScheduleOnDate(primaryCompany: string, workDate: string)
     .from("schedule_groups")
     .select(`
       id, work_date, primary_company, primary_count, work_area,
-      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
+      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor, uses_fire,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
@@ -318,7 +319,7 @@ async function queryScheduleSummariesByPrimaryCompany(primaryCompany: string): P
     .select(
       `
       id, work_date, primary_company, primary_count, work_area,
-      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor,
+      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor, uses_fire,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
@@ -352,6 +353,7 @@ async function queryScheduleSummariesByPrimaryCompany(primaryCompany: string): P
       workContent: schedule.work_content ?? "",
       aerialWorkVehicleCount: schedule.aerial_work_vehicle_count ?? 0,
       aerialWorkVehicleFloor: schedule.aerial_work_vehicle_floor ?? "",
+      usesFire: schedule.uses_fire,
       companyText: subs.join("、"),
       notes: schedule.notes ?? "",
     };
@@ -385,6 +387,7 @@ export function schedulesToListRows(schedules: ScheduleWithSubcompanies[]): Sche
           workContent: schedule.work_content ?? "",
           aerialWorkVehicleCount: schedule.aerial_work_vehicle_count ?? "",
           aerialWorkVehicleFloor: schedule.aerial_work_vehicle_floor ?? "",
+          usesFire: schedule.uses_fire,
           notes: schedule.notes ?? "",
           createdAt: formatDateTime(schedule.created_at),
           updatedAt: formatDateTime(schedule.updated_at),

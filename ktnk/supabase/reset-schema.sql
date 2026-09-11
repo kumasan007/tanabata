@@ -80,6 +80,7 @@ create table public.schedule_groups (
   work_content text,
   aerial_work_vehicle_count integer check (aerial_work_vehicle_count is null or aerial_work_vehicle_count >= 0),
   aerial_work_vehicle_floor text,
+  uses_fire boolean not null default false,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

@@ -139,10 +139,11 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
               (sum, row) => sum + (row.aerial_work_vehicle_count ?? 0),
               0,
             );
+            const fireCompanyCount = daySchedules.filter((row) => row.uses_fire).length;
             const isSaturday = new Date(`${date}T00:00:00`).getDay() === 6;
             return <div key={date} onClick={() => selectDate(date)} className={`min-h-20 min-w-0 cursor-pointer p-1.5 text-left align-top transition hover:bg-emerald-50 sm:min-h-24 sm:p-2 ${selectedDate === date ? "relative z-10 bg-emerald-50 ring-2 ring-inset ring-primary" : isSaturday ? "bg-sky-50/70" : "bg-white"}`}>
               <button type="button" onClick={(event) => { event.stopPropagation(); selectDate(date); }} aria-pressed={selectedDate === date} className="block w-full text-left text-sm font-bold">{Number(date.slice(-2))}</button>
-              {!company && daySchedules.length > 0 && <span className="mt-1 flex flex-col text-sm font-semibold leading-5 text-emerald-900"><span>{daySchedules.length}社</span><span>{total}人</span>{totalAerialVehicles > 0 && <span className="text-sky-800"><span className="hidden sm:inline">高車：</span>{totalAerialVehicles}台</span>}</span>}
+              {!company && daySchedules.length > 0 && <span className="mt-1 flex flex-col text-sm font-semibold leading-5 text-emerald-900"><span>{daySchedules.length}社</span><span>{total}人</span>{totalAerialVehicles > 0 && <span className="text-sky-800"><span className="hidden sm:inline">高車：</span>{totalAerialVehicles}台</span>}<span className="text-orange-700">火気：{fireCompanyCount}社</span></span>}
               {!company && dayEntrants.length > 0 && <span className="block text-xs font-semibold leading-5 text-amber-700 sm:text-sm">新規 {entrantSummary(dayEntrants).companies}社・{entrantSummary(dayEntrants).people}人</span>}
               {company && daySchedules.map((row) => {
                 const area = row.work_area;
@@ -153,6 +154,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                   <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
                   <p className="line-clamp-2 break-words" title={content ?? ""}>{content || "作業内容未入力"}</p>
                   {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="truncate font-semibold text-sky-800">高車：{row.aerial_work_vehicle_count}台</p>}
+                  <p className="truncate font-semibold text-orange-700">火気：{row.uses_fire ? "使用" : "なし"}</p>
                 </div>;
               })}
               {company && dayEntrants.length > 0 && <div className="mt-1 min-w-0 rounded bg-amber-100 p-1 text-[10px] leading-4 text-amber-900 sm:text-xs"><p className="truncate font-semibold">新規入場</p><p>{entrantSummary(dayEntrants).companies}社・{entrantSummary(dayEntrants).people}人</p></div>}
@@ -225,6 +227,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
               <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label="作業エリア" compact stopPropagation /> : "エリア未入力"}</p>
               <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" compact stopPropagation /> : "作業内容未入力"}</p>
               <p className="mt-1 text-sky-800">高車：{(row.aerial_work_vehicle_count ?? 0) > 0 ? <><CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数" compact stopPropagation>{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" compact stopPropagation />）</>}</> : "使用なし"}</p>
+              <p className="text-orange-700">火気：{row.uses_fire ? "使用" : "なし"}</p>
               {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" compact stopPropagation /></p>}
             </article>;
           })}

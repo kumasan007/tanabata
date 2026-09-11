@@ -76,6 +76,7 @@ create table if not exists public.schedule_groups (
   work_content text,
   aerial_work_vehicle_count integer check (aerial_work_vehicle_count is null or aerial_work_vehicle_count >= 0),
   aerial_work_vehicle_floor text,
+  uses_fire boolean not null default false,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -102,6 +103,7 @@ alter table public.schedule_groups add column if not exists notes text;
 alter table public.schedule_groups add column if not exists aerial_work_vehicle_count integer
   check (aerial_work_vehicle_count is null or aerial_work_vehicle_count >= 0);
 alter table public.schedule_groups add column if not exists aerial_work_vehicle_floor text;
+alter table public.schedule_groups add column if not exists uses_fire boolean not null default false;
 
 create table if not exists public.new_entrant_records (
   id uuid primary key default gen_random_uuid(),
