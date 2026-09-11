@@ -9,7 +9,7 @@ import { invalidateEntrantData } from "@/lib/data-cache";
 const personSchema = z.object({
   secondaryCompany: z.string().trim().max(200, "会社名は200文字以内で入力してください。"),
   personName: z.string().trim().min(1, "氏名を入力してください。").max(200, "氏名は200文字以内で入力してください。"),
-  nationalityStatus: z.enum(["japanese_only", "includes_foreign"], { message: "日本人か外国人かを選択してください。" }),
+  nationalityStatus: z.enum(["japanese_only", "includes_foreign"], { message: "日本籍か外国籍かを選択してください。" }),
   notes: z.string().trim().max(2000, "備考は2000文字以内で入力してください。").default(""),
 });
 

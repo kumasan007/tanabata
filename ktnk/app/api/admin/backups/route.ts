@@ -11,6 +11,7 @@ const backupPayloadSchema = z.object({
   company_master: z.array(z.record(z.unknown())),
   schedule_groups: z.array(z.record(z.unknown())),
   schedule_subcompanies: z.array(z.record(z.unknown())),
+  schedule_aerial_work_vehicles: z.array(z.record(z.unknown())).default([]),
   new_entrant_records: z.array(z.record(z.unknown())),
 });
 
@@ -103,13 +104,14 @@ export async function POST(request: Request) {
         company_master: payload.company_master.length,
         schedule_groups: payload.schedule_groups.length,
         schedule_subcompanies: payload.schedule_subcompanies.length,
+        schedule_aerial_work_vehicles: payload.schedule_aerial_work_vehicles.length,
         new_entrant_records: payload.new_entrant_records.length,
       };
       const { data: safetyBackupId, error: safetyBackupError } = await db.rpc("create_data_backup", { p_source: "manual" });
       if (safetyBackupError) throw safetyBackupError;
       const { data: importedBackup, error: importError } = await db
         .from("data_backups")
-        .insert({ source: "manual", schema_version: 1, row_counts: rowCounts, payload })
+        .insert({ source: "manual", schema_version: 2, row_counts: rowCounts, payload })
         .select("id")
         .single();
       if (importError) throw importError;

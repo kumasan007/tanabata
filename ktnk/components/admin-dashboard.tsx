@@ -15,6 +15,7 @@ import {
   ClipboardList,
   DatabaseBackup,
   Download,
+  History,
   LogIn,
   LogOut,
   LoaderCircle,
@@ -47,7 +48,7 @@ type RangePreset =
   | "selectMonth"
   | "custom";
 type SortBy = "dateAsc" | "dateDesc" | "primaryAsc";
-type AdminTab = "schedules" | "companies" | "backups";
+type AdminTab = "schedules" | "companies" | "backups" | "auditLogs";
 type BackupRow = {
   id: string;
   created_at: string;
@@ -55,6 +56,17 @@ type BackupRow = {
   source: "automatic" | "manual";
   schema_version: number;
   row_counts: Record<string, number>;
+};
+type AuditLogRow = {
+  id: number;
+  changed_at: string;
+  transaction_id: number;
+  table_name: string;
+  operation: "INSERT" | "UPDATE" | "DELETE";
+  row_id: string | null;
+  old_data: Record<string, unknown> | null;
+  new_data: Record<string, unknown> | null;
+  restored_at: string | null;
 };
 type CompanyGroup = {
   primaryCompany: string;
@@ -115,6 +127,10 @@ export function AdminDashboard() {
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupMessage, setBackupMessage] = useState("");
   const [backupError, setBackupError] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditMessage, setAuditMessage] = useState("");
+  const [auditError, setAuditError] = useState(false);
 
   function scheduleEditButton(row: ScheduleSummaryRow) {
     const schedule = result.schedules.find((item) => item.work_date === row.workDate && item.primary_company === row.primaryCompany);
@@ -277,6 +293,11 @@ export function AdminDashboard() {
   useEffect(() => {
     if (!authenticated || activeTab !== "backups") return;
     void refreshBackups();
+  }, [authenticated, activeTab]);
+
+  useEffect(() => {
+    if (!authenticated || activeTab !== "auditLogs") return;
+    void refreshAuditLogs();
   }, [authenticated, activeTab]);
 
   useEffect(() => {
@@ -448,6 +469,46 @@ export function AdminDashboard() {
       setBackupMessage(error instanceof Error ? error.message : "バックアップを復元できませんでした。");
     } finally {
       setBackupLoading(false);
+    }
+  }
+
+  async function refreshAuditLogs() {
+    setAuditLoading(true);
+    setAuditMessage("");
+    setAuditError(false);
+    try {
+      const response = await fetch("/api/admin/audit-logs", { cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "操作履歴を取得できませんでした。");
+      setAuditLogs(body.logs ?? []);
+    } catch (error) {
+      setAuditError(true);
+      setAuditMessage(error instanceof Error ? error.message : "操作履歴を取得できませんでした。");
+    } finally {
+      setAuditLoading(false);
+    }
+  }
+
+  async function restoreAuditChange(log: AuditLogRow) {
+    if (!window.confirm(`${auditLogDescription(log)}を変更前の状態に戻します。よろしいですか？`)) return;
+    setAuditLoading(true);
+    setAuditMessage("");
+    setAuditError(false);
+    try {
+      let { response, body } = await requestAuditRestore(log.id, false);
+      if (response.status === 409 && body.code === "AUDIT_NEWER_CHANGE_EXISTS") {
+        const force = window.confirm("このデータは、その後にも変更されています。戻すと新しい内容を上書きする可能性があります。それでも戻しますか？");
+        if (!force) return;
+        ({ response, body } = await requestAuditRestore(log.id, true));
+      }
+      if (!response.ok) throw new Error(body.error ?? "変更を戻せませんでした。");
+      await Promise.all([refreshAuditLogs(), refreshCompanyMaster(), refreshCompanyOptions(), search()]);
+      setAuditMessage("変更前の状態に戻しました。この復元操作も履歴に保存されています。");
+    } catch (error) {
+      setAuditError(true);
+      setAuditMessage(error instanceof Error ? error.message : "変更を戻せませんでした。");
+    } finally {
+      setAuditLoading(false);
     }
   }
 
@@ -864,6 +925,18 @@ export function AdminDashboard() {
           >
             <DatabaseBackup size={18} aria-hidden="true" />
             バックアップ
+          </button>
+          <button
+            className={`flex min-h-12 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors sm:px-4 ${activeTab === "auditLogs" ? "border-emerald-700 text-emerald-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+            type="button"
+            aria-pressed={activeTab === "auditLogs"}
+            onClick={() => {
+              setActiveTab("auditLogs");
+              setMessage("");
+            }}
+          >
+            <History size={18} aria-hidden="true" />
+            操作履歴
           </button>
         </nav>
 
@@ -1532,6 +1605,56 @@ export function AdminDashboard() {
           </div>
         </section>
 
+        <section className={`${activeTab === "auditLogs" ? "grid" : "hidden"} panel gap-4 p-4 sm:p-5`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-950">操作履歴</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                過去24時間の登録・編集・削除を保存します。復元操作も履歴に残るため、間違えた復元を戻せます。期限切れ履歴は1日1回まとめて削除されます。
+              </p>
+            </div>
+            <button className="btn btn-secondary" type="button" disabled={auditLoading} onClick={() => void refreshAuditLogs()}>
+              {auditLoading ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : <History size={17} aria-hidden="true" />}
+              更新
+            </button>
+          </div>
+
+          {auditMessage ? (
+            <p className={`rounded-md border px-4 py-3 text-sm ${auditError ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`} role={auditError ? "alert" : "status"}>
+              {auditMessage}
+            </p>
+          ) : null}
+
+          <div className="overflow-hidden rounded-md border border-border bg-white">
+            {auditLogs.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-slate-500">
+                {auditLoading ? "取得中…" : "過去24時間の操作履歴はありません。"}
+              </p>
+            ) : (
+              <div className="divide-y divide-slate-200">
+                {auditLogs.map((log) => (
+                  <div key={log.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-slate-900">{auditLogDescription(log)}</p>
+                        <span className={`rounded px-2 py-0.5 text-xs font-bold ${auditOperationClass(log.operation)}`}>
+                          {auditOperationLabel(log.operation)}
+                        </span>
+                        {log.restored_at ? <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">復元済み</span> : null}
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">{formatBackupTime(log.changed_at)}</p>
+                    </div>
+                    <button className="btn btn-secondary" type="button" disabled={auditLoading || Boolean(log.restored_at)} onClick={() => void restoreAuditChange(log)}>
+                      <RotateCcw size={16} aria-hidden="true" />
+                      この変更を戻す
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
         <section
           className={`${activeTab === "schedules" ? "block" : "hidden"} overflow-hidden rounded-md border border-border bg-white`}
           aria-label="作業予定一覧"
@@ -2048,6 +2171,50 @@ function formatBackupTime(value: string) {
     minute: "2-digit",
     second: "2-digit",
   }).format(new Date(value));
+}
+
+function auditOperationLabel(operation: AuditLogRow["operation"]) {
+  if (operation === "INSERT") return "登録";
+  if (operation === "UPDATE") return "編集";
+  return "削除";
+}
+
+function auditOperationClass(operation: AuditLogRow["operation"]) {
+  if (operation === "INSERT") return "bg-emerald-100 text-emerald-800";
+  if (operation === "UPDATE") return "bg-sky-100 text-sky-800";
+  return "bg-red-100 text-red-800";
+}
+
+function auditLogDescription(log: AuditLogRow) {
+  const data = log.new_data ?? log.old_data ?? {};
+  const tableLabels: Record<string, string> = {
+    company_master: "会社マスタ",
+    schedule_groups: "作業予定",
+    schedule_subcompanies: "二次会社の予定",
+    schedule_aerial_work_vehicles: "高所作業車",
+    new_entrant_records: "新規入場者",
+  };
+  const details = [
+    stringField(data, "work_date") || stringField(data, "entry_date"),
+    stringField(data, "primary_company"),
+    stringField(data, "secondary_company"),
+    stringField(data, "person_names"),
+  ].filter(Boolean);
+  return `${tableLabels[log.table_name] ?? log.table_name}${details.length ? `（${details.join("・")}）` : ""}`;
+}
+
+function stringField(data: Record<string, unknown>, key: string) {
+  return typeof data[key] === "string" ? data[key] : "";
+}
+
+async function requestAuditRestore(id: number, force: boolean) {
+  const response = await fetch("/api/admin/audit-logs", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, force }),
+  });
+  const body = await response.json();
+  return { response, body };
 }
 
 function parseRoleText(value: string) {
