@@ -192,7 +192,7 @@ export async function PATCH(request: Request) {
 
       const { data: rows, error: rowsError } = await supabase
         .from("company_master")
-        .select("id,primary_company,secondary_company,primary_trade_roles");
+        .select("id,primary_company,secondary_company,primary_trade_roles,sort_order");
       if (rowsError) throw rowsError;
 
       const existingIds = new Set((rows ?? []).map((row) => row.id));
@@ -207,18 +207,21 @@ export async function PATCH(request: Request) {
       }
 
       const rowsById = new Map((rows ?? []).map((row) => [row.id, row]));
-      const { error: updateError } = await supabase.from("company_master").upsert(
-        orderedIds.map((id, sortOrder) => {
+      const changedRows = orderedIds.flatMap((id, sortOrder) => {
           const row = rowsById.get(id)!;
-          return {
+          return row.sort_order === sortOrder ? [] : [{
             ...row,
             primary_trade_roles: row.primary_trade_roles ?? [],
             sort_order: sortOrder,
-          };
-        }),
-        { onConflict: "id" },
-      );
-      if (updateError) throw updateError;
+          }];
+        });
+      if (changedRows.length > 0) {
+        const { error: updateError } = await supabase.from("company_master").upsert(
+          changedRows,
+          { onConflict: "id" },
+        );
+        if (updateError) throw updateError;
+      }
 
       invalidateCompanyData();
       return NextResponse.json({ ok: true });

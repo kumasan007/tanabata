@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertAdminFromRequest, createAdminServerClient } from "@/lib/supabase";
+import { verifyAdminPassword } from "@/lib/admin-auth";
 import { invalidateAllOperationalData } from "@/lib/data-cache";
 
 export const runtime = "nodejs";
@@ -82,6 +83,9 @@ export async function POST(request: Request) {
     const db = createAdminServerClient();
     if (request.headers.get("content-type")?.includes("multipart/form-data")) {
       const formData = await request.formData();
+      if (!verifyAdminPassword(String(formData.get("password") ?? ""))) {
+        return NextResponse.json({ error: "パスワードが違います。" }, { status: 401 });
+      }
       const file = formData.get("file");
       if (!(file instanceof File)) {
         return NextResponse.json({ error: "バックアップJSONを選択してください。" }, { status: 400 });
@@ -134,6 +138,9 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
+    if (!verifyAdminPassword(typeof body?.password === "string" ? body.password : "")) {
+      return NextResponse.json({ error: "パスワードが違います。" }, { status: 401 });
+    }
     const id = backupIdSchema.safeParse(body?.id);
     if (!id.success) return NextResponse.json({ error: "バックアップIDが不正です。" }, { status: 400 });
 

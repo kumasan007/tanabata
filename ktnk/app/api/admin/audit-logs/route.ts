@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertAdminFromRequest, createAdminServerClient } from "@/lib/supabase";
 import { invalidateAllOperationalData } from "@/lib/data-cache";
+import { verifyAdminPassword } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 const restoreSchema = z.object({
   id: z.coerce.number().int().positive(),
   force: z.boolean().optional().default(false),
+  password: z.string(),
 });
 
 function unauthorized() {
@@ -51,6 +53,9 @@ export async function PATCH(request: Request) {
   try {
     const parsed = restoreSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "操作履歴IDが不正です。" }, { status: 400 });
+    if (!verifyAdminPassword(parsed.data.password)) {
+      return NextResponse.json({ error: "パスワードが違います。" }, { status: 401 });
+    }
 
     const { data, error } = await createAdminServerClient().rpc("restore_audit_change", {
       p_audit_id: parsed.data.id,

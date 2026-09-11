@@ -5,8 +5,6 @@ import { CopyValue } from "@/components/copy-value";
 
 import {
   GripVertical,
-  ArrowDown,
-  ArrowUp,
   Building2,
   CalendarDays,
   CalendarRange,
@@ -68,6 +66,10 @@ type AuditLogRow = {
   new_data: Record<string, unknown> | null;
   restored_at: string | null;
 };
+type PendingRestore =
+  | { kind: "backup"; backup: BackupRow }
+  | { kind: "audit"; log: AuditLogRow }
+  | { kind: "import"; file: File };
 type CompanyGroup = {
   primaryCompany: string;
   primaryTradeRoles: string[];
@@ -131,6 +133,8 @@ export function AdminDashboard() {
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditMessage, setAuditMessage] = useState("");
   const [auditError, setAuditError] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState<PendingRestore | null>(null);
+  const [restorePassword, setRestorePassword] = useState("");
 
   function scheduleEditButton(row: ScheduleSummaryRow) {
     const schedule = result.schedules.find((item) => item.work_date === row.workDate && item.primary_company === row.primaryCompany);
@@ -150,6 +154,7 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [companyFetching, setCompanyFetching] = useState(true);
   const [companyLoading, setCompanyLoading] = useState(false);
+  const [companyOrderDirty, setCompanyOrderDirty] = useState(false);
   const [draggedCompany, setDraggedCompany] = useState<{ primary: string; rowId?: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
 
@@ -158,7 +163,7 @@ export function AdminDashboard() {
     setDropTarget(null);
   }
 
-  async function dropCompany(primary: string, rowId?: string) {
+  function dropCompany(primary: string, rowId?: string) {
     const source = draggedCompany;
     clearCompanyDrag();
     if (!source || companyLoading || editingCompanyId) return;
@@ -171,7 +176,7 @@ export function AdminDashboard() {
       const to = rows.findIndex((row) => row.id === rowId);
       if (from < 0 || to < 0) return;
       rows.splice(to, 0, rows.splice(from, 1)[0]);
-      await saveCompanyOrder(companyGroups.flatMap((item) => item === group ? rows : item.rows));
+      stageCompanyOrder(companyGroups.flatMap((item) => item === group ? rows : item.rows));
     } else {
       if (rowId || source.primary === primary) return;
       const groups = [...companyGroups];
@@ -179,7 +184,7 @@ export function AdminDashboard() {
       const to = groups.findIndex((item) => item.primaryCompany === primary);
       if (from < 0 || to < 0) return;
       groups.splice(to, 0, groups.splice(from, 1)[0]);
-      await saveCompanyOrder(groups.flatMap((item) => item.rows));
+      stageCompanyOrder(groups.flatMap((item) => item.rows));
     }
   }
 
@@ -428,14 +433,20 @@ export function AdminDashboard() {
     }
   }
 
-  async function importBackup(file: File) {
+  function requestBackupImport(file: File) {
     if (!window.confirm(`${file.name} のバックアップを取り込み、現在のデータを置き換えます。よろしいですか？`)) return;
+    setRestorePassword("");
+    setPendingRestore({ kind: "import", file });
+  }
+
+  async function importBackup(file: File, password: string) {
     setBackupLoading(true);
     setBackupMessage("");
     setBackupError(false);
     try {
       const formData = new FormData();
       formData.set("file", file);
+      formData.set("password", password);
       const response = await fetch("/api/admin/backups", { method: "POST", body: formData });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "バックアップを取り込めませんでした。");
@@ -449,8 +460,13 @@ export function AdminDashboard() {
     }
   }
 
-  async function restoreBackup(backup: BackupRow) {
+  function requestBackupRestore(backup: BackupRow) {
     if (!window.confirm(`${formatBackupTime(backup.created_at)} の状態に全データを戻します。復元前に現在のデータをバックアップして保険として保存します。現在のデータは置き換わります。よろしいですか？`)) return;
+    setRestorePassword("");
+    setPendingRestore({ kind: "backup", backup });
+  }
+
+  async function restoreBackup(backup: BackupRow, password: string) {
     setBackupLoading(true);
     setBackupMessage("");
     setBackupError(false);
@@ -458,7 +474,7 @@ export function AdminDashboard() {
       const response = await fetch("/api/admin/backups", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: backup.id }),
+        body: JSON.stringify({ id: backup.id, password }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "バックアップを復元できませんでした。");
@@ -489,17 +505,22 @@ export function AdminDashboard() {
     }
   }
 
-  async function restoreAuditChange(log: AuditLogRow) {
+  function requestAuditChangeRestore(log: AuditLogRow) {
     if (!window.confirm(`${auditLogDescription(log)}を変更前の状態に戻します。よろしいですか？`)) return;
+    setRestorePassword("");
+    setPendingRestore({ kind: "audit", log });
+  }
+
+  async function restoreAuditChange(log: AuditLogRow, password: string) {
     setAuditLoading(true);
     setAuditMessage("");
     setAuditError(false);
     try {
-      let { response, body } = await requestAuditRestore(log.id, false);
+      let { response, body } = await requestAuditRestore(log.id, false, password);
       if (response.status === 409 && body.code === "AUDIT_NEWER_CHANGE_EXISTS") {
         const force = window.confirm("このデータは、その後にも変更されています。戻すと新しい内容を上書きする可能性があります。それでも戻しますか？");
         if (!force) return;
-        ({ response, body } = await requestAuditRestore(log.id, true));
+        ({ response, body } = await requestAuditRestore(log.id, true, password));
       }
       if (!response.ok) throw new Error(body.error ?? "変更を戻せませんでした。");
       await Promise.all([refreshAuditLogs(), refreshCompanyMaster(), refreshCompanyOptions(), search()]);
@@ -510,6 +531,18 @@ export function AdminDashboard() {
     } finally {
       setAuditLoading(false);
     }
+  }
+
+  function confirmPendingRestore(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const pending = pendingRestore;
+    const password = restorePassword;
+    if (!pending || !password) return;
+    setPendingRestore(null);
+    setRestorePassword("");
+    if (pending.kind === "backup") void restoreBackup(pending.backup, password);
+    else if (pending.kind === "audit") void restoreAuditChange(pending.log, password);
+    else void importBackup(pending.file, password);
   }
 
   async function addCompanyMaster() {
@@ -684,45 +717,14 @@ export function AdminDashboard() {
     }
   }
 
-  async function movePrimaryCompany(
-    primaryCompanyName: string,
-    direction: -1 | 1,
-  ) {
-    if (companyLoading || editingCompanyId) return;
-    const index = companyGroups.findIndex(
-      (group) => group.primaryCompany === primaryCompanyName,
-    );
-    const destination = index + direction;
-    if (index < 0 || destination < 0 || destination >= companyGroups.length)
-      return;
-
-    const reorderedGroups = [...companyGroups];
-    [reorderedGroups[index], reorderedGroups[destination]] = [
-      reorderedGroups[destination],
-      reorderedGroups[index],
-    ];
-    await saveCompanyOrder(reorderedGroups.flatMap((group) => group.rows));
-  }
-
-  async function moveSecondaryCompany(
-    group: CompanyGroup,
-    index: number,
-    direction: -1 | 1,
-  ) {
-    if (companyLoading || editingCompanyId) return;
-    const destination = index + direction;
-    if (destination < 0 || destination >= group.rows.length) return;
-    const rows = [...group.rows];
-    [rows[index], rows[destination]] = [rows[destination], rows[index]];
-    await saveCompanyOrder(
-      companyGroups.flatMap((item) =>
-        item.primaryCompany === group.primaryCompany ? rows : item.rows,
-      ),
-    );
-  }
-
-  async function saveCompanyOrder(reordered: CompanyMasterRow[]) {
+  function stageCompanyOrder(reordered: CompanyMasterRow[]) {
     setCompanyRows(reordered);
+    setCompanyOrderDirty(true);
+    setMessage("");
+  }
+
+  async function saveCompanyOrder() {
+    const reordered = companyRows;
     setMessage("");
     setCompanyLoading(true);
 
@@ -735,9 +737,9 @@ export function AdminDashboard() {
       const body = await response.json();
       if (!response.ok)
         throw new Error(body.error ?? "並び順の保存に失敗しました。");
+      setCompanyOrderDirty(false);
       await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
     } catch (error) {
-      setCompanyRows(companyRows);
       setMessage(
         error instanceof Error ? error.message : "並び順の保存に失敗しました。",
       );
@@ -1214,9 +1216,20 @@ export function AdminDashboard() {
             </button>
           </div>
 
-          <p className="hidden text-sm text-slate-600 sm:block">
-            つまみをドラッグするか、↑・↓で並び替えできます。二次会社は同じ一次会社内で移動でき、変更は自動保存されます。
-          </p>
+          <div className="hidden items-center justify-between gap-3 sm:flex">
+            <p className="text-sm text-slate-600">
+              つまみをドラッグして並び替え、最後に一度だけ保存してください。二次会社は同じ一次会社内で移動できます。
+            </p>
+            <button
+              className="btn btn-primary shrink-0"
+              type="button"
+              disabled={companyLoading || !companyOrderDirty}
+              onClick={() => void saveCompanyOrder()}
+            >
+              {companyLoading ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : null}
+              並び順を保存
+            </button>
+          </div>
 
           <div className="grid gap-2">
             {companyFetching && <LoadingIndicator label="協力会社一覧を読み込み中…" />}
@@ -1225,7 +1238,7 @@ export function AdminDashboard() {
                 協力会社がまだ登録されていません
               </p>
             )}
-            {companyGroups.map((group, groupIndex) => (
+            {companyGroups.map((group) => (
               <div
                 key={group.primaryCompany}
                 className={`grid grid-cols-1 items-start gap-1 rounded-md sm:grid-cols-[auto_minmax(0,1fr)] ${dropTarget === group.primaryCompany ? "ring-2 ring-emerald-500 bg-emerald-50" : ""}`}
@@ -1253,24 +1266,6 @@ export function AdminDashboard() {
                     }}
                     onDragEnd={clearCompanyDrag}
                   ><GripVertical size={18} aria-hidden="true" /></span>
-                  <button
-                    className="btn btn-secondary h-9 w-9 p-0"
-                    type="button"
-                    aria-label={`${group.primaryCompany}を上へ`}
-                    disabled={companyLoading || !!editingCompanyId || groupIndex === 0}
-                    onClick={() => void movePrimaryCompany(group.primaryCompany, -1)}
-                  >
-                    <ArrowUp size={16} aria-hidden="true" />
-                  </button>
-                  <button
-                    className="btn btn-secondary h-9 w-9 p-0"
-                    type="button"
-                    aria-label={`${group.primaryCompany}を下へ`}
-                    disabled={companyLoading || !!editingCompanyId || groupIndex === companyGroups.length - 1}
-                    onClick={() => void movePrimaryCompany(group.primaryCompany, 1)}
-                  >
-                    <ArrowDown size={16} aria-hidden="true" />
-                  </button>
                 </div>
               <details className="min-w-0 flex-1 rounded-md border border-border bg-white">
                 <summary className="flex min-h-10 cursor-pointer items-center rounded-md px-2.5 py-1.5 font-semibold text-slate-900 marker:text-emerald-700">
@@ -1373,7 +1368,7 @@ export function AdminDashboard() {
                         </button>
                     </div>
                   )}
-                  {group.rows.map((row, rowIndex) => (
+                  {group.rows.map((row) => (
                     <div
                       key={row.id}
                       className={`grid items-center gap-2 rounded-md bg-slate-50 px-2 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto] ${dropTarget === row.id ? "ring-2 ring-emerald-500" : ""}`}
@@ -1427,24 +1422,6 @@ export function AdminDashboard() {
                               }}
                               onDragEnd={clearCompanyDrag}
                             ><GripVertical size={18} aria-hidden="true" /></span>
-                            <button
-                              className="btn btn-secondary h-9 w-9 p-0"
-                              type="button"
-                              aria-label={`${group.primaryCompany}の${row.secondary_company || "一次会社のみ"}を上へ`}
-                              disabled={companyLoading || !!editingCompanyId || rowIndex === 0}
-                              onClick={() => void moveSecondaryCompany(group, rowIndex, -1)}
-                            >
-                              <ArrowUp size={16} aria-hidden="true" />
-                            </button>
-                            <button
-                              className="btn btn-secondary h-9 w-9 p-0"
-                              type="button"
-                              aria-label={`${group.primaryCompany}の${row.secondary_company || "一次会社のみ"}を下へ`}
-                              disabled={companyLoading || !!editingCompanyId || rowIndex === group.rows.length - 1}
-                              onClick={() => void moveSecondaryCompany(group, rowIndex, 1)}
-                            >
-                              <ArrowDown size={16} aria-hidden="true" />
-                            </button>
                           </div>
                         ) : null}
                         {editingCompanyId === row.id ? (
@@ -1556,7 +1533,7 @@ export function AdminDashboard() {
                 onChange={(event) => {
                   const file = event.currentTarget.files?.[0];
                   event.currentTarget.value = "";
-                  if (file) void importBackup(file);
+                  if (file) requestBackupImport(file);
                 }}
               />
             </label>
@@ -1593,7 +1570,7 @@ export function AdminDashboard() {
                         <Download size={16} aria-hidden="true" />
                         PCに保存
                       </a>
-                      <button className="btn btn-secondary" type="button" disabled={backupLoading} onClick={() => void restoreBackup(backup)}>
+                      <button className="btn btn-secondary" type="button" disabled={backupLoading} onClick={() => requestBackupRestore(backup)}>
                         <RotateCcw size={16} aria-hidden="true" />
                         復元
                       </button>
@@ -1644,7 +1621,7 @@ export function AdminDashboard() {
                       </div>
                       <p className="mt-1 text-xs text-slate-500">{formatBackupTime(log.changed_at)}</p>
                     </div>
-                    <button className="btn btn-secondary" type="button" disabled={auditLoading || Boolean(log.restored_at)} onClick={() => void restoreAuditChange(log)}>
+                    <button className="btn btn-secondary" type="button" disabled={auditLoading || Boolean(log.restored_at)} onClick={() => requestAuditChangeRestore(log)}>
                       <RotateCcw size={16} aria-hidden="true" />
                       この変更を戻す
                     </button>
@@ -1961,6 +1938,39 @@ export function AdminDashboard() {
         onClose={() => setEditingSchedule(null)}
         onSaved={() => { setEditingSchedule(null); void search(); }}
       />}
+      {pendingRestore ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4" role="presentation">
+          <form className="panel grid w-full max-w-sm gap-4 p-5" onSubmit={confirmPendingRestore} role="dialog" aria-modal="true" aria-labelledby="restore-password-title">
+            <div>
+              <h2 id="restore-password-title" className="text-lg font-bold text-slate-950">管理者パスワードの再確認</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                {pendingRestore.kind === "audit" ? "操作履歴を巻き戻します。" : "バックアップからデータを復元します。"}
+              </p>
+            </div>
+            <label className="field">
+              <span className="label">管理者パスワード</span>
+              <input
+                className="input"
+                type="password"
+                autoComplete="current-password"
+                autoFocus
+                required
+                value={restorePassword}
+                onChange={(event) => setRestorePassword(event.target.value)}
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button className="btn btn-secondary" type="button" onClick={() => { setPendingRestore(null); setRestorePassword(""); }}>
+                キャンセル
+              </button>
+              <button className="btn btn-primary" type="submit" disabled={!restorePassword}>
+                <RotateCcw size={16} aria-hidden="true" />
+                実行
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -2207,11 +2217,11 @@ function stringField(data: Record<string, unknown>, key: string) {
   return typeof data[key] === "string" ? data[key] : "";
 }
 
-async function requestAuditRestore(id: number, force: boolean) {
+async function requestAuditRestore(id: number, force: boolean, password: string) {
   const response = await fetch("/api/admin/audit-logs", {
     method: "PATCH",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ id, force }),
+    body: JSON.stringify({ id, force, password }),
   });
   const body = await response.json();
   return { response, body };
