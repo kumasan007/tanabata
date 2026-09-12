@@ -2,10 +2,12 @@
 
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { CopyValue } from "@/components/copy-value";
+import { AdminTabs, type AdminTab } from "@/components/admin/admin-tabs";
+import { AdminLogin } from "@/components/admin/admin-login";
+import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 
 import {
   GripVertical,
-  Building2,
   CalendarDays,
   CalendarRange,
   ChevronDown,
@@ -14,7 +16,6 @@ import {
   DatabaseBackup,
   Download,
   History,
-  LogIn,
   LogOut,
   LoaderCircle,
   Pencil,
@@ -25,11 +26,11 @@ import {
   Upload,
   Users,
 } from "lucide-react";
-import Link from "next/link";
-import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CompanyMaster, CompanyMasterRow, ScheduleListRow, ScheduleWithSubcompanies } from "@/lib/types";
 import { addDays, toDateString } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-client";
 
 type AdminResult = {
   rows: ScheduleListRow[];
@@ -46,7 +47,7 @@ type RangePreset =
   | "selectMonth"
   | "custom";
 type SortBy = "dateAsc" | "dateDesc" | "primaryAsc";
-type AdminTab = "schedules" | "companies" | "backups" | "auditLogs";
+const AdminScheduleEditor = dynamic(() => import("@/components/admin-schedule-editor").then((module) => module.AdminScheduleEditor));
 type BackupRow = {
   id: string;
   created_at: string;
@@ -101,7 +102,28 @@ function currentWeek() {
   };
 }
 
+function companyMasterFromRows(rows: CompanyMasterRow[]): CompanyMaster {
+  const primaryCompanies: string[] = [];
+  const secondariesByPrimary: Record<string, string[]> = {};
+  const primaryTradeRolesByPrimary: Record<string, string[]> = {};
+  for (const row of rows) {
+    const primary = row.primary_company.trim();
+    if (!primary) continue;
+    if (!secondariesByPrimary[primary]) {
+      primaryCompanies.push(primary);
+      secondariesByPrimary[primary] = [];
+      primaryTradeRolesByPrimary[primary] = row.primary_trade_roles ?? [];
+    } else if (primaryTradeRolesByPrimary[primary].length === 0 && (row.primary_trade_roles?.length ?? 0) > 0) {
+      primaryTradeRolesByPrimary[primary] = row.primary_trade_roles ?? [];
+    }
+    const secondary = row.secondary_company?.trim();
+    if (secondary && !secondariesByPrimary[primary].includes(secondary)) secondariesByPrimary[primary].push(secondary);
+  }
+  return { primaryCompanies, secondariesByPrimary, primaryTradeRolesByPrimary, loadedAt: new Date().toISOString() };
+}
+
 export function AdminDashboard() {
+  const { confirm, dialog: confirmationDialog } = useConfirmDialog();
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
@@ -272,7 +294,7 @@ export function AdminDashboard() {
   );
 
   useEffect(() => {
-    fetch("/api/admin/session")
+    apiFetch("/api/admin/session")
       .then((response) => response.json())
       .then((body) => setAuthenticated(Boolean(body.authenticated)))
       .catch(() => setAuthenticated(false))
@@ -283,7 +305,7 @@ export function AdminDashboard() {
     if (!authenticated) return;
 
     setCompanyFetching(true);
-    void Promise.all([refreshCompanyOptions(), refreshCompanyMaster()]).catch(
+    void refreshCompanyMaster().catch(
       (error) => {
         setCompanyMaster(null);
         setMessage(
@@ -321,7 +343,7 @@ export function AdminDashboard() {
     setLoginLoading(true);
 
     try {
-      const response = await fetch("/api/admin/login", {
+      const response = await apiFetch("/api/admin/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ password }),
@@ -343,7 +365,7 @@ export function AdminDashboard() {
   }
 
   async function logout() {
-    await fetch("/api/admin/logout", { method: "POST" });
+    await apiFetch("/api/admin/logout", { method: "POST" });
     setAuthenticated(false);
     setResult({ rows: [], count: 0, schedules: [] });
     window.location.href = "/";
@@ -359,7 +381,7 @@ export function AdminDashboard() {
     setMessage("");
 
     try {
-      const response = await fetch(`/api/schedules?${queryString()}`);
+      const response = await apiFetch(`/api/schedules?${queryString()}`);
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "取得に失敗しました。");
       setResult({ rows: body.rows ?? [], count: body.count ?? 0, schedules: body.schedules ?? [] });
@@ -379,7 +401,7 @@ export function AdminDashboard() {
   }
 
   async function refreshCompanyMaster() {
-    const response = await fetch("/api/admin/company-master", {
+    const response = await apiFetch("/api/admin/company-master", {
       headers: { accept: "application/json" },
     });
     const body = await response.json();
@@ -388,14 +410,7 @@ export function AdminDashboard() {
       throw new Error(body.error ?? "会社マスタの取得に失敗しました。");
     }
     setCompanyRows(body.rows ?? []);
-  }
-
-  async function refreshCompanyOptions() {
-    const response = await fetch("/api/companies", { cache: "no-store" });
-    const body = await response.json();
-    if (!response.ok)
-      throw new Error(body.error ?? "会社一覧を取得できませんでした。");
-    setCompanyMaster(body);
+    setCompanyMaster(companyMasterFromRows(body.rows ?? []));
   }
 
   async function refreshBackups() {
@@ -403,7 +418,7 @@ export function AdminDashboard() {
     setBackupMessage("");
     setBackupError(false);
     try {
-      const response = await fetch("/api/admin/backups", { cache: "no-store" });
+      const response = await apiFetch("/api/admin/backups", { cache: "no-store" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "バックアップ履歴を取得できませんでした。");
       setBackups(body.backups ?? []);
@@ -420,7 +435,7 @@ export function AdminDashboard() {
     setBackupMessage("");
     setBackupError(false);
     try {
-      const response = await fetch("/api/admin/backups", { method: "POST" });
+      const response = await apiFetch("/api/admin/backups", { method: "POST" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "バックアップを作成できませんでした。");
       await refreshBackups();
@@ -433,8 +448,8 @@ export function AdminDashboard() {
     }
   }
 
-  function requestBackupImport(file: File) {
-    if (!window.confirm(`${file.name} のバックアップを取り込み、現在のデータを置き換えます。よろしいですか？`)) return;
+  async function requestBackupImport(file: File) {
+    if (!await confirm("バックアップを取り込みますか？", `${file.name}\n現在のデータはファイル内のデータに置き換わります。`, "取り込みへ進む")) return;
     setRestorePassword("");
     setPendingRestore({ kind: "import", file });
   }
@@ -447,10 +462,10 @@ export function AdminDashboard() {
       const formData = new FormData();
       formData.set("file", file);
       formData.set("password", password);
-      const response = await fetch("/api/admin/backups", { method: "POST", body: formData });
+      const response = await apiFetch("/api/admin/backups", { method: "POST", body: formData });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "バックアップを取り込めませんでした。");
-      await Promise.all([refreshBackups(), refreshCompanyMaster(), refreshCompanyOptions(), search()]);
+      await Promise.all([refreshBackups(), refreshCompanyMaster(), search()]);
       setBackupMessage("バックアップを取り込みました。");
     } catch (error) {
       setBackupError(true);
@@ -460,8 +475,8 @@ export function AdminDashboard() {
     }
   }
 
-  function requestBackupRestore(backup: BackupRow) {
-    if (!window.confirm(`${formatBackupTime(backup.created_at)} の状態に全データを戻します。復元前に現在のデータをバックアップして保険として保存します。現在のデータは置き換わります。よろしいですか？`)) return;
+  async function requestBackupRestore(backup: BackupRow) {
+    if (!await confirm("この状態へ復元しますか？", `${formatBackupTime(backup.created_at)} の状態に全データを戻します。\n復元前のデータはバックアップとして保存されます。`, "復元へ進む")) return;
     setRestorePassword("");
     setPendingRestore({ kind: "backup", backup });
   }
@@ -471,14 +486,14 @@ export function AdminDashboard() {
     setBackupMessage("");
     setBackupError(false);
     try {
-      const response = await fetch("/api/admin/backups", {
+      const response = await apiFetch("/api/admin/backups", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: backup.id, password }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "バックアップを復元できませんでした。");
-      await Promise.all([refreshBackups(), refreshCompanyMaster(), refreshCompanyOptions(), search()]);
+      await Promise.all([refreshBackups(), refreshCompanyMaster(), search()]);
       setBackupMessage("バックアップを復元しました。復元前のデータも保険として保存されています。");
     } catch (error) {
       setBackupError(true);
@@ -493,7 +508,7 @@ export function AdminDashboard() {
     setAuditMessage("");
     setAuditError(false);
     try {
-      const response = await fetch("/api/admin/audit-logs", { cache: "no-store" });
+      const response = await apiFetch("/api/admin/audit-logs", { cache: "no-store" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "操作履歴を取得できませんでした。");
       setAuditLogs(body.logs ?? []);
@@ -505,8 +520,8 @@ export function AdminDashboard() {
     }
   }
 
-  function requestAuditChangeRestore(log: AuditLogRow) {
-    if (!window.confirm(`${auditLogDescription(log)}を変更前の状態に戻します。よろしいですか？`)) return;
+  async function requestAuditChangeRestore(log: AuditLogRow) {
+    if (!await confirm("変更前の状態へ戻しますか？", auditLogDescription(log), "復元へ進む")) return;
     setRestorePassword("");
     setPendingRestore({ kind: "audit", log });
   }
@@ -518,12 +533,12 @@ export function AdminDashboard() {
     try {
       let { response, body } = await requestAuditRestore(log.id, false, password);
       if (response.status === 409 && body.code === "AUDIT_NEWER_CHANGE_EXISTS") {
-        const force = window.confirm("このデータは、その後にも変更されています。戻すと新しい内容を上書きする可能性があります。それでも戻しますか？");
+        const force = await confirm("新しい変更を上書きしますか？", "このデータは、その後にも変更されています。続けると新しい内容が失われる可能性があります。", "上書きして戻す");
         if (!force) return;
         ({ response, body } = await requestAuditRestore(log.id, true, password));
       }
       if (!response.ok) throw new Error(body.error ?? "変更を戻せませんでした。");
-      await Promise.all([refreshAuditLogs(), refreshCompanyMaster(), refreshCompanyOptions(), search()]);
+      await Promise.all([refreshAuditLogs(), refreshCompanyMaster(), search()]);
       setAuditMessage("変更前の状態に戻しました。この復元操作も履歴に保存されています。");
     } catch (error) {
       setAuditError(true);
@@ -585,7 +600,7 @@ export function AdminDashboard() {
     setCompanyLoading(true);
 
     try {
-      const response = await fetch("/api/admin/company-master", {
+      const response = await apiFetch("/api/admin/company-master", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -601,7 +616,7 @@ export function AdminDashboard() {
       setNewPrimaryCompany("");
       setNewSecondaryCompanies("");
       setNewPrimaryRoles("");
-      await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
+      await refreshCompanyMaster();
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -618,13 +633,13 @@ export function AdminDashboard() {
     const confirmation = group
       ? `「${group.primaryCompany}」と配下の登録${group.rows.length}件を協力会社一覧から削除しますか？登録済みの作業予定は残ります。`
       : "この協力会社を一覧から削除しますか？";
-    if (!window.confirm(confirmation)) return;
+    if (!await confirm("協力会社を削除しますか？", confirmation, "削除する")) return;
     const params = new URLSearchParams(group ? { primaryCompany: group.primaryCompany } : { id });
     setMessage("");
     setCompanyLoading(true);
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/admin/company-master?${params.toString()}`,
         { method: "DELETE" },
       );
@@ -633,7 +648,7 @@ export function AdminDashboard() {
         throw new Error(body.error ?? "会社マスタの削除に失敗しました。");
 
       if (editingCompanyId === id || group?.rows.some((row) => row.id === editingCompanyId)) setEditingCompanyId(null);
-      await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
+      await refreshCompanyMaster();
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -661,7 +676,7 @@ export function AdminDashboard() {
     setMessage("");
     setCompanyLoading(true);
     try {
-      const response = await fetch("/api/admin/company-master", {
+      const response = await apiFetch("/api/admin/company-master", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -675,7 +690,7 @@ export function AdminDashboard() {
         throw new Error(body.error ?? "会社マスタの更新に失敗しました。");
 
       setEditingCompanyId(null);
-      await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
+      await refreshCompanyMaster();
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -693,7 +708,7 @@ export function AdminDashboard() {
     setMessage("");
     setCompanyLoading(true);
     try {
-      const response = await fetch("/api/admin/company-master", {
+      const response = await apiFetch("/api/admin/company-master", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -707,7 +722,7 @@ export function AdminDashboard() {
         throw new Error(body.error ?? "職種の更新に失敗しました。");
 
       setEditingPrimaryRoles(null);
-      await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
+      await refreshCompanyMaster();
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "職種の更新に失敗しました。",
@@ -729,7 +744,7 @@ export function AdminDashboard() {
     setCompanyLoading(true);
 
     try {
-      const response = await fetch("/api/admin/company-master", {
+      const response = await apiFetch("/api/admin/company-master", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ orderedIds: reordered.map((row) => row.id) }),
@@ -738,7 +753,7 @@ export function AdminDashboard() {
       if (!response.ok)
         throw new Error(body.error ?? "並び順の保存に失敗しました。");
       setCompanyOrderDirty(false);
-      await Promise.all([refreshCompanyMaster(), refreshCompanyOptions()]);
+      await refreshCompanyMaster();
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "並び順の保存に失敗しました。",
@@ -817,74 +832,7 @@ export function AdminDashboard() {
   }
 
   if (!authenticated) {
-    return (
-      <main className="admin-dashboard min-h-screen bg-[#f6f7f5]">
-        <div className="mx-auto grid max-w-md px-5 py-14 sm:py-24">
-          <h1 className="mb-6 text-xl font-bold text-slate-900">管理画面</h1>
-          <form
-            onSubmit={login}
-            className="compact-panel grid w-full gap-3 p-4 sm:p-4"
-            aria-busy={loginLoading}
-          >
-            <div className="flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-md bg-slate-100 text-slate-600">
-                <LogIn size={19} aria-hidden="true" />
-              </span>
-              <h2 className="text-lg font-bold tracking-tight text-slate-950">
-                管理画面にログイン
-              </h2>
-            </div>
-            {message ? (
-              <div
-                role="alert"
-                className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-              >
-                {message}
-              </div>
-            ) : null}
-            <label className="field">
-              <span className="label">パスワード</span>
-              <input
-                className="input"
-                type="password"
-                name="password"
-                autoComplete="current-password"
-                placeholder="管理者パスワードを入力"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
-            </label>
-            <button
-              className="btn btn-primary w-full"
-              type="submit"
-              disabled={loginLoading}
-            >
-              {loginLoading ? (
-                <LoaderCircle
-                  size={18}
-                  className="animate-spin"
-                  aria-hidden="true"
-                />
-              ) : (
-                <LogIn size={18} aria-hidden="true" />
-              )}
-              {loginLoading ? "ログインしています…" : "ログイン"}
-            </button>
-          </form>
-          <p className="mt-6 text-center text-xs leading-6 text-slate-500">
-            作業予定の登録は
-            <Link
-              href="/"
-              className="ml-1 font-medium text-emerald-800 underline underline-offset-4"
-            >
-              入力画面
-            </Link>
-            から行えます。
-          </p>
-        </div>
-      </main>
-    );
+    return <AdminLogin password={password} loading={loginLoading} message={message} onPasswordChange={setPassword} onSubmit={login} />;
   }
 
   return (
@@ -900,47 +848,7 @@ export function AdminDashboard() {
             ログアウト
           </button>
         </div>
-        <nav
-          className="flex gap-2 border-b border-slate-200"
-          aria-label="管理画面メニュー"
-        >
-          <button
-            className={`flex min-h-12 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors sm:px-4 ${activeTab === "companies" ? "border-emerald-700 text-emerald-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-            type="button"
-            aria-pressed={activeTab === "companies"}
-            onClick={() => {
-              setActiveTab("companies");
-              setMessage("");
-            }}
-          >
-            <Building2 size={18} aria-hidden="true" />
-            協力会社一覧
-          </button>
-          <button
-            className={`flex min-h-12 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors sm:px-4 ${activeTab === "backups" ? "border-emerald-700 text-emerald-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-            type="button"
-            aria-pressed={activeTab === "backups"}
-            onClick={() => {
-              setActiveTab("backups");
-              setMessage("");
-            }}
-          >
-            <DatabaseBackup size={18} aria-hidden="true" />
-            バックアップ
-          </button>
-          <button
-            className={`flex min-h-12 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors sm:px-4 ${activeTab === "auditLogs" ? "border-emerald-700 text-emerald-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-            type="button"
-            aria-pressed={activeTab === "auditLogs"}
-            onClick={() => {
-              setActiveTab("auditLogs");
-              setMessage("");
-            }}
-          >
-            <History size={18} aria-hidden="true" />
-            操作履歴
-          </button>
-        </nav>
+        <AdminTabs active={activeTab} onChange={(tab) => { setActiveTab(tab); setMessage(""); }} />
 
         {message ? (
           <div
@@ -969,12 +877,12 @@ export function AdminDashboard() {
           </div>
         ) : null}
 
-        <form
+        {activeTab === "schedules" && <form
           onSubmit={(event) => {
             event.preventDefault();
             void search();
           }}
-          className={`${activeTab === "schedules" ? "grid" : "hidden"} panel gap-3 p-4 sm:p-4`}
+          className="panel grid gap-3 p-4 sm:p-4"
           aria-label="作業予定を検索"
         >
           <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -1157,11 +1065,9 @@ export function AdminDashboard() {
               )}
             </div>
           </div>
-        </form>
+        </form>}
 
-        <section
-          className={`${activeTab === "companies" ? "grid" : "hidden"} panel gap-3 p-4 sm:p-4`}
-        >
+        {activeTab === "companies" && <section className="panel grid gap-3 p-4 sm:p-4">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-slate-950">協力会社一覧</h2>
@@ -1474,10 +1380,10 @@ export function AdminDashboard() {
               </div>
             ))}
           </div>
-        </section>
+        </section>}
 
-        <section
-          className={`${activeTab === "schedules" ? "flex" : "hidden"} flex-wrap items-center justify-between gap-4 pt-2`}
+        {activeTab === "schedules" && <section
+          className="flex flex-wrap items-center justify-between gap-4 pt-2"
           aria-label="検索結果の表示設定"
         >
           <div>
@@ -1508,9 +1414,9 @@ export function AdminDashboard() {
               </select>
             </label>
           </div>
-        </section>
+        </section>}
 
-        <section className={`${activeTab === "backups" ? "grid" : "hidden"} panel gap-4 p-4 sm:p-5`}>
+        {activeTab === "backups" && <section className="panel grid gap-4 p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-slate-950">バックアップ</h2>
@@ -1580,9 +1486,9 @@ export function AdminDashboard() {
               </div>
             )}
           </div>
-        </section>
+        </section>}
 
-        <section className={`${activeTab === "auditLogs" ? "grid" : "hidden"} panel gap-4 p-4 sm:p-5`}>
+        {activeTab === "auditLogs" && <section className="panel grid gap-4 p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-slate-950">操作履歴</h2>
@@ -1630,10 +1536,10 @@ export function AdminDashboard() {
               </div>
             )}
           </div>
-        </section>
+        </section>}
 
-        <section
-          className={`${activeTab === "schedules" ? "block" : "hidden"} overflow-hidden rounded-md border border-border bg-white`}
+        {activeTab === "schedules" && <section
+          className="overflow-hidden rounded-md border border-border bg-white"
           aria-label="作業予定一覧"
           aria-busy={loading}
         >
@@ -1792,7 +1698,7 @@ export function AdminDashboard() {
               </tbody>
             </table>
           </div>
-        </section>
+        </section>}
 
         <section
           className="hidden"
@@ -1971,6 +1877,7 @@ export function AdminDashboard() {
           </form>
         </div>
       ) : null}
+      {confirmationDialog}
     </main>
   );
 }
@@ -2218,7 +2125,7 @@ function stringField(data: Record<string, unknown>, key: string) {
 }
 
 async function requestAuditRestore(id: number, force: boolean, password: string) {
-  const response = await fetch("/api/admin/audit-logs", {
+  const response = await apiFetch("/api/admin/audit-logs", {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ id, force, password }),

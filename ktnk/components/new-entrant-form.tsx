@@ -1,9 +1,11 @@
 "use client";
 
 import { Pencil, Plus, Trash2, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FormProgress } from "@/components/ui/form-progress";
 import type { CompanyMaster } from "@/lib/types";
 import { isWorkingDate, workingDateOptions, shortDateWithWeekday, parseLocalDate } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-client";
 
 type Step = "company" | "date" | "details" | "confirm" | "success";
 type Nationality = "japanese_only" | "includes_foreign" | "";
@@ -12,6 +14,7 @@ type Draft = { companyChoice: string; newCompany: string; personName: string; na
 const PRIMARY = "__primary__";
 const NEW_COMPANY = "__new_company__";
 const emptyDraft = (): Draft => ({ companyChoice: "", newCompany: "", personName: "", nationalityStatus: "", notes: "" });
+const ENTRANT_DRAFT_KEY = "ktnk:entrant-draft";
 
 function displayDate(value: string) {
   const date = parseLocalDate(value);
@@ -29,9 +32,34 @@ export function NewEntrantForm({ today, initialDate = "", initialCompany = "", i
   const [customDate, setCustomDate] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
   const personNameInput = useRef<HTMLInputElement>(null);
   const secondaryOptions = useMemo(() => master.secondariesByPrimary[primaryCompany] ?? [], [master, primaryCompany]);
   const dateOptions = useMemo(() => workingDateOptions(today), [today]);
+  useEffect(() => {
+    if (!initialCompany) {
+      try {
+        const saved = sessionStorage.getItem(ENTRANT_DRAFT_KEY);
+        if (saved) {
+          const restored = JSON.parse(saved) as { step: Step; entryDate: string; primaryCompany: string; people: Person[]; draft: Draft };
+          if (restored.primaryCompany && initialMaster.primaryCompanies.includes(restored.primaryCompany)) {
+            setStep(restored.step === "success" ? "confirm" : restored.step);
+            setEntryDate(restored.entryDate);
+            setPrimaryCompany(restored.primaryCompany);
+            setPeople(restored.people ?? []);
+            setDraft(restored.draft ?? emptyDraft());
+          }
+        }
+      } catch {
+        sessionStorage.removeItem(ENTRANT_DRAFT_KEY);
+      }
+    }
+    setDraftReady(true);
+  }, [initialCompany, initialMaster]);
+  useEffect(() => {
+    if (!draftReady || step === "success") return;
+    sessionStorage.setItem(ENTRANT_DRAFT_KEY, JSON.stringify({ step, entryDate, primaryCompany, people, draft }));
+  }, [draftReady, draft, entryDate, people, primaryCompany, step]);
 
   function chooseDate(date: string) {
     if (!isWorkingDate(date)) { setMessage("日曜日は入力できません。月曜〜土曜を選択してください。"); return; }
@@ -69,21 +97,23 @@ export function NewEntrantForm({ today, initialDate = "", initialCompany = "", i
     if (step !== "confirm" || busy) return;
     setBusy(true); setMessage("");
     try {
-      const response = await fetch("/api/new-entrants", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ entryDate, primaryCompany, people }) });
+      const response = await apiFetch("/api/new-entrants", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ entryDate, primaryCompany, people }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "保存できませんでした。");
       const newCompanies = people.map((person) => person.secondaryCompany).filter((company) => company && !secondaryOptions.includes(company));
       if (newCompanies.length) setMaster((current) => ({ ...current, secondariesByPrimary: { ...current.secondariesByPrimary, [primaryCompany]: [...new Set([...secondaryOptions, ...newCompanies])] } }));
-      setStep("success"); window.scrollTo({ top: 0, behavior: "smooth" });
+      sessionStorage.removeItem(ENTRANT_DRAFT_KEY); setStep("success"); window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) { setMessage(error instanceof Error ? error.message : "保存できませんでした。"); }
     finally { setBusy(false); }
   }
 
   function reset(keepCompany: boolean) {
+    sessionStorage.removeItem(ENTRANT_DRAFT_KEY);
     setEntryDate(""); setPrimaryCompany(keepCompany ? primaryCompany : ""); setPeople([]); setDraft(emptyDraft()); setEditingId(null); setCustomDate(false); setMessage(""); setStep(keepCompany ? "date" : "company");
   }
 
   return <div className="simple-schedule min-h-screen pb-32 sm:pb-8"><main className="mx-auto max-w-2xl px-3 py-5 sm:px-4"><form onSubmit={submit} className="space-y-4">
+    <FormProgress currentKey={step === "company" ? "company" : step === "date" ? "date" : step === "confirm" || step === "success" ? "confirm" : "details"} steps={[{ key: "company", label: "会社" }, { key: "date", label: "日付" }, { key: "details", label: "入場者" }, { key: "confirm", label: "確認・送信" }]} />
     {step !== "company" && step !== "success" && <div className="flex items-center justify-between gap-3 text-sm text-slate-600"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setStep(step === "date" ? "company" : step === "details" ? "date" : "details")}>戻る</button><p className="min-w-0 text-right break-words">{primaryCompany}<span className="block">{displayDate(entryDate)}</span></p></div>}
 
     {step === "company" && <section className="panel p-5 sm:p-6"><h2 className="mb-5 text-lg font-bold">一次会社を選んでください</h2><select autoFocus className="input" value={primaryCompany} onChange={(event) => { setPrimaryCompany(event.target.value); setPeople([]); setMessage(""); if (event.target.value) setStep(isWorkingDate(entryDate) ? "details" : "date"); }}><option value="" disabled>会社を選択</option>{master.primaryCompanies.map((company) => <option key={company}>{company}</option>)}</select></section>}

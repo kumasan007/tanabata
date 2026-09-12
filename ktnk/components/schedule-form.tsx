@@ -5,7 +5,8 @@ import { LoadingIndicator } from "@/components/loading-indicator";
 import { CopyButton } from "@/components/copy-button";
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { MultiDateCalendar } from "@/components/multi-date-calendar";
+import dynamic from "next/dynamic";
+import { FormProgress } from "@/components/ui/form-progress";
 import type {
   CompanyMaster,
   PreviousSchedule,
@@ -14,12 +15,15 @@ import type {
   ScheduleWithSubcompanies,
 } from "@/lib/types";
 import { isWorkingDate, workingDateOptions, shortDateWithWeekday, parseLocalDate } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-client";
 
 type SubmitState =
   | { status: "idle" }
   | { status: "submitting" }
   | { status: "success"; dates: string[] }
   | { status: "error"; message: string };
+const MultiDateCalendar = dynamic(() => import("@/components/multi-date-calendar").then((module) => module.MultiDateCalendar));
+const SCHEDULE_DRAFT_KEY = "ktnk:schedule-draft";
 const emptyForm = (date: string): ScheduleSubmitInput => ({
   dates: date ? [date] : [],
   startDate: date,
@@ -379,8 +383,31 @@ export function ScheduleForm({
   const [summaries, setSummaries] = useState<ScheduleSummary[] | null>(null);
   const [summaryError, setSummaryError] = useState("");
   const [summaryVersion, setSummaryVersion] = useState(0);
+  const [draftReady, setDraftReady] = useState(false);
   const submitting = useRef(false);
   const resultRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!initialCompany) {
+      try {
+        const saved = sessionStorage.getItem(SCHEDULE_DRAFT_KEY);
+        if (saved) {
+          const restored = JSON.parse(saved) as ScheduleSubmitInput;
+          if (restored.primaryCompany && initialCompanyMaster.primaryCompanies.includes(restored.primaryCompany)) {
+            setForm(restored);
+            setChoosingCompany(false);
+            setStep(restored.startDate ? "existing" : "date");
+          }
+        }
+      } catch {
+        sessionStorage.removeItem(SCHEDULE_DRAFT_KEY);
+      }
+    }
+    setDraftReady(true);
+  }, [initialCompany, initialCompanyMaster]);
+  useEffect(() => {
+    if (!draftReady || submitState.status === "success") return;
+    sessionStorage.setItem(SCHEDULE_DRAFT_KEY, JSON.stringify(form));
+  }, [draftReady, form, submitState.status]);
   const source = sourceResult?.company === form.primaryCompany && sourceResult?.date === form.startDate ? sourceResult.source : null;
   const sourceLoading = Boolean(
     form.primaryCompany && form.startDate && (sourceResult?.company !== form.primaryCompany || sourceResult?.date !== form.startDate),
@@ -445,7 +472,7 @@ export function ScheduleForm({
     if (companyRetry === 0) return;
     const controller = new AbortController();
     setCompanyError("");
-    fetch("/api/companies", { signal: controller.signal })
+    apiFetch("/api/companies", { signal: controller.signal })
       .then(async (response) => {
         const body = await response.json();
         if (!response.ok)
@@ -463,7 +490,7 @@ export function ScheduleForm({
     if (!form.primaryCompany || !form.startDate) return;
     const controller = new AbortController();
     setSourceResult(null);
-    fetch(
+    apiFetch(
       "/api/schedules/copy-source?" +
         new URLSearchParams({ primaryCompany: form.primaryCompany, workDate: form.startDate }),
       { signal: controller.signal, cache: "no-store" },
@@ -497,7 +524,7 @@ export function ScheduleForm({
     if (!showEditor) return;
     const controller = new AbortController();
     setPreviousResult(null);
-    fetch(
+    apiFetch(
       "/api/schedules/previous?" +
         new URLSearchParams({
           primaryCompany: form.primaryCompany,
@@ -537,7 +564,7 @@ export function ScheduleForm({
     const controller = new AbortController();
     setSummaries(null);
     setSummaryError("");
-    fetch(
+    apiFetch(
       "/api/schedules/summary?" +
         new URLSearchParams({ primaryCompany: form.primaryCompany }),
       { signal: controller.signal },
@@ -668,6 +695,7 @@ export function ScheduleForm({
     setStep("existing");
   }
   function resetForm() {
+    sessionStorage.removeItem(SCHEDULE_DRAFT_KEY);
     setForm(emptyForm(""));
     setSecondaryWorkChoice(null);
     setChoice(null);
@@ -787,7 +815,7 @@ export function ScheduleForm({
     setSubmitState({ status: "submitting" });
     try {
       const submit = async (overwrite: boolean) => {
-        const response = await fetch("/api/schedules", {
+        const response = await apiFetch("/api/schedules", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -822,6 +850,7 @@ export function ScheduleForm({
         status: "success",
         dates: body.dates ?? [form.startDate],
       });
+      sessionStorage.removeItem(SCHEDULE_DRAFT_KEY);
       setSummaryVersion((v) => v + 1);
       setSourceRetry((v) => v + 1);
     } catch (error) {
@@ -839,8 +868,12 @@ export function ScheduleForm({
     <div className="simple-schedule min-h-screen pb-32 sm:pb-8">
       <main className="mx-auto max-w-2xl px-3 py-5 sm:px-4">
         <form onSubmit={handleSubmit} className="space-y-4">
+          <FormProgress
+            currentKey={choosingCompany ? "company" : step === "date" ? "date" : step === "confirm" ? "confirm" : "details"}
+            steps={[{ key: "company", label: "会社" }, { key: "date", label: "日付" }, { key: "details", label: "作業内容" }, { key: "confirm", label: "確認・送信" }]}
+          />
           {!choosingCompany && (
-            <div className="flex items-center justify-between gap-3 text-sm text-slate-600">
+            <div className="grid gap-2 text-sm text-slate-600">
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -874,12 +907,6 @@ export function ScheduleForm({
               >
                 戻る
               </button>
-              <p className="min-w-0 text-right break-words">
-                {form.primaryCompany}
-                {validDate && step !== "date" && (
-                  <span className="block">{displaySelectedDates(form.dates, form.startDate, form.endDate)}</span>
-                )}
-              </p>
             </div>
           )}
           <fieldset disabled={busy} className="grid min-w-0 gap-4">

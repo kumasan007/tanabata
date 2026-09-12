@@ -5,10 +5,13 @@ import { CopyValue } from "@/components/copy-value";
 import { isWorkingDate } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AdminScheduleEditor } from "@/components/admin-schedule-editor";
-import { NewEntrantEditor } from "@/components/new-entrant-editor";
+import { apiFetch } from "@/lib/api-client";
 import type { CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
+
+const AdminScheduleEditor = dynamic(() => import("@/components/admin-schedule-editor").then((module) => module.AdminScheduleEditor));
+const NewEntrantEditor = dynamic(() => import("@/components/new-entrant-editor").then((module) => module.NewEntrantEditor));
 
 function monthRange(month: string) {
   const [year, value] = month.split("-").map(Number);
@@ -47,7 +50,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
     const params = new URLSearchParams({ from: range.from, to: range.to });
     if (company) params.set("primaryCompany", company);
     setMessage("");
-    fetch(`/api/calendar?${params}`, { cache: "no-store", signal: controller.signal }).then(async (response) => {
+    apiFetch(`/api/calendar?${params}`, { cache: "no-store", signal: controller.signal }).then(async (response) => {
       const body = await response.json(); if (!response.ok) throw new Error(body.error);
       if (controller.signal.aborted) return;
       setSchedules(body.schedules ?? []); setEntrants(body.entrants ?? []); setMessage(body.warning ?? "");
@@ -134,6 +137,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
           {days.map((date) => {
             const daySchedules = scheduleMap[date] ?? [];
             const dayEntrants = entrantMap[date] ?? [];
+            const entrantStats = entrantSummary(dayEntrants);
             const total = daySchedules.reduce((sum, row) => sum + totalWorkers(row), 0);
             const totalAerialVehicles = daySchedules.reduce(
               (sum, row) => sum + (row.aerial_work_vehicle_count ?? 0),
@@ -144,7 +148,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
             return <div key={date} onClick={() => selectDate(date)} className={`min-h-20 min-w-0 cursor-pointer p-1.5 text-left align-top transition hover:bg-emerald-50 sm:min-h-24 sm:p-2 ${selectedDate === date ? "relative z-10 bg-emerald-50 ring-2 ring-inset ring-primary" : isSaturday ? "bg-sky-50/70" : "bg-white"}`}>
               <button type="button" onClick={(event) => { event.stopPropagation(); selectDate(date); }} aria-pressed={selectedDate === date} className="block w-full text-left text-sm font-bold">{Number(date.slice(-2))}</button>
               {!company && daySchedules.length > 0 && <span className="mt-1 flex flex-col text-sm font-semibold leading-5 text-emerald-900"><span>{daySchedules.length}社</span><span>{total}人</span>{totalAerialVehicles > 0 && <span className="text-sky-800"><span className="hidden sm:inline">高車：</span>{totalAerialVehicles}台</span>}{fireCompanyCount > 0 && <span className="text-red-700">火気：{fireCompanyCount}社</span>}</span>}
-              {!company && dayEntrants.length > 0 && <span className="block text-xs font-semibold leading-5 text-amber-700 sm:text-sm">新規 {entrantSummary(dayEntrants).companies}社・{entrantSummary(dayEntrants).people}人</span>}
+              {!company && dayEntrants.length > 0 && <span className="block text-xs font-semibold leading-5 text-amber-700 sm:text-sm">新規 {entrantStats.companies}社・{entrantStats.people}人</span>}
               {company && daySchedules.map((row) => {
                 const area = row.work_area;
                 const content = row.work_content;
@@ -161,7 +165,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                   {row.uses_fire && <p className="truncate font-semibold text-red-700">火気：使用</p>}
                 </div>;
               })}
-              {company && dayEntrants.length > 0 && <div className="mt-1 min-w-0 rounded bg-amber-100 p-1 text-[10px] leading-4 text-amber-900 sm:text-xs"><p className="truncate font-semibold">新規入場</p><p>{entrantSummary(dayEntrants).companies}社・{entrantSummary(dayEntrants).people}人</p></div>}
+              {company && dayEntrants.length > 0 && <div className="mt-1 min-w-0 rounded bg-amber-100 p-1 text-[10px] leading-4 text-amber-900 sm:text-xs"><p className="truncate font-semibold">新規入場</p><p>{entrantStats.companies}社・{entrantStats.people}人</p></div>}
             </div>;
           })}
         </div>

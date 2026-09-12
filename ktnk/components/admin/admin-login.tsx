@@ -1,0 +1,8 @@
+"use client";
+
+import { LoaderCircle, LogIn } from "lucide-react";
+import Link from "next/link";
+
+export function AdminLogin({ password, loading, message, onPasswordChange, onSubmit }: { password: string; loading: boolean; message: string; onPasswordChange: (value: string) => void; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void }) {
+  return <main className="admin-dashboard min-h-screen bg-[#f6f7f5]"><div className="mx-auto grid max-w-md px-5 py-14 sm:py-24"><h1 className="mb-6 text-xl font-bold text-slate-900">管理画面</h1><form onSubmit={onSubmit} className="compact-panel grid w-full gap-3 p-4" aria-busy={loading}><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-md bg-slate-100 text-slate-600"><LogIn size={19} aria-hidden="true" /></span><h2 className="text-lg font-bold">管理画面にログイン</h2></div>{message && <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{message}</div>}<label className="field"><span className="label">パスワード</span><input className="input" type="password" autoComplete="current-password" value={password} onChange={(event) => onPasswordChange(event.target.value)} required /></label><button className="btn btn-primary w-full" type="submit" disabled={loading}>{loading ? <LoaderCircle size={18} className="animate-spin" /> : <LogIn size={18} />}{loading ? "ログインしています…" : "ログイン"}</button></form><p className="mt-6 text-center text-xs text-slate-500">作業予定の登録は<Link href="/" className="ml-1 font-medium text-emerald-800 underline">入力画面</Link>から行えます。</p></div></main>;
+}

@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CompanyMaster, ScheduleSubmitInput, ScheduleWithSubcompanies } from "@/lib/types";
 import { CompanyPeopleFields } from "@/components/schedule-form";
+import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export function AdminScheduleEditor({ schedule, master, onClose, onSaved, workerMode = false }: {
   schedule: ScheduleWithSubcompanies;
@@ -12,6 +13,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
   onSaved: () => void;
   workerMode?: boolean;
 }) {
+  const { confirm, dialog: confirmationDialog } = useConfirmDialog();
   const secondaryCompanies = [...new Set([
     ...(master?.secondariesByPrimary[schedule.primary_company] ?? []),
     ...schedule.subcompanies.map((row) => row.secondary_company ?? ""),
@@ -49,7 +51,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
 
   async function submit(remove = false) {
     if (busy) return;
-    if (remove && !window.confirm(`${schedule.work_date}「${schedule.primary_company}」の予定を削除しますか？二次会社の人数内訳も削除されます。`)) return;
+    if (remove && !await confirm("この予定を削除しますか？", `${schedule.work_date}「${schedule.primary_company}」\n二次会社の人数内訳も削除されます。`, "削除する")) return;
     if (!remove && (form.aerialWorkVehicles ?? []).some((row) => (row.vehicleCount ?? 0) < 1)) {
       setError("高所作業車の希望台数を1以上の整数で入力してください。");
       return;
@@ -75,7 +77,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
     finally { setBusy(false); }
   }
 
-  return <dialog
+  return <><dialog
     ref={dialog}
     onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
     onClick={(event) => {
@@ -132,5 +134,5 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
         <button type="button" className="btn btn-secondary ml-auto text-red-700" disabled={busy} onClick={() => void submit(true)}>この予定を削除</button>
       </div>
     </form>
-  </dialog>;
+  </dialog>{confirmationDialog}</>;
 }
