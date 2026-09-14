@@ -33,6 +33,8 @@ export type PreviousSchedule = {
   aerialWorkVehicleFloor?: string | null;
   aerialWorkVehicles?: AerialWorkVehicleInput[];
   usesFire?: boolean;
+  usesTachiuma?: boolean;
+  tachiumaNotes?: string | null;
   subcompanies: { secondaryCompany: string; workerCount: number | null }[];
 };
 
@@ -51,6 +53,8 @@ export type ScheduleSubmitInput = {
   aerialWorkVehicleFloor: string;
   aerialWorkVehicles?: AerialWorkVehicleInput[];
   usesFire: boolean;
+  usesTachiuma: boolean;
+  tachiumaNotes: string;
   notes: string;
   overwriteExisting?: boolean;
   skipExisting?: boolean;
@@ -66,6 +70,8 @@ export type ScheduleGroupRow = {
   aerial_work_vehicle_count: number | null;
   aerial_work_vehicle_floor: string | null;
   uses_fire: boolean;
+  uses_tachiuma: boolean;
+  tachiuma_notes: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -103,6 +109,8 @@ export type ScheduleListRow = {
   aerialWorkVehicleCount: number | "";
   aerialWorkVehicleFloor: string;
   usesFire: boolean;
+  usesTachiuma: boolean;
+  tachiumaNotes: string;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -116,6 +124,8 @@ export type ScheduleSummary = {
   aerialWorkVehicleCount: number;
   aerialWorkVehicleFloor: string;
   usesFire: boolean;
+  usesTachiuma: boolean;
+  tachiumaNotes: string;
   companyText: string;
   notes: string;
 };

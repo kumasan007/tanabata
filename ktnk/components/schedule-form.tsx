@@ -35,6 +35,8 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   aerialWorkVehicleFloor: "",
   aerialWorkVehicles: [],
   usesFire: false,
+  usesTachiuma: false,
+  tachiumaNotes: "",
   notes: "",
 });
 
@@ -319,6 +321,9 @@ function SchedulePreview({
           </dd>
           <dt className="text-slate-500">火気の使用</dt>
           <dd>{schedule.usesFire ? "する" : "しない"}</dd>
+          <dt className="text-slate-500">立ち馬の使用</dt>
+          <dd>{schedule.usesTachiuma ? "する" : "しない"}</dd>
+          {schedule.usesTachiuma && schedule.tachiumaNotes && <><dt className="text-slate-500">立ち馬の使用内容</dt><dd>{schedule.tachiumaNotes}</dd></>}
         </dl>
     </div>
   );
@@ -381,6 +386,27 @@ export function ScheduleForm({
   const [summaryVersion, setSummaryVersion] = useState(0);
   const submitting = useRef(false);
   const resultRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const clearRestoredInput = (event: PageTransitionEvent) => {
+      const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+      if (!event.persisted && navigation?.type !== "back_forward") return;
+      setForm({ ...emptyForm(initialDate), primaryCompany: initialCompany });
+      setChoosingCompany(!initialCompany);
+      setChoice(null);
+      setCustomDate(false);
+      setContinuingInput(false);
+      setOverwriteExisting(false);
+      setStep(initialDate && initialCompany ? "existing" : "date");
+      setEditorPart("people");
+      setSecondaryWorkChoice(null);
+      setSourceResult(null);
+      setPreviousResult(null);
+      setSubmitState({ status: "idle" });
+      setSummaryOpen(false);
+    };
+    window.addEventListener("pageshow", clearRestoredInput);
+    return () => window.removeEventListener("pageshow", clearRestoredInput);
+  }, [initialDate, initialCompany]);
   const source = sourceResult?.company === form.primaryCompany && sourceResult?.date === form.startDate ? sourceResult.source : null;
   const sourceLoading = Boolean(
     form.primaryCompany && form.startDate && (sourceResult?.company !== form.primaryCompany || sourceResult?.date !== form.startDate),
@@ -619,6 +645,8 @@ export function ScheduleForm({
           ? [{ workArea: source.aerialWorkVehicleFloor ?? "", vehicleCount: source.aerialWorkVehicleCount ?? 1 }]
           : [];
       next.usesFire = source.usesFire ?? false;
+      next.usesTachiuma = source.usesTachiuma ?? false;
+      next.tachiumaNotes = source.tachiumaNotes ?? "";
     } else {
       next.primaryCount = null;
       next.currentSubcompanies = secondaryOptions.map((secondaryCompany) => ({
@@ -636,6 +664,8 @@ export function ScheduleForm({
           ? [{ workArea: source?.aerialWorkVehicleFloor ?? "", vehicleCount: source?.aerialWorkVehicleCount ?? 1 }]
           : [];
       next.usesFire = source?.usesFire ?? false;
+      next.usesTachiuma = source?.usesTachiuma ?? false;
+      next.tachiumaNotes = source?.tachiumaNotes ?? "";
     }
     setForm(next);
     setSecondaryWorkChoice(next.currentSubcompanies.length > 0);
@@ -697,6 +727,8 @@ export function ScheduleForm({
       aerialWorkVehicleFloor: row.aerial_work_vehicle_floor ?? "",
       aerialWorkVehicles: vehicles,
       usesFire: row.uses_fire,
+      usesTachiuma: row.uses_tachiuma,
+      tachiumaNotes: row.tachiuma_notes ?? "",
       notes: row.notes ?? "",
     });
     setOverwriteExisting(true);
@@ -838,7 +870,7 @@ export function ScheduleForm({
   return (
     <div className="simple-schedule min-h-screen pb-32 sm:pb-8">
       <main className="mx-auto max-w-2xl px-3 py-5 sm:px-4">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           {!choosingCompany && (
             <div className="flex items-center justify-between gap-3 text-sm text-slate-600">
               <button
@@ -1138,6 +1170,8 @@ export function ScheduleForm({
                         aerialWorkVehicleFloor: form.aerialWorkVehicleFloor,
                         aerialWorkVehicles: form.aerialWorkVehicles,
                         usesFire: form.usesFire,
+                        usesTachiuma: form.usesTachiuma,
+                        tachiumaNotes: form.tachiumaNotes,
                         subcompanies: activeRows,
                       }}
                     />
@@ -1229,26 +1263,26 @@ export function ScheduleForm({
                           }
                         />
                       </>
-                      <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
-                          <p className="font-semibold text-slate-900">高所作業車を使用しますか？ <span className="required-mark">必須</span></p>
-                          <div className="mt-3 grid grid-cols-2 gap-3">
-                            <button type="button" className="status-option" aria-pressed={(form.aerialWorkVehicles?.length ?? 0) > 0} onClick={() => {
-                              if (!form.aerialWorkVehicles?.length) setAerialVehicles([{ workArea: "", vehicleCount: 1 }]);
-                            }}>使用する</button>
-                            <button type="button" className="status-option" aria-pressed={form.aerialWorkVehicleCount === 0} onClick={() => setAerialVehicles([])}>使用しない</button>
-                          </div>
+                      <div className="space-y-3">
+                        <div className="rounded-xl border border-sky-300 bg-sky-50/60 p-3">
+                          <label className="flex cursor-pointer items-center gap-2 font-bold text-sky-950"><input type="checkbox" className="h-5 w-5 accent-sky-600" checked={(form.aerialWorkVehicles?.length ?? 0) > 0} onChange={(event) => setAerialVehicles(event.target.checked ? [{ workArea: "", vehicleCount: 1 }] : [])} />高所作業車</label>
+                        {(form.aerialWorkVehicles?.length ?? 0) > 0 && <div className="mt-3 border-t border-sky-200 pt-3">
+                          <p className="font-bold text-sky-900">高所作業車の使用内容</p>
+                          <p className="mt-1 text-sm text-sky-800">使用場所と台数を入力してください。</p>
                           {(form.aerialWorkVehicles ?? []).map((vehicle, index) => <div key={index} className="mt-3 grid gap-2 rounded-lg border border-sky-200 bg-white p-3 sm:grid-cols-[1fr_7rem_auto]">
                             <label className="field"><span className="label">使用場所 <span className="required-mark">必須</span></span><input className="input" value={vehicle.workArea} placeholder="例：10階" onChange={(event) => setAerialVehicles((form.aerialWorkVehicles ?? []).map((row, rowIndex) => rowIndex === index ? { ...row, workArea: event.target.value } : row))} /></label>
                             <label className="field"><span className="label">台数</span><input className="input" type="number" inputMode="numeric" min={1} value={vehicle.vehicleCount ?? ""} onChange={(event) => setAerialVehicles((form.aerialWorkVehicles ?? []).map((row, rowIndex) => rowIndex === index ? { ...row, vehicleCount: event.target.value === "" ? null : Math.max(1, Number(event.target.value)) } : row))} /></label>
                             <button type="button" className="btn btn-secondary self-end px-4 text-xl" aria-label={`${index + 1}件目の高所作業車を削除`} onClick={() => setAerialVehicles((form.aerialWorkVehicles ?? []).filter((_, rowIndex) => rowIndex !== index))}>×</button>
                           </div>)}
                           {(form.aerialWorkVehicles?.length ?? 0) > 0 && <button type="button" className="btn btn-secondary mt-3 w-full" onClick={() => setAerialVehicles([...(form.aerialWorkVehicles ?? []), { workArea: "", vehicleCount: 1 }])}>使用場所を追加</button>}
-                      </div>
-                      <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-4">
-                        <p className="font-semibold text-slate-900">火気の使用 <span className="required-mark">必須</span></p>
-                        <div className="mt-3 grid grid-cols-2 gap-3">
-                          <button type="button" className="status-option" aria-pressed={form.usesFire} onClick={() => patch({ usesFire: true })}>する</button>
-                          <button type="button" className="status-option" aria-pressed={!form.usesFire} onClick={() => patch({ usesFire: false })}>しない</button>
+                        </div>}
+                        </div>
+                        <div className="rounded-xl border border-emerald-300 bg-emerald-50/60 p-3">
+                          <label className="flex cursor-pointer items-center gap-2 font-bold text-emerald-950"><input type="checkbox" className="h-5 w-5 accent-emerald-600" checked={form.usesTachiuma} onChange={(event) => patch({ usesTachiuma: event.target.checked, tachiumaNotes: event.target.checked ? form.tachiumaNotes : "" })} />立ち馬</label>
+                          {form.usesTachiuma && <div className="mt-3 border-t border-emerald-200 pt-3"><p className="font-bold text-emerald-900">立ち馬の使用内容</p><p className="mt-1 text-sm text-emerald-800">使用する階と個数を入力してください。</p><label className="field mt-3"><span className="label">使用場所・個数（任意）</span><textarea className="textarea" maxLength={500} value={form.tachiumaNotes} placeholder="例：10階で3個使用" onChange={(event) => patch({ tachiumaNotes: event.target.value })} /></label></div>}
+                        </div>
+                        <div className="rounded-xl border border-red-300 bg-red-50/60 p-3">
+                          <label className="flex cursor-pointer items-center gap-2 font-bold text-red-950"><input type="checkbox" className="h-5 w-5 accent-red-600" checked={form.usesFire} onChange={(event) => patch({ usesFire: event.target.checked })} />火気使用</label>
                         </div>
                       </div>
                       <WorkField
@@ -1459,6 +1493,8 @@ export function ScheduleForm({
                           <p>高所作業車：{summary.aerialWorkVehicleCount}台{summary.aerialWorkVehicleFloor ? `（使用フロア：${summary.aerialWorkVehicleFloor}）` : ""}</p>
                         )}
                         <p>火気の使用：{summary.usesFire ? "する" : "しない"}</p>
+                        <p>立ち馬の使用：{summary.usesTachiuma ? "する" : "しない"}</p>
+                        {summary.usesTachiuma && summary.tachiumaNotes && <p>立ち馬の使用内容：{summary.tachiumaNotes}</p>}
                         {summary.notes && <p>備考：{summary.notes}</p>}
                       </div>
                     ))

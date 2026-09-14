@@ -37,6 +37,8 @@ export const scheduleSubmitSchema = z
       vehicleCount: countSchema.refine((value) => value !== null && value >= 1, "台数は1以上で入力してください。"),
     })).optional().default([]),
     usesFire: z.boolean().default(false),
+    usesTachiuma: z.boolean().default(false),
+    tachiumaNotes: z.string().max(500).default(""),
     notes: z.string().max(2000, "備考は2000文字以内で入力してください。").default(""),
     overwriteExisting: z.boolean().optional().default(false),
     skipExisting: z.boolean().optional().default(false),
