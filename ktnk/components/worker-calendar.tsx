@@ -1,5 +1,6 @@
 "use client";
 
+import { CalendarClientCache } from "@/lib/calendar-client-cache";
 import type { WorkCompletion } from "@/lib/work-completions";
 import { LoadingIndicator, LoadingOverlay } from "@/components/loading-indicator";
 import { CalendarDay } from "@/components/calendar-day";
@@ -43,6 +44,9 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
   const [detailLoadedKey, setDetailLoadedKey] = useState("");
   const [detailMessage, setDetailMessage] = useState("");
   const [completionVersion, setCompletionVersion] = useState(0);
+  const summaryCache = useRef(new CalendarClientCache<{ schedules: CalendarSchedule[]; entrants: CalendarEntrant[]; completions: WorkCompletion[]; warning?: string }>());
+  const detailCache = useRef(new CalendarClientCache<{ schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[]; warning?: string }>());
+  const cacheVersion = useRef(0);
   const [pendingEditId, setPendingEditId] = useState<string | null>(null);
   const [completionBusy, setCompletionBusy] = useState(false);
   const completionPending = useRef(false);
@@ -58,6 +62,17 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
   const loading = loadedKey !== requestKey;
   useEffect(() => {
     const controller = new AbortController();
+    if (cacheVersion.current !== version) {
+      summaryCache.current.clear();
+      detailCache.current.clear();
+      cacheVersion.current = version;
+    }
+    const cached = summaryCache.current.get(requestKey);
+    if (cached) {
+      setSchedules(cached.schedules); setEntrants(cached.entrants); setCompletions(cached.completions);
+      setMessage(cached.warning ?? ""); setLoadedKey(requestKey);
+      return;
+    }
     const params = new URLSearchParams({ from: range.from, to: range.to, view: "summary" });
     if (company) params.set("primaryCompany", company);
     setMessage("");
@@ -75,6 +90,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
         setMaster(nextMaster);
         masterVersion.current = version;
       }
+      if (!body.warning) summaryCache.current.set(requestKey, body);
       setCompletions(body.completions ?? []); setSchedules(body.schedules ?? []); setEntrants(body.entrants ?? []); setMessage(body.warning ?? "");
     }).catch((error) => {
       if (!controller.signal.aborted) { setCompletions([]); setSchedules([]); setEntrants([]); setMessage(error instanceof Error ? error.message : "取得できませんでした。"); }
@@ -85,6 +101,12 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
   const detailLoading = detailLoadedKey !== detailKey;
   useEffect(() => {
     const controller = new AbortController();
+    const cached = detailCache.current.get(detailKey);
+    if (cached) {
+      setDetail({ date: selectedDate, ...cached });
+      setDetailMessage(cached.warning ?? ""); setDetailLoadedKey(detailKey);
+      return;
+    }
     const params = new URLSearchParams({ from: selectedDate, to: selectedDate });
     if (company) params.set("primaryCompany", company);
     setDetailMessage("");
@@ -93,6 +115,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
         const body = await response.json();
         if (!response.ok) throw new Error(body.error);
         if (controller.signal.aborted) return;
+        if (!body.warning) detailCache.current.set(detailKey, body);
         setDetail({ date: selectedDate, schedules: body.schedules ?? [], entrants: body.entrants ?? [], completions: body.completions ?? [] });
         setDetailMessage(body.warning ?? "");
       }).catch((error) => {
@@ -138,6 +161,15 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
         ];
         setCompletions(update);
         setDetail((current) => ({ ...current, completions: date === current.date ? update(current.completions) : current.completions }));
+        summaryCache.current.clear();
+        detailCache.current.clear();
+        // Seed the next detail key from the mutation result when the day is already loaded.
+        // Otherwise let the effect abort the old request and fetch the current day.
+        if (!detailLoading && detail.date === selectedDate) {
+          detailCache.current.set(JSON.stringify([selectedDate, company, version, completionVersion + 1]), {
+            schedules: detail.schedules, entrants: detail.entrants, completions: update(detail.completions),
+          });
+        }
         setCompletionVersion((value) => value + 1);
       }
       if (!response.ok) throw new Error(body.error || "作業終了報告を保存できませんでした。");
@@ -147,7 +179,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
       completionPending.current = false;
       setCompletionBusy(false);
     }
-  }, []);
+  }, [detailLoading, detail, selectedDate, company, version, completionVersion]);
   const entrantMap = useMemo(() => Object.groupBy(entrants.filter((row) => !company || row.primary_company === company), (row) => row.entry_date), [entrants, company]);
   const firstDayOffset = (new Date(`${month}-01T00:00:00`).getDay() + 6) % 7 % 6;
   const weekdays = ["月", "火", "水", "木", "金", "土"];
