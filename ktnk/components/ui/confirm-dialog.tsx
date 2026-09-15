@@ -23,21 +23,20 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
+    const dialog = dialogRef.current;
+    dialog?.showModal();
     cancelRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [busy, onClose, open]);
+    return () => dialog?.close();
+  }, [open]);
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
+    <dialog ref={dialogRef} className="fixed inset-0 m-0 grid h-dvh max-h-none w-screen max-w-none place-items-center border-0 bg-transparent p-4 backdrop:bg-slate-950/45" onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }} onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
       <section role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby={description ? "confirm-description" : undefined} className="panel w-full max-w-md p-5 shadow-xl">
         <h2 id="confirm-title" className="text-lg font-bold text-slate-950">{title}</h2>
         {description && <p id="confirm-description" className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">{description}</p>}
@@ -47,7 +46,7 @@ export function ConfirmDialog({
           <button type="button" className={`btn ${destructive ? "btn-danger" : "btn-primary"}`} disabled={busy} onClick={onConfirm}>{busy ? "処理中…" : confirmLabel}</button>
         </div>
       </section>
-    </div>
+    </dialog>
   );
 }
 

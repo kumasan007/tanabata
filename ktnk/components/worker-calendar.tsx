@@ -3,7 +3,7 @@
 import { LoadingIndicator, LoadingOverlay } from "@/components/loading-indicator";
 import { CopyValue } from "@/components/copy-value";
 import { isWorkingDate } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, Pencil } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -176,8 +176,13 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
       </section>}
 
       <section ref={selectedDaySectionRef} className="mt-4 scroll-mt-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="whitespace-nowrap text-lg font-bold">{Number(selectedDate.slice(5, 7))}月{Number(selectedDate.slice(8, 10))}日の予定</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h2 className="whitespace-nowrap text-lg font-bold">{Number(selectedDate.slice(5, 7))}月{Number(selectedDate.slice(8, 10))}日の予定</h2>
+            <button type="button" className="btn btn-secondary h-9 min-h-0 w-9 p-0" disabled={loading} onClick={() => setVersion((value) => value + 1)} aria-label={loading ? "予定を更新中" : "予定を更新"} title="予定を更新">
+              <RefreshCw size={18} className={loading ? "animate-spin" : ""} aria-hidden="true" />
+            </button>
+          </div>
           <div className="flex shrink-0 gap-1.5">
             {[{ label: "作業入力", pathname: "/schedule" }, { label: "新規入場", pathname: "/new-entrants" }].map((item) => (
               <Link
