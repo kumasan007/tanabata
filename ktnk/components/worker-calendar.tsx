@@ -208,7 +208,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
             </button>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {[{ label: "作業入力", pathname: "/schedule" }, { label: "新規入場", pathname: "/new-entrants" }, { label: "作業終了", pathname: "/work-completion" }].map((item) => (
+            {[{ label: "作業入力", pathname: "/schedule" }, { label: "新規入場", pathname: "/new-entrants" }].map((item) => (
               <Link
                 key={item.pathname}
                 className="btn btn-primary h-9 min-h-0 px-2.5 py-1 text-sm"

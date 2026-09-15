@@ -7,6 +7,7 @@ const navigation = [
   { href: "/schedule", label: "作業入力" },
   { href: "/new-entrants", label: "新規入場" },
   { href: "/calendar", label: "カレンダー" },
+  { href: "/work-completion", label: "作業終了" },
 ];
 
 export function SiteHeader() {
@@ -21,7 +22,7 @@ export function SiteHeader() {
           </Link>
         </div>
         {pathname !== "/" ? (
-          <nav className="ml-auto grid min-w-0 flex-1 grid-cols-3 gap-0.5 sm:flex sm:flex-none sm:gap-1" aria-label="メインメニュー">
+          <nav className="ml-auto grid min-w-0 flex-1 grid-cols-4 gap-0.5 sm:flex sm:flex-none sm:gap-1" aria-label="メインメニュー">
             {navigation.map((item) => {
               const active = pathname === item.href;
               return (
