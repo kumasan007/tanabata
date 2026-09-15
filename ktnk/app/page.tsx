@@ -3,7 +3,7 @@ import { CheckCircle2, CalendarDays, ClipboardList, ShieldCheck, UserPlus } from
 
 export default function HomePage() {
   const menus = [
-    { href: "/work-completion", title: "作業終了報告", description: "帰った会社を報告・確認", icon: CheckCircle2 },
+    { href: "/work-completion", title: "作業終了報告", description: "作業終了時はこちら", icon: CheckCircle2 },
     { href: "/schedule", title: "作業入力", description: "日程・人数・作業内容・高車を入力、修正", icon: ClipboardList },
     { href: "/new-entrants", title: "新規入場", description: "初めて入る会社・人を登録", icon: UserPlus },
     { href: "/calendar", title: "カレンダー", description: "全体の予定を確認", icon: CalendarDays },
