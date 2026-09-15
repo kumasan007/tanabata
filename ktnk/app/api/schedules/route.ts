@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { assertAdminFromRequest } from "@/lib/supabase";
-import { deleteSchedule, getSchedules, saveScheduleSubmission, ScheduleAlreadyExistsError, schedulesToListRows } from "@/lib/schedule-service";
+import { deleteSchedule, saveScheduleSubmission, ScheduleAlreadyExistsError } from "@/lib/schedule-service";
 import { scheduleSubmitSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -21,7 +20,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await saveScheduleSubmission(parsed.data);
+    const id = z.string().uuid().optional().safeParse(body.id);
+    if (!id.success) return NextResponse.json({ error: "予定の指定が正しくありません。" }, { status: 400 });
+    const result = await saveScheduleSubmission(parsed.data, id.data);
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ScheduleAlreadyExistsError) {
@@ -43,35 +44,6 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET(request: Request) {
-  const admin = await assertAdminFromRequest(request);
-  if (!admin) {
-    return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
-  }
-
-  try {
-    const url = new URL(request.url);
-    const schedules = await getSchedules({
-      dateFrom: url.searchParams.get("dateFrom"),
-      dateTo: url.searchParams.get("dateTo"),
-      primaryCompany: url.searchParams.get("primaryCompany"),
-      secondaryCompany: url.searchParams.get("secondaryCompany"),
-    });
-
-    return NextResponse.json({
-      schedules,
-      rows: schedulesToListRows(schedules),
-      count: schedules.length,
-    });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "予定の取得に失敗しました。",
-      },
-      { status: 500 },
-    );
-  }
-}
 export async function DELETE(request: Request) {
   const id = z.string().uuid().safeParse(new URL(request.url).searchParams.get("id"));
   if (!id.success) return NextResponse.json({ error: "予定の指定が正しくありません。" }, { status: 400 });

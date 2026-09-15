@@ -13,7 +13,6 @@ type Draft = { companyChoice: string; newCompany: string; personName: string; na
 const PRIMARY = "__primary__";
 const NEW_COMPANY = "__new_company__";
 const emptyDraft = (): Draft => ({ companyChoice: "", newCompany: "", personName: "", nationalityStatus: "", notes: "" });
-const ENTRANT_DRAFT_KEY = "ktnk:entrant-draft";
 
 function displayDate(value: string) {
   const date = parseLocalDate(value);
@@ -31,35 +30,25 @@ export function NewEntrantForm({ today, initialDate = "", initialCompany = "", i
   const [customDate, setCustomDate] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [draftReady, setDraftReady] = useState(false);
   const personNameInput = useRef<HTMLInputElement>(null);
   const secondaryOptions = useMemo(() => master.secondariesByPrimary[primaryCompany] ?? [], [master, primaryCompany]);
   const dateOptions = useMemo(() => workingDateOptions(today), [today]);
   useEffect(() => {
-    if (!initialCompany) {
-      try {
-        const saved = sessionStorage.getItem(ENTRANT_DRAFT_KEY);
-        if (saved) {
-          const restored = JSON.parse(saved) as { step: Step; entryDate: string; primaryCompany: string; people: Person[]; draft: Draft };
-          if (restored.primaryCompany && initialMaster.primaryCompanies.includes(restored.primaryCompany)) {
-            setStep(restored.step === "success" ? "confirm" : restored.step);
-            setEntryDate(restored.entryDate);
-            setPrimaryCompany(restored.primaryCompany);
-            setPeople(restored.people ?? []);
-            setDraft(restored.draft ?? emptyDraft());
-          }
-        }
-      } catch {
-        sessionStorage.removeItem(ENTRANT_DRAFT_KEY);
-      }
-    }
-    setDraftReady(true);
-  }, [initialCompany, initialMaster]);
-  useEffect(() => {
-    if (!draftReady || step === "success") return;
-    sessionStorage.setItem(ENTRANT_DRAFT_KEY, JSON.stringify({ step, entryDate, primaryCompany, people, draft }));
-  }, [draftReady, draft, entryDate, people, primaryCompany, step]);
-
+    const clearRestoredInput = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      setEntryDate(initialDate);
+      setPrimaryCompany(initialCompany);
+      setStep(initialDate && initialCompany ? "details" : "company");
+      setPeople([]);
+      setDraft(emptyDraft());
+      setEditingId(null);
+      setCustomDate(false);
+      setMessage("");
+      setBusy(false);
+    };
+    window.addEventListener("pageshow", clearRestoredInput);
+    return () => window.removeEventListener("pageshow", clearRestoredInput);
+  }, [initialDate, initialCompany]);
   function chooseDate(date: string) {
     if (!isWorkingDate(date)) { setMessage("日曜日は入力できません。月曜〜土曜を選択してください。"); return; }
     setEntryDate(date); setMessage(""); setStep("details");
@@ -100,14 +89,12 @@ export function NewEntrantForm({ today, initialDate = "", initialCompany = "", i
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "保存できませんでした。");
       const newCompanies = people.map((person) => person.secondaryCompany).filter((company) => company && !secondaryOptions.includes(company));
-      if (newCompanies.length) setMaster((current) => ({ ...current, secondariesByPrimary: { ...current.secondariesByPrimary, [primaryCompany]: [...new Set([...secondaryOptions, ...newCompanies])] } }));
-      sessionStorage.removeItem(ENTRANT_DRAFT_KEY); setStep("success"); window.scrollTo({ top: 0, behavior: "smooth" });
+      if (newCompanies.length) setMaster((current) => ({ ...current, secondariesByPrimary: { ...current.secondariesByPrimary, [primaryCompany]: [...new Set([...secondaryOptions, ...newCompanies])] } })); setStep("success"); window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) { setMessage(error instanceof Error ? error.message : "保存できませんでした。"); }
     finally { setBusy(false); }
   }
 
   function reset(keepCompany: boolean) {
-    sessionStorage.removeItem(ENTRANT_DRAFT_KEY);
     setEntryDate(""); setPrimaryCompany(keepCompany ? primaryCompany : ""); setPeople([]); setDraft(emptyDraft()); setEditingId(null); setCustomDate(false); setMessage(""); setStep(keepCompany ? "date" : "company");
   }
 

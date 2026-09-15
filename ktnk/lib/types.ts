@@ -98,24 +98,6 @@ export type ScheduleWithSubcompanies = ScheduleGroupRow & {
   aerialWorkVehicles?: ScheduleAerialWorkVehicleRow[];
 };
 
-export type ScheduleListRow = {
-  workDate: string;
-  primaryCompany: string;
-  primaryCount: number | "";
-  secondaryCompany: string;
-  secondaryCount: number | "";
-  workArea: string;
-  workContent: string;
-  aerialWorkVehicleCount: number | "";
-  aerialWorkVehicleFloor: string;
-  usesFire: boolean;
-  usesTachiuma: boolean;
-  tachiumaNotes: string;
-  notes: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
 export type ScheduleSummary = {
   id: string;
   workDate: string;

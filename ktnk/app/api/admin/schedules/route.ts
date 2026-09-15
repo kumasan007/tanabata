@@ -18,10 +18,10 @@ export async function PATCH(request: Request) {
     if (!existing) return NextResponse.json({ error: "予定は削除されています。一覧を更新してください。" }, { status: 404 });
     const parsed = scheduleSubmitSchema.safeParse({ ...body, startDate: existing.work_date, endDate: existing.work_date, primaryCompany: existing.primary_company, excludeWeekends: false, overwriteExisting: true });
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
-    await saveScheduleSubmission(parsed.data);
+    await saveScheduleSubmission(parsed.data, id.data);
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: "予定の保存に失敗しました。入力内容を確認して再度お試しください。" }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "予定の保存に失敗しました。入力内容を確認して再度お試しください。" }, { status: 500 });
   }
 }
 

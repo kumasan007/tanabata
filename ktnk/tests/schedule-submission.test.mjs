@@ -234,10 +234,14 @@ function submission(patch = {}) {
   };
 }
 
-function serviceWithDatabase(previous = null) {
+function serviceWithDatabase(previous = null, rpcError = null) {
   const mutations = [];
   let previousReads = 0;
   const client = {
+    async rpc(name, args) {
+      mutations.push({ operation: "rpc", name, data: args });
+      return { data: rpcError ? null : { dates: args.p_groups.map(row => row.work_date), savedIds: args.p_groups.map(() => "existing-id") }, error: rpcError };
+    },
     from(table) {
       let previousQuery = false;
       const query = {
@@ -308,7 +312,8 @@ test("一次0人でも二次会社の前回人数を解決して保存できる"
     schedule_subcompanies: [{ secondary_company: "テスト二次会社", worker_count: 3, sort_order: 0 }],
   });
   await service.saveScheduleSubmission(input);
-  const rows = service.mutations.find((mutation) => mutation.operation === "insert").data;
+  assert.equal(service.mutations.length, 1);
+  const rows = service.mutations[0].data.p_subcompanies;
   assert.equal(rows[0].worker_count, 3);
 });
 
@@ -470,4 +475,53 @@ test("worker secondary registration validates input and only adds under an exist
       assert.deepEqual(inserted[0].primary_trade_roles, ["role"]);
     }
   }
+});
+
+
+test("予定保存は複数日と全明細を一回のRPCへ渡す", async () => {
+  const service = serviceWithDatabase();
+  const input = scheduleSubmitSchema.parse(submission({
+    dates: ["2026-09-16", "2026-09-15"], startDate: "2026-09-15", endDate: "2026-09-16",
+    currentSubcompanies: [{secondaryCompany:"二次会社",workerCount:2}],
+    aerialWorkVehicles:[{workArea:"10階",vehicleCount:3}], usesFire:true,usesTachiuma:true,tachiumaNotes:"10階で2個",
+    overwriteExisting:true,
+  }));
+  const result = await service.saveScheduleSubmission(input);
+  assert.equal(service.mutations.length,1);
+  const call = service.mutations[0];
+  assert.equal(call.name,"save_schedule_atomically");
+  assert.equal(call.data.p_groups.length,2);
+  assert.equal(call.data.p_subcompanies[0].worker_count,2);
+  assert.equal(call.data.p_vehicles[0].vehicle_count,3);
+  assert.equal(call.data.p_groups[0].tachiuma_notes,"10階で2個");
+  assert.equal(call.data.p_overwrite,true);
+  assert.deepEqual(Array.from(result.dates),["2026-09-15","2026-09-16"]);
+});
+
+test("DBで発生した競合を上書き確認用のエラーへ変換する", async () => {
+  const service=serviceWithDatabase(null,{message:"SCHEDULE_ALREADY_EXISTS",details:'["2026-09-15"]'});
+  await assert.rejects(service.saveScheduleSubmission(scheduleSubmitSchema.parse(submission())),error=>{
+    assert.equal(error.name,"ScheduleAlreadyExistsError");
+    assert.deepEqual(Array.from(error.dates),["2026-09-15"]); return true;
+  });
+  assert.equal(service.mutations.length,1);
+});
+
+test("RPC失敗時は従来の個別保存へフォールバックしない", async () => {
+  const service=serviceWithDatabase(null,{message:"missing function",code:"PGRST202"});
+  await assert.rejects(service.saveScheduleSubmission(scheduleSubmitSchema.parse(submission())),/追加SQL/);
+  assert.equal(service.mutations.length,1);
+});
+
+test("編集フォーム変換は過去の高所作業車データと人数を維持する",()=>{
+  const {scheduleToFormData}=loadModule("lib/schedule-fields.ts");
+  const row={work_date:"2026-09-15",primary_company:"A",primary_count:0,work_area:"10階",work_content:"配管",
+    aerial_work_vehicle_count:2,aerial_work_vehicle_floor:"10階",uses_fire:true,uses_tachiuma:true,tachiuma_notes:"2個",
+    subcompanies:[{secondary_company:"B",worker_count:3}]};
+  const form=scheduleToFormData(row,["B","C"]);
+  assert.equal(form.aerialWorkVehicles[0].vehicleCount,2);
+  assert.equal(form.aerialWorkVehicles[0].workArea,"10階");
+  assert.equal(form.currentSubcompanies[0].workerCount,3);
+  assert.equal(form.currentSubcompanies[1].workerCount,0);
+  assert.equal(form.primaryCount,0); assert.equal(form.tachiumaNotes,"2個");
 });

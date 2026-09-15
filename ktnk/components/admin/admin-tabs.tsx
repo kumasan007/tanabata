@@ -2,7 +2,7 @@
 
 import { Building2, DatabaseBackup, History } from "lucide-react";
 
-export type AdminTab = "schedules" | "companies" | "backups" | "auditLogs";
+export type AdminTab = "companies" | "backups" | "auditLogs";
 const tabs = [{ key: "companies", label: "協力会社一覧", icon: Building2 }, { key: "backups", label: "バックアップ", icon: DatabaseBackup }, { key: "auditLogs", label: "操作履歴", icon: History }] as const;
 
 export function AdminTabs({ active, onChange }: { active: AdminTab; onChange: (tab: AdminTab) => void }) {

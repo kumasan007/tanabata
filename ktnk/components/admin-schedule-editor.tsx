@@ -1,9 +1,11 @@
 "use client";
 
+import {ScheduleEquipmentFields} from "@/components/schedule-equipment-fields";
+import {scheduleToFormData} from "@/lib/schedule-fields";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CompanyMaster, ScheduleSubmitInput, ScheduleWithSubcompanies } from "@/lib/types";
-import { CompanyPeopleFields } from "@/components/schedule-form";
+import { CompanyPeopleFields } from "@/components/company-people-fields";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export function AdminScheduleEditor({ schedule, master, onClose, onSaved, workerMode = false }: {
@@ -18,38 +20,11 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
     ...(master?.secondariesByPrimary[schedule.primary_company] ?? []),
     ...schedule.subcompanies.map((row) => row.secondary_company ?? ""),
   ])].filter(Boolean);
-  const savedCounts = new Map(schedule.subcompanies.map((row) => [row.secondary_company ?? "", row.worker_count]));
-  const initialAerialWorkVehicles = schedule.aerialWorkVehicles?.length
-    ? schedule.aerialWorkVehicles.map((row) => ({ workArea: row.work_area, vehicleCount: row.vehicle_count }))
-    : (schedule.aerial_work_vehicle_count ?? 0) > 0
-      ? [{ workArea: schedule.aerial_work_vehicle_floor ?? "", vehicleCount: schedule.aerial_work_vehicle_count }]
-      : [];
   const dialog = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState<ScheduleSubmitInput>(() => ({
-    startDate: schedule.work_date, endDate: schedule.work_date, excludeWeekends: false,
-    primaryCompany: schedule.primary_company,
-    primaryCount: schedule.primary_count, workArea: schedule.work_area ?? "", workContent: schedule.work_content ?? "",
-    aerialWorkVehicleCount: schedule.aerial_work_vehicle_count,
-    aerialWorkVehicleFloor: schedule.aerial_work_vehicle_floor ?? "",
-    aerialWorkVehicles: initialAerialWorkVehicles,
-    usesFire: schedule.uses_fire,
-    usesTachiuma: schedule.uses_tachiuma,
-    tachiumaNotes: schedule.tachiuma_notes ?? "",
-    notes: schedule.notes ?? "",
-    currentSubcompanies: secondaryCompanies.map((secondaryCompany) => ({ secondaryCompany, workerCount: savedCounts.get(secondaryCompany) ?? 0 })),
-  }));
+  const [form, setForm] = useState<ScheduleSubmitInput>(() => scheduleToFormData(schedule, secondaryCompanies));
   useEffect(() => { dialog.current?.showModal(); }, []);
-
-  function setAerialVehicles(vehicles: NonNullable<ScheduleSubmitInput["aerialWorkVehicles"]>) {
-    setForm((current) => ({
-      ...current,
-      aerialWorkVehicles: vehicles,
-      aerialWorkVehicleCount: vehicles.reduce((sum, row) => sum + (row.vehicleCount ?? 0), 0),
-      aerialWorkVehicleFloor: vehicles.map((row) => row.workArea).filter(Boolean).join("、"),
-    }));
-  }
 
   async function submit(remove = false) {
     if (busy) return;
@@ -113,28 +88,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
         />
         <label className="field"><span className="label">作業エリア（必須）</span><input className="input" required value={form.workArea} onChange={(event) => setForm({ ...form, workArea: event.target.value })} /></label>
         <label className="field"><span className="label">作業内容（必須）</span><textarea className="textarea" required value={form.workContent} onChange={(event) => setForm({ ...form, workContent: event.target.value })} /></label>
-        <div className="space-y-3">
-          <div className="rounded-xl border border-sky-300 bg-sky-50/60 p-3">
-            <label className="flex cursor-pointer items-center gap-2 font-bold text-sky-950"><input type="checkbox" className="h-5 w-5 accent-sky-600" checked={(form.aerialWorkVehicles?.length ?? 0) > 0} onChange={(event) => setAerialVehicles(event.target.checked ? [{ workArea: "", vehicleCount: 1 }] : [])} />高所作業車</label>
-          {(form.aerialWorkVehicles?.length ?? 0) > 0 && <div className="mt-3 border-t border-sky-200 pt-3">
-          <p className="font-bold text-sky-900">高所作業車の使用内容</p>
-          <p className="mt-1 text-sm text-sky-800">使用場所と台数を入力してください。</p>
-          {(form.aerialWorkVehicles ?? []).map((vehicle, index) => <div key={index} className="mt-3 grid gap-2 rounded-lg border border-sky-200 bg-white p-3 sm:grid-cols-[1fr_7rem_auto]">
-            <label className="field"><span className="label">使用場所（必須）</span><input className="input" required maxLength={100} value={vehicle.workArea} placeholder="例：10階" onChange={(event) => setAerialVehicles((form.aerialWorkVehicles ?? []).map((row, rowIndex) => rowIndex === index ? { ...row, workArea: event.target.value } : row))} /></label>
-            <label className="field"><span className="label">台数</span><input className="input" type="number" inputMode="numeric" min={1} step={1} required value={vehicle.vehicleCount ?? ""} onChange={(event) => setAerialVehicles((form.aerialWorkVehicles ?? []).map((row, rowIndex) => rowIndex === index ? { ...row, vehicleCount: event.target.value === "" ? null : Math.max(1, Number(event.target.value)) } : row))} /></label>
-            <button type="button" className="btn btn-secondary self-end px-4 text-xl" aria-label={`${index + 1}件目の高所作業車を削除`} onClick={() => setAerialVehicles((form.aerialWorkVehicles ?? []).filter((_, rowIndex) => rowIndex !== index))}>×</button>
-          </div>)}
-          {(form.aerialWorkVehicles?.length ?? 0) > 0 && <button type="button" className="btn btn-secondary mt-3 w-full" onClick={() => setAerialVehicles([...(form.aerialWorkVehicles ?? []), { workArea: "", vehicleCount: 1 }])}>使用場所を追加</button>}
-          </div>}
-          </div>
-          <div className="rounded-xl border border-emerald-300 bg-emerald-50/60 p-3">
-            <label className="flex cursor-pointer items-center gap-2 font-bold text-emerald-950"><input type="checkbox" className="h-5 w-5 accent-emerald-600" checked={form.usesTachiuma} onChange={(event) => setForm({ ...form, usesTachiuma: event.target.checked, tachiumaNotes: event.target.checked ? form.tachiumaNotes : "" })} />立ち馬</label>
-            {form.usesTachiuma && <div className="mt-3 border-t border-emerald-200 pt-3"><p className="font-bold text-emerald-900">立ち馬の使用内容</p><p className="mt-1 text-sm text-emerald-800">使用する階と個数を入力してください。</p><label className="field mt-3"><span className="label">使用場所・個数（任意）</span><textarea className="textarea" maxLength={500} value={form.tachiumaNotes} placeholder="例：10階で3個使用" onChange={(event) => setForm({ ...form, tachiumaNotes: event.target.value })} /></label></div>}
-          </div>
-          <div className="rounded-xl border border-red-300 bg-red-50/60 p-3">
-            <label className="flex cursor-pointer items-center gap-2 font-bold text-red-950"><input type="checkbox" className="h-5 w-5 accent-red-600" checked={form.usesFire} onChange={(event) => setForm({ ...form, usesFire: event.target.checked })} />火気使用</label>
-          </div>
-        </div>
+        <ScheduleEquipmentFields form={form} onChange={(fields) => setForm((current) => ({ ...current, ...fields }))} />
         <label className="field"><span className="label">備考（任意）</span><textarea className="textarea" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
       </fieldset>
       {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}

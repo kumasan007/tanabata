@@ -1,9 +1,12 @@
 "use client";
 
+import { SchedulePreview } from "@/components/schedule-preview";
 import { ExistingEntryCheck } from "@/components/existing-entry-check";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { CopyButton } from "@/components/copy-button";
-import Link from "next/link";
+import {CompanyPeopleFields} from "@/components/company-people-fields";
+import {ScheduleEquipmentFields} from "@/components/schedule-equipment-fields";
+import {scheduleToFormData} from "@/lib/schedule-fields";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type {
@@ -22,7 +25,6 @@ type SubmitState =
   | { status: "success"; dates: string[] }
   | { status: "error"; message: string };
 const MultiDateCalendar = dynamic(() => import("@/components/multi-date-calendar").then((module) => module.MultiDateCalendar));
-const SCHEDULE_DRAFT_KEY = "ktnk:schedule-draft";
 const emptyForm = (date: string): ScheduleSubmitInput => ({
   dates: date ? [date] : [],
   startDate: date,
@@ -75,100 +77,6 @@ function sourceQuestion(workDate: string, today: string) {
 
 function SectionHeading({ title }: { title: string }) {
   return <h2 className="mb-5 text-lg font-bold text-slate-900">{title}</h2>;
-}
-
-export function CompanyPeopleFields({
-  primaryCompany,
-  primaryCount,
-  primaryCountCopied,
-  previousPrimaryCount,
-  subcompanies,
-  previousCounts,
-  onPrimaryCountChange,
-  onSubcompaniesChange,
-  showPrevious = true,
-}: {
-  primaryCompany: string;
-  primaryCount: number | null;
-  primaryCountCopied: boolean;
-  previousPrimaryCount: number | null | undefined;
-  subcompanies: ScheduleSubmitInput["currentSubcompanies"];
-  previousCounts: Map<string, number | null>;
-  onPrimaryCountChange: (count: number | null, copied: boolean) => void;
-  onSubcompaniesChange: (rows: ScheduleSubmitInput["currentSubcompanies"]) => void;
-  showPrevious?: boolean;
-}) {
-  const id = useId();
-  const rows = [
-    ...subcompanies.map((row) => ({
-      company: row.secondaryCompany,
-      count: row.workerCount,
-      copied: Boolean(row.usePreviousWorkerCount),
-      previous: previousCounts.get(row.secondaryCompany),
-      primary: false,
-    })),
-    { company: primaryCompany, count: primaryCount, copied: primaryCountCopied, previous: previousPrimaryCount, primary: true },
-  ];
-
-  return (
-    <section className="overflow-hidden rounded-md border border-border" aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`} className="border-b border-border bg-slate-50 px-3 py-2 font-bold text-slate-800">
-        作業する会社
-      </h2>
-      <div className={`grid ${showPrevious ? "grid-cols-[minmax(0,1fr)_76px_52px]" : "grid-cols-[minmax(0,1fr)_76px]"} items-center gap-2 border-b border-border bg-slate-50/60 px-3 py-1.5 text-sm font-semibold text-slate-500`}>
-        <span>会社名</span><span>人数</span>{showPrevious && <span className="sr-only">前回値</span>}
-      </div>
-      <div className="divide-y divide-slate-100">
-        {rows.map((row, index) => (
-          <div key={`${row.primary}-${row.company}`} className={`grid ${showPrevious ? "grid-cols-[minmax(0,1fr)_76px_52px]" : "grid-cols-[minmax(0,1fr)_76px]"} items-center gap-2 px-3 py-2`}>
-            <span className="min-w-0 break-words text-sm font-medium text-slate-800">{row.company}</span>
-            <div className="relative">
-              <input
-                id={`${id}-${index}`}
-                aria-label={`${row.company}の人数`}
-                className="input h-10 px-2 pr-5 text-base tabular-nums"
-                inputMode="numeric"
-                type="number"
-                min={0}
-                step={1}
-                placeholder="0"
-                value={row.count ?? ""}
-                onChange={(event) => {
-                  const count = event.target.value === "" ? null : Math.max(0, Number(event.target.value));
-                  if (row.primary) onPrimaryCountChange(count, false);
-                  else onSubcompaniesChange(subcompanies.map((item) => item.secondaryCompany === row.company
-                    ? { ...item, workerCount: count, usePreviousWorkerCount: false }
-                    : item));
-                }}
-              />
-              <span className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-xs text-slate-500">人</span>
-            </div>
-            {showPrevious && <button
-              type="button"
-              className="min-h-9 rounded border border-border bg-white px-1 text-xs font-semibold text-slate-600 disabled:opacity-35"
-              disabled={row.previous == null}
-              aria-label={`${row.company}の前回人数をコピー`}
-              onClick={() => {
-                if (row.previous == null) return;
-                if (row.primary) onPrimaryCountChange(row.previous, true);
-                else onSubcompaniesChange(subcompanies.map((item) => item.secondaryCompany === row.company
-                  ? { ...item, workerCount: row.previous ?? null, usePreviousWorkerCount: true }
-                  : item));
-              }}
-            >
-              {row.copied ? "済" : "前回"}
-            </button>}
-          </div>
-        ))}
-      </div>
-      <div className="border-t border-border bg-slate-50 p-3 text-sm">
-        <p className="text-slate-600">ここにない二次会社は、新規入場から追加できます。</p>
-        <Link className="btn btn-secondary mt-2 w-full" href="/new-entrants">
-          新規入場から二次会社を追加
-        </Link>
-      </div>
-    </section>
-  );
 }
 
 function WorkField({
@@ -237,101 +145,6 @@ function WorkField({
   );
 }
 
-function SchedulePreview({
-  schedule,
-  primaryCompany,
-}: {
-  schedule: PreviousSchedule;
-  primaryCompany: string;
-}) {
-  const companies = [
-    {
-      secondaryCompany: primaryCompany,
-      workerCount: schedule.primaryCount ?? 0,
-    },
-    ...schedule.subcompanies.filter((row) => row.secondaryCompany),
-  ];
-  return (
-    <div className="overflow-hidden rounded-xl border border-border text-base">
-      <table className="w-full table-fixed text-left">
-        <caption className="sr-only">会社ごとの人数</caption>
-        <thead className="bg-slate-50 text-sm text-slate-500">
-          <tr>
-            <th scope="col" className="px-4 py-2 font-medium">
-              会社名
-            </th>
-            <th scope="col" className="w-20 px-4 py-2 text-right font-medium">
-              人数
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {companies.map((row, index) => (
-            <tr key={index}>
-              <td className="break-words px-4 py-2.5">
-                {row.secondaryCompany}
-              </td>
-              <td className="px-4 py-2.5 text-right font-semibold tabular-nums">
-                {row.workerCount ?? 0}
-                <span className="ml-1 text-sm font-normal text-slate-500">
-                  人
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot className="border-t border-border bg-slate-50">
-          <tr>
-            <th scope="row" className="px-4 py-2.5 text-sm font-medium">
-              合計
-            </th>
-            <td className="px-4 py-2.5 text-right font-bold tabular-nums">
-              {companies.reduce(
-                (total, row) => total + (row.workerCount ?? 0),
-                0,
-              )}
-              <span className="ml-1 text-sm font-normal text-slate-500">
-                人
-              </span>
-            </td>
-          </tr>
-        </tfoot>
-      </table>
-      <dl className="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-3 border-t border-border px-4 py-3 text-sm leading-6">
-          <dt className="text-slate-500">作業エリア</dt>
-          <dd className="whitespace-pre-wrap break-words">
-            {schedule.workArea || "未入力"}
-          </dd>
-          <dt className="text-slate-500">作業内容</dt>
-          <dd className="whitespace-pre-wrap break-words">
-            {schedule.workContent || "未入力"}
-          </dd>
-          <dt className="text-slate-500">高所作業車</dt>
-          <dd className="space-y-1">
-            {schedule.aerialWorkVehicles?.length ? (
-              schedule.aerialWorkVehicles.map((vehicle, index) => (
-                <p key={index} className="whitespace-pre-wrap break-words">
-                  {vehicle.workArea || "使用場所未入力"}・{vehicle.vehicleCount ?? 0}台
-                </p>
-              ))
-            ) : (schedule.aerialWorkVehicleCount ?? 0) > 0 ? (
-              <p className="whitespace-pre-wrap break-words">
-                {schedule.aerialWorkVehicleFloor || "使用場所未入力"}・{schedule.aerialWorkVehicleCount}台
-              </p>
-            ) : (
-              "使用しない"
-            )}
-          </dd>
-          <dt className="text-slate-500">火気の使用</dt>
-          <dd>{schedule.usesFire ? "する" : "しない"}</dd>
-          <dt className="text-slate-500">立ち馬の使用</dt>
-          <dd>{schedule.usesTachiuma ? "する" : "しない"}</dd>
-          {schedule.usesTachiuma && schedule.tachiumaNotes && <><dt className="text-slate-500">立ち馬の使用内容</dt><dd>{schedule.tachiumaNotes}</dd></>}
-        </dl>
-    </div>
-  );
-}
-
 export function ScheduleForm({
   today,
   initialDate = "",
@@ -387,7 +200,6 @@ export function ScheduleForm({
   const [summaries, setSummaries] = useState<ScheduleSummary[] | null>(null);
   const [summaryError, setSummaryError] = useState("");
   const [summaryVersion, setSummaryVersion] = useState(0);
-  const [draftReady, setDraftReady] = useState(false);
   const submitting = useRef(false);
   const resultRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -411,28 +223,6 @@ export function ScheduleForm({
     window.addEventListener("pageshow", clearRestoredInput);
     return () => window.removeEventListener("pageshow", clearRestoredInput);
   }, [initialDate, initialCompany]);
-  useEffect(() => {
-    if (!initialCompany) {
-      try {
-        const saved = sessionStorage.getItem(SCHEDULE_DRAFT_KEY);
-        if (saved) {
-          const restored = JSON.parse(saved) as ScheduleSubmitInput;
-          if (restored.primaryCompany && initialCompanyMaster.primaryCompanies.includes(restored.primaryCompany)) {
-            setForm(restored);
-            setChoosingCompany(false);
-            setStep(restored.startDate ? "existing" : "date");
-          }
-        }
-      } catch {
-        sessionStorage.removeItem(SCHEDULE_DRAFT_KEY);
-      }
-    }
-    setDraftReady(true);
-  }, [initialCompany, initialCompanyMaster]);
-  useEffect(() => {
-    if (!draftReady || submitState.status === "success") return;
-    sessionStorage.setItem(SCHEDULE_DRAFT_KEY, JSON.stringify(form));
-  }, [draftReady, form, submitState.status]);
   const source = sourceResult?.company === form.primaryCompany && sourceResult?.date === form.startDate ? sourceResult.source : null;
   const sourceLoading = Boolean(
     form.primaryCompany && form.startDate && (sourceResult?.company !== form.primaryCompany || sourceResult?.date !== form.startDate),
@@ -724,7 +514,6 @@ export function ScheduleForm({
     setStep("existing");
   }
   function resetForm() {
-    sessionStorage.removeItem(SCHEDULE_DRAFT_KEY);
     setForm(emptyForm(""));
     setSecondaryWorkChoice(null);
     setChoice(null);
@@ -738,38 +527,12 @@ export function ScheduleForm({
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function editExisting(row: ScheduleWithSubcompanies) {
-    const vehicles = row.aerialWorkVehicles?.length
-      ? row.aerialWorkVehicles.map((vehicle) => ({ workArea: vehicle.work_area, vehicleCount: vehicle.vehicle_count }))
-      : (row.aerial_work_vehicle_count ?? 0) > 0
-        ? [{ workArea: row.aerial_work_vehicle_floor ?? "", vehicleCount: row.aerial_work_vehicle_count }]
-        : [];
-    setForm({
-      ...emptyForm(row.work_date),
-      primaryCompany: row.primary_company,
-      primaryCount: row.primary_count ?? 0,
-      currentSubcompanies: row.subcompanies.map((sub) => ({ secondaryCompany: sub.secondary_company ?? "", workerCount: sub.worker_count ?? 0 })),
-      workArea: row.work_area ?? "",
-      workContent: row.work_content ?? "",
-      aerialWorkVehicleCount: row.aerial_work_vehicle_count ?? 0,
-      aerialWorkVehicleFloor: row.aerial_work_vehicle_floor ?? "",
-      aerialWorkVehicles: vehicles,
-      usesFire: row.uses_fire,
-      usesTachiuma: row.uses_tachiuma,
-      tachiumaNotes: row.tachiuma_notes ?? "",
-      notes: row.notes ?? "",
-    });
+    setForm(scheduleToFormData(row));
     setOverwriteExisting(true);
     setChoice("new");
     setSecondaryWorkChoice(row.subcompanies.length > 0);
     setEditorPart("people");
     setStep("edit");
-  }
-  function setAerialVehicles(vehicles: NonNullable<ScheduleSubmitInput["aerialWorkVehicles"]>) {
-    patch({
-      aerialWorkVehicles: vehicles,
-      aerialWorkVehicleCount: vehicles.length ? vehicles.reduce((sum, row) => sum + (row.vehicleCount ?? 0), 0) : 0,
-      aerialWorkVehicleFloor: vehicles.map((row) => row.workArea).filter(Boolean).join("、"),
-    });
   }
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -881,7 +644,6 @@ export function ScheduleForm({
         status: "success",
         dates: body.dates ?? [form.startDate],
       });
-      sessionStorage.removeItem(SCHEDULE_DRAFT_KEY);
       setSummaryVersion((v) => v + 1);
       setSourceRetry((v) => v + 1);
     } catch (error) {
@@ -900,9 +662,9 @@ export function ScheduleForm({
       <main className="mx-auto max-w-2xl px-3 py-5 sm:px-4">
         <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           {(form.primaryCompany || form.startDate) && (
-            <div className="min-w-0 space-y-1 break-words text-sm text-slate-600">
-              {form.primaryCompany && <p className="font-semibold">{form.primaryCompany}</p>}
-              {form.startDate && <p>{displaySelectedDates(form.dates, form.startDate, form.endDate)}</p>}
+            <div className="flex min-w-0 items-baseline gap-3 break-words text-sm text-slate-600">
+              {form.primaryCompany && <p className="min-w-0 max-w-[50%] font-semibold">{form.primaryCompany}</p>}
+              {form.startDate && <p className="min-w-0 flex-1">{displaySelectedDates(form.dates, form.startDate, form.endDate)}</p>}
             </div>
           )}
           {!choosingCompany && (
@@ -1189,6 +951,7 @@ export function ScheduleForm({
                     </p>
                     <SchedulePreview
                       primaryCompany={form.primaryCompany}
+                      notes={form.notes}
                       schedule={{
                         workDate: form.startDate,
                         primaryCount: activeCount,
@@ -1203,12 +966,6 @@ export function ScheduleForm({
                         subcompanies: activeRows,
                       }}
                     />
-                    {form.notes && (
-                      <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm">
-                        <span className="font-semibold">備考：</span>
-                        <span className="whitespace-pre-wrap">{form.notes}</span>
-                      </div>
-                    )}
                     <button
                       type="button"
                       className="btn btn-secondary mt-5 w-full"
@@ -1291,28 +1048,7 @@ export function ScheduleForm({
                           }
                         />
                       </>
-                      <div className="space-y-3">
-                        <div className="rounded-xl border border-sky-300 bg-sky-50/60 p-3">
-                          <label className="flex cursor-pointer items-center gap-2 font-bold text-sky-950"><input type="checkbox" className="h-5 w-5 accent-sky-600" checked={(form.aerialWorkVehicles?.length ?? 0) > 0} onChange={(event) => setAerialVehicles(event.target.checked ? [{ workArea: "", vehicleCount: 1 }] : [])} />高所作業車</label>
-                        {(form.aerialWorkVehicles?.length ?? 0) > 0 && <div className="mt-3 border-t border-sky-200 pt-3">
-                          <p className="font-bold text-sky-900">高所作業車の使用内容</p>
-                          <p className="mt-1 text-sm text-sky-800">使用場所と台数を入力してください。</p>
-                          {(form.aerialWorkVehicles ?? []).map((vehicle, index) => <div key={index} className="mt-3 grid gap-2 rounded-lg border border-sky-200 bg-white p-3 sm:grid-cols-[1fr_7rem_auto]">
-                            <label className="field"><span className="label">使用場所 <span className="required-mark">必須</span></span><input className="input" value={vehicle.workArea} placeholder="例：10階" onChange={(event) => setAerialVehicles((form.aerialWorkVehicles ?? []).map((row, rowIndex) => rowIndex === index ? { ...row, workArea: event.target.value } : row))} /></label>
-                            <label className="field"><span className="label">台数</span><input className="input" type="number" inputMode="numeric" min={1} value={vehicle.vehicleCount ?? ""} onChange={(event) => setAerialVehicles((form.aerialWorkVehicles ?? []).map((row, rowIndex) => rowIndex === index ? { ...row, vehicleCount: event.target.value === "" ? null : Math.max(1, Number(event.target.value)) } : row))} /></label>
-                            <button type="button" className="btn btn-secondary self-end px-4 text-xl" aria-label={`${index + 1}件目の高所作業車を削除`} onClick={() => setAerialVehicles((form.aerialWorkVehicles ?? []).filter((_, rowIndex) => rowIndex !== index))}>×</button>
-                          </div>)}
-                          {(form.aerialWorkVehicles?.length ?? 0) > 0 && <button type="button" className="btn btn-secondary mt-3 w-full" onClick={() => setAerialVehicles([...(form.aerialWorkVehicles ?? []), { workArea: "", vehicleCount: 1 }])}>使用場所を追加</button>}
-                        </div>}
-                        </div>
-                        <div className="rounded-xl border border-emerald-300 bg-emerald-50/60 p-3">
-                          <label className="flex cursor-pointer items-center gap-2 font-bold text-emerald-950"><input type="checkbox" className="h-5 w-5 accent-emerald-600" checked={form.usesTachiuma} onChange={(event) => patch({ usesTachiuma: event.target.checked, tachiumaNotes: event.target.checked ? form.tachiumaNotes : "" })} />立ち馬</label>
-                          {form.usesTachiuma && <div className="mt-3 border-t border-emerald-200 pt-3"><p className="font-bold text-emerald-900">立ち馬の使用内容</p><p className="mt-1 text-sm text-emerald-800">使用する階と個数を入力してください。</p><label className="field mt-3"><span className="label">使用場所・個数（任意）</span><textarea className="textarea" maxLength={500} value={form.tachiumaNotes} placeholder="例：10階で3個使用" onChange={(event) => patch({ tachiumaNotes: event.target.value })} /></label></div>}
-                        </div>
-                        <div className="rounded-xl border border-red-300 bg-red-50/60 p-3">
-                          <label className="flex cursor-pointer items-center gap-2 font-bold text-red-950"><input type="checkbox" className="h-5 w-5 accent-red-600" checked={form.usesFire} onChange={(event) => patch({ usesFire: event.target.checked })} />火気使用</label>
-                        </div>
-                      </div>
+                      <ScheduleEquipmentFields form={form} onChange={patch} />
                       <WorkField
                         key={`${previousKey}-${copyVersion}-notes`}
                         label="備考"

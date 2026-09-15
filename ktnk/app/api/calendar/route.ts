@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSchedules } from "@/lib/schedule-service";
 import { getNewEntrants } from "@/lib/new-entrants";
 
+import { getWorkCompletions } from "@/lib/work-completions";
+
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
@@ -13,18 +15,21 @@ export async function GET(request: Request) {
     const kind = url.searchParams.get("kind");
     const includeSchedules = kind !== "entrant";
     const includeEntrants = kind !== "schedule";
-    const [schedules, entrants] = await Promise.all([
+    let completionWarning = "";
+    const [schedules, entrants, completions] = await Promise.all([
       includeSchedules
         ? getSchedules({ dateFrom, dateTo, primaryCompany, exactPrimaryCompany: Boolean(primaryCompany) })
         : Promise.resolve([]),
       includeEntrants
         ? getNewEntrants(dateFrom, dateTo, primaryCompany)
         : Promise.resolve([]),
+      getWorkCompletions(dateFrom, dateTo, primaryCompany).catch((error) => { completionWarning = error.message; return []; }),
     ]);
     return NextResponse.json({
       schedules,
       entrants,
-      warning: "",
+      completions,
+      warning: completionWarning,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "カレンダーを取得できませんでした。" }, { status: 500 });

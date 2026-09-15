@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { SchedulePreview } from "@/components/schedule-preview";
+import { scheduleToCopyData } from "@/lib/schedule-copy";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import type { NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 import { shortDateWithWeekday } from "@/lib/utils";
@@ -48,10 +50,8 @@ export function ExistingEntryCheck({ date, dates, company, kind, onNew, onOtherD
   return <section className="panel space-y-4 p-5">
     <p className="text-lg font-bold">{existingDates.map(shortDateWithWeekday).join("、")}には、すでに作業が入力されています。</p>
     {schedules.map((row) => <article key={row.id} className="space-y-2 rounded-md bg-slate-50 p-4">
-      <p>{row.primary_company}・{row.primary_count ?? 0}人</p>
-      {row.subcompanies.map((sub) => <p key={sub.id}>{sub.secondary_company}・{sub.worker_count ?? 0}人</p>)}
-      <p className="whitespace-pre-wrap">{row.work_area} / {row.work_content}</p>
-      {(row.aerial_work_vehicle_count ?? 0) > 0 && <p>高所作業車：{row.aerial_work_vehicle_count}台 使用フロア：{row.aerial_work_vehicle_floor}</p>}
+      <p className="font-semibold text-primary">{shortDateWithWeekday(row.work_date)}</p>
+      <SchedulePreview primaryCompany={row.primary_company} schedule={scheduleToCopyData(row)!} notes={row.notes} />
       {requested.length === 1 && <button type="button" className="btn btn-primary w-full" onClick={() => onSchedule?.(row)}>内容を変更する</button>}
     </article>)}
     {entrants.map((row) => <article key={row.id} className="space-y-2 rounded-md bg-slate-50 p-4">

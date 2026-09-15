@@ -1,5 +1,7 @@
 "use client";
 
+import { WorkCompletionForm, completionTime } from "@/components/work-completion-form";
+import type { WorkCompletion } from "@/lib/work-completions";
 import { LoadingIndicator, LoadingOverlay } from "@/components/loading-indicator";
 import { CopyValue } from "@/components/copy-value";
 import { isWorkingDate } from "@/lib/utils";
@@ -33,13 +35,16 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
   const [month, setMonth] = useState(initialDate.slice(0, 7));
   const [selectedDate, setSelectedDate] = useState(isWorkingDate(initialDate) ? initialDate : datesInMonth(initialDate.slice(0, 7)).find((date) => date > initialDate) ?? datesInMonth(initialDate.slice(0, 7))[0]);
   const [company, setCompany] = useState("");
-  const [master] = useState<CompanyMaster>(initialMaster);
+  const [master, setMaster] = useState<CompanyMaster>(initialMaster);
   const [schedules, setSchedules] = useState<ScheduleWithSubcompanies[]>([]);
   const [entrants, setEntrants] = useState<NewEntrantRecord[]>([]);
+  const [completions, setCompletions] = useState<WorkCompletion[]>([]);
+  const [reporting, setReporting] = useState<{ date: string; company: string } | null>(null);
   const [editing, setEditing] = useState<ScheduleWithSubcompanies | null>(null);
   const [editingEntrant, setEditingEntrant] = useState<NewEntrantRecord | null>(null);
   const [message, setMessage] = useState("");
   const [version, setVersion] = useState(0);
+  const masterVersion = useRef(0);
   const selectedDaySectionRef = useRef<HTMLElement>(null);
   const range = monthRange(month);
   const requestKey = JSON.stringify([month, company, version]);
@@ -50,18 +55,35 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
     const params = new URLSearchParams({ from: range.from, to: range.to });
     if (company) params.set("primaryCompany", company);
     setMessage("");
-    apiFetch(`/api/calendar?${params}`, { cache: "no-store", signal: controller.signal }).then(async (response) => {
-      const body = await response.json(); if (!response.ok) throw new Error(body.error);
+    Promise.all([
+      apiFetch(`/api/calendar?${params}`, { cache: "no-store", signal: controller.signal }),
+      version !== masterVersion.current
+        ? apiFetch("/api/companies", { cache: "no-store", signal: controller.signal })
+        : Promise.resolve(null),
+    ]).then(async ([response, masterResponse]) => {
+      const [body, nextMaster] = await Promise.all([response.json(), masterResponse?.json()]);
+      if (!response.ok) throw new Error(body.error);
+      if (masterResponse && !masterResponse.ok) throw new Error(nextMaster.error);
       if (controller.signal.aborted) return;
-      setSchedules(body.schedules ?? []); setEntrants(body.entrants ?? []); setMessage(body.warning ?? "");
+      if (nextMaster) {
+        setMaster(nextMaster);
+        masterVersion.current = version;
+      }
+      setCompletions(body.completions ?? []); setSchedules(body.schedules ?? []); setEntrants(body.entrants ?? []); setMessage(body.warning ?? "");
     }).catch((error) => {
-      if (!controller.signal.aborted) { setSchedules([]); setEntrants([]); setMessage(error instanceof Error ? error.message : "取得できませんでした。"); }
+      if (!controller.signal.aborted) { setCompletions([]); setSchedules([]); setEntrants([]); setMessage(error instanceof Error ? error.message : "取得できませんでした。"); }
     }).finally(() => { if (!controller.signal.aborted) setLoadedKey(requestKey); });
     return () => controller.abort();
   }, [month, company, version, range.from, range.to, requestKey]);
   const days = useMemo(() => datesInMonth(month), [month]);
   const hasLoaded = loadedKey !== "";
   const scheduleMap = useMemo(() => Object.groupBy(schedules.filter((row) => !company || row.primary_company === company), (row) => row.work_date), [schedules, company]);
+  const completionMap = useMemo(() => Object.groupBy(completions, (row) => row.work_date), [completions]);
+  const selectedCompletions = completionMap[selectedDate] ?? [];
+  function completionControls(primaryCompany: string) {
+    const report = selectedCompletions.find((item) => item.primary_company === primaryCompany);
+    return <div className="mt-2 grid gap-1 border-t border-border pt-2">{report && <div className="rounded bg-emerald-100 p-2 text-emerald-900"><p className="font-bold">✓ 作業終了済み</p><p className="text-xs">報告時刻：{completionTime(report.reported_at)}</p>{report.notes && <p className="whitespace-pre-wrap break-words text-xs">備考：{report.notes}</p>}</div>}<button type="button" className="btn btn-secondary min-h-9 px-2 py-1 text-sm" onClick={() => setReporting({ date: selectedDate, company: primaryCompany })}>作業終了</button></div>;
+  }
   const entrantMap = useMemo(() => Object.groupBy(entrants.filter((row) => !company || row.primary_company === company), (row) => row.entry_date), [entrants, company]);
   const companyPriority = useMemo(
     () => new Map(master.primaryCompanies.map((primaryCompany, index) => [primaryCompany, index])),
@@ -137,6 +159,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
           {days.map((date) => {
             const daySchedules = scheduleMap[date] ?? [];
             const dayEntrants = entrantMap[date] ?? [];
+            const dayCompletions = completionMap[date] ?? [];
             const entrantStats = entrantSummary(dayEntrants);
             const total = daySchedules.reduce((sum, row) => sum + totalWorkers(row), 0);
             const totalAerialVehicles = daySchedules.reduce(
@@ -149,6 +172,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
             return <div key={date} onClick={() => selectDate(date)} className={`min-h-20 min-w-0 cursor-pointer p-1.5 text-left align-top transition hover:bg-emerald-50 sm:min-h-24 sm:p-2 ${selectedDate === date ? "relative z-10 bg-emerald-50 ring-2 ring-inset ring-primary" : isSaturday ? "bg-sky-50/70" : "bg-white"}`}>
               <button type="button" onClick={(event) => { event.stopPropagation(); selectDate(date); }} aria-pressed={selectedDate === date} className="block w-full text-left text-sm font-bold">{Number(date.slice(-2))}</button>
               {!company && daySchedules.length > 0 && <span className="mt-1 flex flex-col text-sm font-semibold leading-5 text-emerald-900"><span>{daySchedules.length}社</span><span>{total}人</span>{totalAerialVehicles > 0 && <span className="text-sky-800"><span className="hidden sm:inline">高車：</span>{totalAerialVehicles}台</span>}{fireCompanyCount > 0 && <span className="text-red-700">火気：{fireCompanyCount}社</span>}{tachiumaCompanyCount > 0 && <span className="text-emerald-700">立ち馬：{tachiumaCompanyCount}社</span>}</span>}
+              {dayCompletions.length > 0 && <span className="mt-1 block rounded bg-emerald-700 px-1 py-0.5 text-xs font-bold text-white">{company ? "✓ 終了済み" : `終了 ${dayCompletions.length}社`}</span>}
               {!company && dayEntrants.length > 0 && <span className="block text-xs font-semibold leading-5 text-amber-700 sm:text-sm">新規 {entrantStats.companies}社・{entrantStats.people}人</span>}
               {company && daySchedules.map((row) => {
                 const area = row.work_area;
@@ -160,7 +184,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                     {row.uses_tachiuma && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 font-bold leading-none text-white shadow-sm" title="立ち馬使用あり">立</span>}
                     <button type="button" className="rounded p-0.5 hover:bg-white/70" onClick={(event) => { event.stopPropagation(); setSelectedDate(date); setEditing(row); }} aria-label={`${date}の予定を編集`} title="予定を編集"><Pencil size={12} aria-hidden="true" /></button>
                   </div>
-                  <p className="font-bold">{totalWorkers(row)}人</p>
+                  {dayCompletions.some((item) => item.primary_company === row.primary_company) && <p className="font-bold text-emerald-800">✓ 作業終了済み</p>}<button type="button" className="mt-1 rounded border border-emerald-600 bg-white px-1 py-0.5 font-semibold" onClick={(event) => { event.stopPropagation(); setReporting({ date, company: row.primary_company }); }}>作業終了</button><p className="font-bold">{totalWorkers(row)}人</p>
                   <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
                   <p className="line-clamp-2 break-words" title={content ?? ""}>{content || "作業内容未入力"}</p>
                   {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="truncate font-semibold text-sky-800">高車：{row.aerial_work_vehicle_count}台</p>}
@@ -183,8 +207,8 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
               <RefreshCw size={18} className={loading ? "animate-spin" : ""} aria-hidden="true" />
             </button>
           </div>
-          <div className="flex shrink-0 gap-1.5">
-            {[{ label: "作業入力", pathname: "/schedule" }, { label: "新規入場", pathname: "/new-entrants" }].map((item) => (
+          <div className="flex flex-wrap gap-1.5">
+            {[{ label: "作業入力", pathname: "/schedule" }, { label: "新規入場", pathname: "/new-entrants" }, { label: "作業終了", pathname: "/work-completion" }].map((item) => (
               <Link
                 key={item.pathname}
                 className="btn btn-primary h-9 min-h-0 px-2.5 py-1 text-sm"
@@ -195,7 +219,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
             ))}
           </div>
         </div>
-        {!hasLoaded && loading ? <LoadingIndicator label="予定を読み込み中…" className="min-h-32" /> : selectedSchedules.length === 0 && selectedEntrants.length === 0 ? <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className={`grid gap-2 transition-opacity sm:grid-cols-2 lg:grid-cols-3 ${loading ? "pointer-events-none opacity-60" : ""}`} aria-busy={loading}>
+        {!hasLoaded && loading ? <LoadingIndicator label="予定を読み込み中…" className="min-h-32" /> : selectedSchedules.length === 0 && selectedEntrants.length === 0 && selectedCompletions.length === 0 ? <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className={`grid gap-2 transition-opacity sm:grid-cols-2 lg:grid-cols-3 ${loading ? "pointer-events-none opacity-60" : ""}`} aria-busy={loading}>
           {selectedSchedules.map((row) => {
             const subs = row.subcompanies;
             const area = row.work_area;
@@ -253,6 +277,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
               {row.uses_tachiuma && <p className="text-emerald-700">立ち馬：使用</p>}
               {row.uses_tachiuma && row.tachiuma_notes && <p className="text-emerald-700">立ち馬の使用内容：<CopyValue value={row.tachiuma_notes} label="立ち馬の使用内容" compact stopPropagation /></p>}
               {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" compact stopPropagation /></p>}
+              {completionControls(row.primary_company)}
             </article>;
           })}
           {selectedEntrantGroups.map(({ primaryCompany, rows }) => {
@@ -269,11 +294,14 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                   </div>)}
                 </div>
               </details>
+              {completionControls(primaryCompany)}
             </article>;
           })}
+          {selectedCompletions.filter((report) => !selectedSchedules.some((row) => row.primary_company === report.primary_company) && !selectedEntrantGroups.some((group) => group.primaryCompany === report.primary_company)).map((report) => <article key={`completion-${report.primary_company}`} className="panel p-3 text-sm"><p className="font-bold">{report.primary_company}</p>{completionControls(report.primary_company)}</article>)}
         </div>}
       </section>
     </main>
+    {reporting && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3"><section role="dialog" aria-modal="true" aria-label="作業終了報告" className="panel max-h-[90dvh] w-full max-w-lg overflow-y-auto p-4"><div className="mb-4 flex items-center justify-between gap-2"><h2 className="text-lg font-bold">作業終了報告</h2><button type="button" className="btn btn-secondary" onClick={() => setReporting(null)}>閉じる</button></div><WorkCompletionForm date={reporting.date} primaryCompany={reporting.company} onSaved={() => setVersion((value) => value + 1)} /></section></div>}
     {editing && <AdminScheduleEditor schedule={editing} master={master} workerMode onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setVersion((v) => v + 1); }} />}
     {editingEntrant && <NewEntrantEditor record={editingEntrant} master={master} onClose={() => setEditingEntrant(null)} onSaved={() => { setEditingEntrant(null); setVersion((v) => v + 1); }} />}
   </div>;

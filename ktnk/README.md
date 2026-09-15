@@ -42,6 +42,12 @@ anonキー運用では公開キーを知る利用者がSupabase REST APIを直�
 
 ## Supabase
 
+### 2026-09-15の予定保存更新
+
+既存DBでは [202609150001_save_schedule_atomically.sql](supabase/migrations/202609150001_save_schedule_atomically.sql) をSupabase SQL Editorで1回実行してから、この版をデプロイしてください。予定・二次会社・高所作業車の保存と上書き確認を一つのトランザクションにまとめます。既存データは削除しません。未適用の場合、予定保存は追加SQLの案内を表示して停止します。
+
+作業入力・新規入場の下書きはブラウザに保存・復元しません。カレンダーから選んだ日付・会社と、利用者が明示的に選ぶ前回コピーは引き続き使えます。
+
 `supabase/schema.sql` をSupabase SQL Editorで実行します。
 
 旧版の `schema.sql` を実行済みの場合は、`supabase/migrations/20260904_supabase_only_company_master.sql` を1回実行してください。会社マスタの既存データを保ったまま、行ID・表示順・重複防止・DB権限を更新します。この移行SQLをすでに実行済みの場合は、追加で `supabase/migrations/20260904_add_company_master_order.sql` を実行します。現在の `schema.sql` は再実行でも同じ更新を適用できます。
