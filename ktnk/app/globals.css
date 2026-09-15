@@ -105,6 +105,9 @@ textarea {
 }
 
 @layer components {
+  .page-title { @apply mb-4 text-xl font-bold text-slate-950; }
+  .notice-success { @apply rounded-md border border-emerald-200 bg-emerald-50 p-4 text-emerald-900; }
+  .notice-error { @apply rounded-md border border-rose-200 bg-rose-50 p-3 text-destructive; }
   .field {
     @apply grid min-w-0 content-start gap-2;
   }
@@ -190,43 +193,6 @@ textarea {
   .no-print {
     display: none !important;
   }
-}
-
-/* Dense controls for the administrative screens. */
-.admin-dashboard .field {
-  gap: 0.25rem;
-}
-.admin-dashboard .label {
-  font-size: 0.8125rem;
-}
-.admin-dashboard .input {
-  height: 2.25rem;
-  border-radius: 6px;
-  padding-inline: 0.625rem;
-  font-size: 0.875rem;
-}
-.admin-dashboard .textarea {
-  min-height: 5rem;
-  border-radius: 6px;
-  padding: 0.5rem 0.625rem;
-  font-size: 0.875rem;
-}
-.admin-dashboard .btn {
-  min-height: 2.25rem;
-  border-radius: 6px;
-  padding: 0.375rem 0.625rem;
-  font-size: 0.8125rem;
-  box-shadow: none;
-}
-.admin-dashboard .btn.w-9 {
-  width: 2.25rem;
-  height: 2.25rem;
-  padding: 0;
-}
-.admin-dashboard .panel,
-.admin-dashboard .compact-panel {
-  border-radius: 6px;
-  box-shadow: none;
 }
 
 .calendar-month {

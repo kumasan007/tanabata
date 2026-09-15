@@ -32,7 +32,7 @@ export function AddSecondaryCompany({ primaryCompany, onAdded }: {
       <div className="grid gap-3 rounded-md border border-border bg-slate-50 p-3">
         <p className="text-sm">「{primaryCompany}」の二次会社として登録します。次回からも選択できます。</p>
         <label className="field" htmlFor={id}><span className="label">新しい二次会社名</span><input id={id} className="input" maxLength={200} value={name} disabled={busy} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void add(); } }} /></label>
-        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+        {error && <p role="alert" className="text-sm notice-error">{error}</p>}
         <div className="flex gap-2">
           <button type="button" className="btn btn-primary" disabled={busy || !name.trim()} onClick={() => void add()}>{busy ? "登録中…" : "登録して追加"}</button>
           <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => { setOpen(false); setError(""); }}>キャンセル</button>

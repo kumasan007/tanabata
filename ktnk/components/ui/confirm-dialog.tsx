@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 export function ConfirmDialog({
   open,
@@ -25,6 +25,8 @@ export function ConfirmDialog({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -36,10 +38,10 @@ export function ConfirmDialog({
 
   if (!open) return null;
   return (
-    <dialog ref={dialogRef} className="fixed inset-0 m-0 grid h-dvh max-h-none w-screen max-w-none place-items-center border-0 bg-transparent p-4 backdrop:bg-slate-950/45" onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }} onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
-      <section role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby={description ? "confirm-description" : undefined} className="panel w-full max-w-md p-5 shadow-xl">
-        <h2 id="confirm-title" className="text-lg font-bold text-slate-950">{title}</h2>
-        {description && <p id="confirm-description" className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">{description}</p>}
+    <dialog ref={dialogRef} role="alertdialog" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} className="fixed inset-0 m-0 grid h-dvh max-h-none w-screen max-w-none place-items-center border-0 bg-transparent p-4 backdrop:bg-slate-950/45" onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }} onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
+      <section className="panel w-full max-w-md p-5 shadow-xl">
+        <h2 id={titleId} className="text-lg font-bold text-slate-950">{title}</h2>
+        {description && <p id={descriptionId} className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">{description}</p>}
         {children}
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button ref={cancelRef} type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>キャンセル</button>

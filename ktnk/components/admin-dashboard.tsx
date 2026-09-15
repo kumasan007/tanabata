@@ -14,6 +14,7 @@ export function AdminDashboard() {
     const [authenticated, setAuthenticated] = useState(false);
     const [checkingSession, setCheckingSession] = useState(true);
     const [loginLoading, setLoginLoading] = useState(false);
+    const [logoutLoading, setLogoutLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<AdminTab>("companies");
     const [message, setMessage] = useState("");
     const [companyVersion, setCompanyVersion] = useState(0);
@@ -44,13 +45,20 @@ export function AdminDashboard() {
         }
     }
     async function logout() {
-        await apiFetch("/api/admin/logout", { method: "POST" });
-        setAuthenticated(false);
-        window.location.href = "/";
+        if (logoutLoading) return;
+        setLogoutLoading(true); setMessage("");
+        try {
+            const response = await apiFetch("/api/admin/logout", { method: "POST" });
+            if (!response.ok) throw new Error("ログアウトできませんでした。もう一度お試しください。");
+            setAuthenticated(false);
+            window.location.href = "/";
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : "接続できませんでした。もう一度お試しください。");
+        } finally { setLogoutLoading(false); }
     }
     if (checkingSession)
         return <main className="admin-dashboard mx-auto grid min-h-screen max-w-xl place-items-center px-4"><div className="flex items-center gap-3 text-sm text-slate-500" role="status"><LoaderCircle size={20} className="animate-spin text-emerald-700" aria-hidden="true"/>管理画面を準備しています</div></main>;
     if (!authenticated)
         return <AdminLogin password={password} loading={loginLoading} message={message} onPasswordChange={setPassword} onSubmit={login}/>;
-    return <main className="admin-dashboard min-h-screen bg-[#f6f7f5]"><div className="mx-auto grid max-w-6xl gap-3 px-4 py-3 sm:px-6 sm:py-4"><div className="flex justify-end"><button className="btn btn-secondary px-3" type="button" onClick={logout}><LogOut size={17} aria-hidden="true"/>ログアウト</button></div><AdminTabs active={activeTab} onChange={setActiveTab}/><div hidden={activeTab !== "companies"}><CompaniesPanel refreshVersion={companyVersion}/></div>{activeTab !== "companies" && <RecoveryPanel key={activeTab} kind={activeTab} onRestored={() => setCompanyVersion(v => v + 1)}/>}</div></main>;
+    return <main className="admin-dashboard min-h-screen bg-[#f6f7f5]"><div className="mx-auto grid max-w-6xl gap-3 px-4 py-3 sm:px-6 sm:py-4"><div className="flex justify-end"><button className="btn btn-secondary px-3" type="button" disabled={logoutLoading} onClick={() => void logout()}><LogOut size={17} aria-hidden="true"/>ログアウト</button></div>{message && <p role="alert" className="notice-error text-sm">{message}</p>}<AdminTabs active={activeTab} onChange={setActiveTab}/><div hidden={activeTab !== "companies"}><CompaniesPanel refreshVersion={companyVersion}/></div>{activeTab !== "companies" && <RecoveryPanel key={activeTab} kind={activeTab} onRestored={() => setCompanyVersion(v => v + 1)}/>}</div></main>;
 }

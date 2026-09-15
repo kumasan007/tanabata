@@ -1,11 +1,8 @@
 "use client";
 
 import { SchedulePreview } from "@/components/schedule-preview";
-import { ExistingEntryCheck } from "@/components/existing-entry-check";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { CopyButton } from "@/components/copy-button";
-import {CompanyPeopleFields} from "@/components/company-people-fields";
-import {ScheduleEquipmentFields} from "@/components/schedule-equipment-fields";
 import {scheduleToFormData} from "@/lib/schedule-fields";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -24,6 +21,9 @@ type SubmitState =
   | { status: "submitting" }
   | { status: "success"; dates: string[] }
   | { status: "error"; message: string };
+const ExistingEntryCheck = dynamic(() => import("@/components/existing-entry-check").then((module) => module.ExistingEntryCheck), { loading: () => <LoadingIndicator /> });
+const CompanyPeopleFields = dynamic(() => import("@/components/company-people-fields").then((module) => module.CompanyPeopleFields), { loading: () => <LoadingIndicator /> });
+const ScheduleEquipmentFields = dynamic(() => import("@/components/schedule-equipment-fields").then((module) => module.ScheduleEquipmentFields), { loading: () => <LoadingIndicator /> });
 const MultiDateCalendar = dynamic(() => import("@/components/multi-date-calendar").then((module) => module.MultiDateCalendar));
 const emptyForm = (date: string): ScheduleSubmitInput => ({
   dates: date ? [date] : [],
@@ -660,6 +660,7 @@ export function ScheduleForm({
   return (
     <div className="simple-schedule min-h-screen pb-32 sm:pb-8">
       <main className="mx-auto max-w-2xl px-3 py-5 sm:px-4">
+        <h1 className="page-title">作業入力</h1>
         <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           {(form.primaryCompany || form.startDate) && (
             <div className="flex min-w-0 items-baseline gap-3 break-words text-sm text-slate-600">
@@ -838,7 +839,7 @@ export function ScheduleForm({
                     </button>
                     {customDate && (
                       <div
-                        className="mt-3 min-w-0 w-full space-y-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4"
+                        className="mt-3 min-w-0 w-full space-y-4 overflow-hidden rounded-md border border-slate-200 bg-slate-50/70 p-3 sm:p-4"
                         id="custom-work-date"
                       >
                         <MultiDateCalendar
@@ -868,7 +869,7 @@ export function ScheduleForm({
                         </div>
                       ) : sourceError ? (
                         <>
-                          <p role="alert" className="text-red-700">
+                          <p role="alert" className="notice-error">
                             {sourceError}
                           </p>
                           <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -1060,7 +1061,7 @@ export function ScheduleForm({
                       />
                     </div>
                     {submitState.status === "error" && (
-                      <p role="alert" className="mt-3 text-red-700">
+                      <p role="alert" className="mt-3 notice-error">
                         {submitState.message}
                       </p>
                     )}
@@ -1139,7 +1140,7 @@ export function ScheduleForm({
               </>
             )}
           </fieldset>
-          {!ready && submitState.status === "error" && <p role="alert" className="text-red-700">{submitState.message}</p>}
+          {!ready && submitState.status === "error" && <p role="alert" className="notice-error">{submitState.message}</p>}
 
           {ready &&
             (submitState.status === "success" ? (
@@ -1147,7 +1148,7 @@ export function ScheduleForm({
                 ref={resultRef}
                 tabIndex={-1}
                 role="status"
-                className="panel border-emerald-200 bg-emerald-50 p-5"
+                className="notice-success p-5"
               >
                 <h2 className="text-lg font-bold text-primary">
                   作業予定を送信しました

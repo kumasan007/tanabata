@@ -53,6 +53,69 @@ function loadModule(path, dependencies = {}) {
   return exports;
 }
 
+test("calendar confirmation skips unrelated queries and completion warnings", async () => {
+  for (const kind of ["schedule", "entrant"]) {
+    const calls = [];
+    const { GET } = loadModule("app/api/calendar/route.ts", {
+      "@/lib/utils": loadModule("lib/utils.ts"),
+      "next/server": { NextResponse: { json: body => ({ body }) } },
+      "@/lib/schedule-service": { getSchedules: async () => { calls.push("schedule"); return []; } },
+      "@/lib/new-entrants": { getNewEntrants: async () => { calls.push("entrant"); return []; } },
+      "@/lib/calendar-summary": {},
+      "@/lib/work-completions": { getWorkCompletions: async () => { throw new Error("unrelated DB failure"); } },
+    });
+    const { body } = await GET({ url: `https://example.com/api/calendar?kind=${kind}` });
+    assert.deepEqual(calls, [kind]);
+    assert.equal(body.warning, "");
+    assert.equal(body.completions.length, 0);
+  }
+});
+
+test("calendar summary uses compact queries while daily detail stays complete", async () => {
+  const calls = [];
+  const full = { id: "1", notes: "detail", subcompanies: [{ worker_count: 3 }] };
+  const summary = { id: "1", total_workers: 5 };
+  const { GET } = loadModule("app/api/calendar/route.ts", {
+      "@/lib/utils": loadModule("lib/utils.ts"),
+    "next/server": { NextResponse: { json: body => ({ body }) } },
+    "@/lib/schedule-service": { getSchedules: async () => { calls.push("full"); return [full]; } },
+    "@/lib/new-entrants": { getNewEntrants: async () => [] },
+    "@/lib/calendar-summary": {
+      getCalendarSchedules: async (...args) => { calls.push(args); return [summary]; },
+      getCalendarEntrants: async () => [],
+    },
+    "@/lib/work-completions": { getWorkCompletions: async (...args) => { calls.push(args[3]); return []; } },
+  });
+  const url = "https://example.com/api/calendar?from=2026-09-01&to=2026-09-30&primaryCompany=A";
+  assert.equal((await GET({ url: `${url}&view=summary` })).body.schedules[0], summary);
+  assert.deepEqual(calls, [["2026-09-01", "2026-09-30", "A"], true]);
+  calls.length = 0;
+  assert.equal((await GET({ url })).body.schedules[0], full);
+  assert.deepEqual(calls, ["full", false]);
+});
+
+test("monthly query aggregates workers and omits names, notes and vehicle detail", async () => {
+  const selections = [];
+  const tags = [];
+  const query = {
+    select(columns) { selections.push(columns); return query; },
+    order() { return query; }, gte() { return query; }, lte() { return query; }, eq() { return query; },
+    then(resolve) { return Promise.resolve({ data: [{ id: "1", primary_count: 2, schedule_subcompanies: [{ worker_count: 3 }, { worker_count: null }] }], error: null }).then(resolve); },
+  };
+  const { getCalendarSchedules } = loadModule("lib/calendar-summary.ts", {
+    "next/cache": { unstable_cache: (fn, key, options) => { tags.push(options.tags); return fn; } },
+    "@/lib/supabase": { createServerClient: () => ({ from: () => query }) },
+    "@/lib/data-cache": { DATA_CACHE_TAGS: { schedules: "schedules", entrants: "entrants" } },
+  });
+  const [row] = await getCalendarSchedules("2026-09-01", "2026-09-30", "");
+  assert.equal(row.total_workers, 5);
+  assert.equal("schedule_subcompanies" in row, false);
+  assert.doesNotMatch(selections[0], /notes|person_names|aerial_work_vehicles|work_content/);
+  await getCalendarSchedules("2026-09-01", "2026-09-30", "A");
+  assert.match(selections[1], /work_area,work_content,tachiuma_notes/);
+  assert.equal(tags[0][0], "schedules");
+});
+
 function previousRoute(previous, calls, today = null, todayCalls = []) {
   return loadModule("app/api/schedules/previous/route.ts", {
     "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },

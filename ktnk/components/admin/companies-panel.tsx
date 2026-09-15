@@ -271,7 +271,7 @@ export function CompaniesPanel({ refreshVersion = 0 }: {
             setCompanyLoading(false);
         }
     }
-    return <>{message && <p role="alert" className="text-sm text-red-700">{message}</p>}<section className="panel grid gap-3 p-4 sm:p-4">
+    return <>{message && <p role="alert" className="text-sm notice-error">{message}</p>}<section className="panel grid gap-3 p-4 sm:p-4">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-slate-950">協力会社一覧</h2>

@@ -18,7 +18,7 @@ export default function HomePage() {
           <span className="mt-1 text-sm leading-6 text-slate-600">{description}</span>
         </Link>)}
       </div>
-      <Link href="/admin" className="mt-8 inline-flex items-center gap-2 text-sm text-slate-500 hover:text-primary"><ShieldCheck className="h-4 w-4" />管理者はこちら</Link>
+      <Link prefetch={false} href="/admin" className="mt-8 inline-flex items-center gap-2 text-sm text-slate-500 hover:text-primary"><ShieldCheck className="h-4 w-4" />管理者はこちら</Link>
     </main>
   </div>;
 }

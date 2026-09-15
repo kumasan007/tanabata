@@ -1,0 +1,137 @@
+"use client";
+import { memo, useMemo } from "react";
+import { Pencil } from "lucide-react";
+import { CopyValue } from "@/components/copy-value";
+import { completionTime } from "@/lib/completion-time";
+import type { CalendarEntrant, CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
+import type { WorkCompletion } from "@/lib/work-completions";
+export const CalendarDetails = memo(function CalendarDetails({ detail, master, selectedDate, completionBusy, onEdit: setEditing, onEditEntrant: setEditingEntrant, onCompletion: saveCompletion }: {
+  detail: { schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[] };
+  master: CompanyMaster; selectedDate: string; completionBusy: boolean;
+  onEdit: (row: ScheduleWithSubcompanies) => void; onEditEntrant: (row: NewEntrantRecord) => void;
+  onCompletion: (date: string, company: string, report?: WorkCompletion) => Promise<void>;
+}) {
+  const selectedCompletions = detail.completions;
+  const completionMap = useMemo(() => new Map(detail.completions.map((row) => [row.primary_company, row])), [detail.completions]);
+  const companyPriority = useMemo(
+    () => new Map(master.primaryCompanies.map((primaryCompany, index) => [primaryCompany, index])),
+    [master],
+  );
+  const { selectedSchedules, selectedEntrantGroups, scheduledCompanies } = useMemo(() => {
+    const compareCompanyPriority = <T extends { primary_company: string }>(left: T, right: T) =>
+      (companyPriority.get(left.primary_company) ?? Number.MAX_SAFE_INTEGER) -
+        (companyPriority.get(right.primary_company) ?? Number.MAX_SAFE_INTEGER) ||
+      left.primary_company.localeCompare(right.primary_company, "ja");
+    const selectedSchedules = [...detail.schedules].sort(compareCompanyPriority);
+    const selectedEntrants = [...detail.entrants].sort(compareCompanyPriority);
+    const selectedEntrantGroups = Object.entries(Object.groupBy(selectedEntrants, (row) => row.primary_company))
+      .map(([primaryCompany, rows]) => ({ primaryCompany, rows: rows ?? [] }))
+      .sort((left, right) => compareCompanyPriority({ primary_company: left.primaryCompany }, { primary_company: right.primaryCompany }));
+    return { selectedSchedules, selectedEntrantGroups, scheduledCompanies: new Set(selectedSchedules.map((row) => row.primary_company)) };
+  }, [detail.schedules, detail.entrants, companyPriority]);
+  function completionControls(primaryCompany: string) {
+    const report = completionMap.get(primaryCompany);
+    return <div className="mt-2 grid gap-1 border-t border-border pt-2">
+      {report ? <div className="rounded bg-emerald-100 p-2 text-emerald-900">
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-bold">✓ 作業終了済み</p>
+          <button type="button" className="shrink-0 rounded border border-emerald-600 bg-white px-1.5 py-0.5 text-xs font-semibold disabled:opacity-50" disabled={completionBusy} onClick={(event) => { event.stopPropagation(); void saveCompletion(selectedDate, primaryCompany, report); }}>取り消し</button>
+        </div>
+        <p className="text-xs">報告時刻：{completionTime(report.reported_at)}</p>{report.notes && <p className="whitespace-pre-wrap break-words text-xs">備考：{report.notes}</p>}
+      </div> : <button type="button" className="btn btn-secondary min-h-9 px-2 py-1 text-sm" disabled={completionBusy} onClick={(event) => { event.stopPropagation(); void saveCompletion(selectedDate, primaryCompany); }}>作業終了</button>}
+    </div>;
+  }
+  function totalWorkers(row: ScheduleWithSubcompanies) {
+    return (row.primary_count ?? 0) +
+      row.subcompanies.reduce((sum, sub) => sum + (sub.worker_count ?? 0), 0);
+  }
+
+  function entrantSummary(rows: CalendarEntrant[]) {
+    return {
+      people: rows.reduce((sum, row) => sum + row.person_count, 0),
+      companies: new Set(rows.map((row) => row.secondary_company || row.primary_company)).size,
+    };
+  }
+
+  return <>
+          {selectedSchedules.map((row) => {
+            const subs = row.subcompanies;
+            const area = row.work_area;
+            const content = row.work_content;
+            const tradeRoles = master.primaryTradeRolesByPrimary[row.primary_company] ?? [];
+            const totalWorkerCount = totalWorkers(row);
+            return <article key={row.id} className="panel min-w-0 p-3 text-sm">
+              <div className="flex min-w-0 items-start justify-between gap-2">
+              <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+                <p className="min-w-0 truncate font-bold" title={row.primary_company}>
+                  <CopyValue value={row.primary_company} label="一次会社" compact stopPropagation />
+                </p>
+                {tradeRoles.length > 0 && (
+                  <span className="max-w-full truncate text-xs font-normal text-slate-400" title={tradeRoles.join("・")}>
+                    <CopyValue value={tradeRoles.join("・")} label="職種" compact stopPropagation />
+                  </span>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                {(row.aerial_work_vehicle_count ?? 0) > 0 && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-sm font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
+                {row.uses_fire && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-sm font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
+                {row.uses_tachiuma && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold leading-none text-white shadow-sm" title="立ち馬使用あり">立</span>}
+                <button type="button" className="btn btn-secondary h-8 min-h-8 w-8 p-0" disabled={completionBusy} onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
+              </div>
+              </div>
+              <details className="mt-2 rounded-md border border-border bg-slate-50">
+                  <summary className="cursor-pointer px-2.5 py-2 font-semibold text-slate-700 marker:text-emerald-700">
+                    合計 <CopyValue value={totalWorkerCount} label="合計人数" compact stopPropagation>{totalWorkerCount}人</CopyValue>
+                  </summary>
+                  <div className="grid gap-1.5 border-t border-border p-2.5">
+                    <div className="flex min-w-0 items-baseline justify-between gap-3">
+                      <span className="min-w-0 break-words">
+                        <CopyValue value={row.primary_company} label="一次会社名" compact stopPropagation />
+                        <span className="ml-1 text-xs text-slate-400">一次</span>
+                      </span>
+                      <span className="shrink-0 font-semibold text-primary">
+                        <CopyValue value={row.primary_count ?? 0} label="一次会社人数" compact stopPropagation>{row.primary_count ?? 0}人</CopyValue>
+                      </span>
+                    </div>
+                    {subs.map((sub) => (
+                      <div key={sub.id} className="flex min-w-0 items-baseline justify-between gap-3">
+                        <span className="min-w-0 break-words">
+                          {sub.secondary_company ? <CopyValue value={sub.secondary_company} label="二次会社名" compact stopPropagation /> : "会社名未入力"}
+                          <span className="ml-1 text-xs text-slate-400">二次</span>
+                        </span>
+                        <span className="shrink-0 font-semibold text-primary">
+                          <CopyValue value={sub.worker_count ?? 0} label="二次会社人数" compact stopPropagation>{sub.worker_count ?? 0}人</CopyValue>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+              </details>
+              <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label="作業エリア" compact stopPropagation /> : "エリア未入力"}</p>
+              <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" compact stopPropagation /> : "作業内容未入力"}</p>
+              {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="mt-1 text-sky-800">高車：<CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数" compact stopPropagation>{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" compact stopPropagation />）</>}</p>}
+              {row.uses_fire && <p className="text-red-700">火気：使用</p>}
+              {row.uses_tachiuma && <p className="text-emerald-700">立ち馬：使用</p>}
+              {row.uses_tachiuma && row.tachiuma_notes && <p className="text-emerald-700">立ち馬の使用内容：<CopyValue value={row.tachiuma_notes} label="立ち馬の使用内容" compact stopPropagation /></p>}
+              {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" compact stopPropagation /></p>}
+              {completionControls(row.primary_company)}
+            </article>;
+          })}
+          {selectedEntrantGroups.map(({ primaryCompany, rows }) => {
+            const summary = entrantSummary(rows);
+            const companyGroups = Object.entries(Object.groupBy(rows, (row) => row.secondary_company || primaryCompany));
+            return <article key={`entrant-${primaryCompany}`} className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm">
+              <p className="font-bold"><CopyValue value={primaryCompany} label="一次会社名" compact stopPropagation />　新規入場</p>
+              <details className="mt-2 rounded-md border border-amber-200 bg-white/70">
+                <summary className="cursor-pointer px-3 py-2 font-semibold text-amber-900">{summary.companies}社・{summary.people}人</summary>
+                <div className="grid gap-3 border-t border-amber-200 p-3">
+                  {companyGroups.map(([companyName, companyRows]) => <div key={companyName}>
+                    <p className="font-semibold">{companyName === primaryCompany ? `${primaryCompany}（一次会社所属）` : <CopyValue value={companyName} label="所属会社名" compact stopPropagation />}　{entrantSummary(companyRows ?? []).people}人</p>
+                    <div className="mt-1 grid gap-1">{(companyRows ?? []).map((row) => <div key={row.id} className="flex min-w-0 items-center gap-2 rounded bg-amber-50 px-2 py-1.5"><button type="button" className="min-w-0 flex-1 text-left" disabled={completionBusy} onClick={() => setEditingEntrant(row)}><span className="break-words font-medium">{row.person_names || "氏名未入力"}</span>{row.person_count > 1 && <span className="ml-1 text-xs text-amber-800">（旧形式 {row.person_count}人）</span>}</button><button type="button" className="btn btn-secondary h-8 min-h-8 w-8 shrink-0 p-0" disabled={completionBusy} onClick={() => setEditingEntrant(row)} aria-label={`${row.person_names || "新規入場者"}を編集`}><Pencil size={14} /></button></div>)}</div>
+                  </div>)}
+                </div>
+              </details>
+            </article>;
+          })}
+          {selectedCompletions.filter((report) => !scheduledCompanies.has(report.primary_company)).map((report) => <article key={`completion-${report.primary_company}`} className="panel p-3 text-sm"><p className="font-bold">{report.primary_company}</p>{completionControls(report.primary_company)}</article>)}
+  </>;
+});

@@ -124,3 +124,11 @@ export type NewEntrantRecord = {
   created_at: string;
   updated_at: string;
 };
+
+export type CalendarSchedule = Pick<ScheduleWithSubcompanies, "id" | "work_date" | "primary_company" | "aerial_work_vehicle_count" | "uses_fire" | "uses_tachiuma"> & {
+  total_workers: number;
+  work_area?: string | null;
+  work_content?: string | null;
+  tachiuma_notes?: string | null;
+};
+export type CalendarEntrant = Pick<NewEntrantRecord, "entry_date" | "primary_company" | "secondary_company" | "person_count">;

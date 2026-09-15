@@ -1,9 +1,10 @@
 "use client";
+import "@/components/admin/admin-controls.css";
 
 import {ScheduleEquipmentFields} from "@/components/schedule-equipment-fields";
 import {scheduleToFormData} from "@/lib/schedule-fields";
 import { X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { CompanyMaster, ScheduleSubmitInput, ScheduleWithSubcompanies } from "@/lib/types";
 import { CompanyPeopleFields } from "@/components/company-people-fields";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -21,10 +22,11 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
     ...schedule.subcompanies.map((row) => row.secondary_company ?? ""),
   ])].filter(Boolean);
   const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState<ScheduleSubmitInput>(() => scheduleToFormData(schedule, secondaryCompanies));
-  useEffect(() => { dialog.current?.showModal(); }, []);
+  useEffect(() => { const element = dialog.current; element?.showModal(); return () => element?.close(); }, []);
 
   async function submit(remove = false) {
     if (busy) return;
@@ -55,7 +57,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
   }
 
   return <><dialog
-    ref={dialog}
+    ref={dialog} aria-labelledby={titleId}
     onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
     onClick={(event) => {
       if (busy || event.target !== event.currentTarget) return;
@@ -63,11 +65,11 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
       const clickedOutside = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
       if (clickedOutside) onClose();
     }}
-    className="admin-dashboard m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-md border border-border p-4 backdrop:bg-black/40"
+    className="admin-dashboard m-auto max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-2xl overflow-y-auto rounded-md border border-border p-4 backdrop:bg-slate-950/45"
   >
     <form onSubmit={(event) => { event.preventDefault(); void submit(); }}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-bold">予定を編集</h2>
+        <h2 id={titleId} className="text-lg font-bold">予定を編集</h2>
         <button type="button" className="btn btn-secondary h-9 min-h-9 px-3" disabled={busy} onClick={onClose}>
           <X size={16} aria-hidden="true" />
           閉じる
@@ -91,7 +93,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
         <ScheduleEquipmentFields form={form} onChange={(fields) => setForm((current) => ({ ...current, ...fields }))} />
         <label className="field"><span className="label">備考（任意）</span><textarea className="textarea" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
       </fieldset>
-      {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="mt-3 text-sm notice-error">{error}</p>}
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "処理中…" : "保存"}</button>
         <button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>閉じる</button>

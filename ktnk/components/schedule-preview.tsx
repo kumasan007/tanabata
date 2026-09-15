@@ -20,7 +20,7 @@ export function SchedulePreview({
   ];
   return (
     <>
-    <div className="overflow-hidden rounded-xl border border-border text-base">
+    <div className="overflow-hidden rounded-md border border-border text-base">
       <table className="w-full table-fixed text-left">
         <caption className="sr-only">会社ごとの人数</caption>
         <thead className="bg-slate-50 text-sm text-slate-500">
@@ -97,7 +97,7 @@ export function SchedulePreview({
           {schedule.usesTachiuma && schedule.tachiumaNotes && <><dt className="text-slate-500">立ち馬の使用内容</dt><dd className="whitespace-pre-wrap break-words">{schedule.tachiumaNotes}</dd></>}
         </dl>
     </div>
-    {notes && <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm"><span className="font-semibold">備考：</span><span className="whitespace-pre-wrap break-words">{notes}</span></div>}
+    {notes && <div className="mt-4 rounded-md bg-amber-50 p-4 text-sm"><span className="font-semibold">備考：</span><span className="whitespace-pre-wrap break-words">{notes}</span></div>}
     </>
   );
 }
