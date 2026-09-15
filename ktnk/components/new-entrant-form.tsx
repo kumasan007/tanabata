@@ -2,7 +2,6 @@
 
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FormProgress } from "@/components/ui/form-progress";
 import type { CompanyMaster } from "@/lib/types";
 import { isWorkingDate, workingDateOptions, shortDateWithWeekday, parseLocalDate } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
@@ -113,8 +112,8 @@ export function NewEntrantForm({ today, initialDate = "", initialCompany = "", i
   }
 
   return <div className="simple-schedule min-h-screen pb-32 sm:pb-8"><main className="mx-auto max-w-2xl px-3 py-5 sm:px-4"><form onSubmit={submit} className="space-y-4">
-    <FormProgress currentKey={step === "company" ? "company" : step === "date" ? "date" : step === "confirm" || step === "success" ? "confirm" : "details"} steps={[{ key: "company", label: "会社" }, { key: "date", label: "日付" }, { key: "details", label: "入場者" }, { key: "confirm", label: "確認・送信" }]} />
-    {step !== "company" && step !== "success" && <div className="flex items-center justify-between gap-3 text-sm text-slate-600"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setStep(step === "date" ? "company" : step === "details" ? "date" : "details")}>戻る</button><p className="min-w-0 text-right break-words">{primaryCompany}<span className="block">{displayDate(entryDate)}</span></p></div>}
+    {(primaryCompany || entryDate) && <div className="min-w-0 space-y-1 break-words text-sm text-slate-600">{primaryCompany && <p className="font-semibold">{primaryCompany}</p>}{entryDate && <p>{displayDate(entryDate)}</p>}</div>}
+    {step !== "company" && step !== "success" && <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setStep(step === "date" ? "company" : step === "details" ? "date" : "details")}>戻る</button>}
 
     {step === "company" && <section className="panel p-5 sm:p-6"><h2 className="mb-5 text-lg font-bold">一次会社を選んでください</h2><select autoFocus className="input" value={primaryCompany} onChange={(event) => { setPrimaryCompany(event.target.value); setPeople([]); setMessage(""); if (event.target.value) setStep(isWorkingDate(entryDate) ? "details" : "date"); }}><option value="" disabled>会社を選択</option>{master.primaryCompanies.map((company) => <option key={company}>{company}</option>)}</select></section>}
 

@@ -6,7 +6,6 @@ import { CopyButton } from "@/components/copy-button";
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { FormProgress } from "@/components/ui/form-progress";
 import type {
   CompanyMaster,
   PreviousSchedule,
@@ -900,10 +899,12 @@ export function ScheduleForm({
     <div className="simple-schedule min-h-screen pb-32 sm:pb-8">
       <main className="mx-auto max-w-2xl px-3 py-5 sm:px-4">
         <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
-          <FormProgress
-            currentKey={choosingCompany ? "company" : step === "date" ? "date" : step === "confirm" ? "confirm" : "details"}
-            steps={[{ key: "company", label: "会社" }, { key: "date", label: "日付" }, { key: "details", label: "作業内容" }, { key: "confirm", label: "確認・送信" }]}
-          />
+          {(form.primaryCompany || form.startDate) && (
+            <div className="min-w-0 space-y-1 break-words text-sm text-slate-600">
+              {form.primaryCompany && <p className="font-semibold">{form.primaryCompany}</p>}
+              {form.startDate && <p>{displaySelectedDates(form.dates, form.startDate, form.endDate)}</p>}
+            </div>
+          )}
           {!choosingCompany && (
             <div className="grid gap-2 text-sm text-slate-600">
               <button
