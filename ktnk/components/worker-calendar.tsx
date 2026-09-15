@@ -1,6 +1,6 @@
 "use client";
 
-import { WorkCompletionForm, completionTime } from "@/components/work-completion-form";
+import { completionTime } from "@/components/work-completion-form";
 import type { WorkCompletion } from "@/lib/work-completions";
 import { LoadingIndicator, LoadingOverlay } from "@/components/loading-indicator";
 import { CopyValue } from "@/components/copy-value";
@@ -39,7 +39,8 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
   const [schedules, setSchedules] = useState<ScheduleWithSubcompanies[]>([]);
   const [entrants, setEntrants] = useState<NewEntrantRecord[]>([]);
   const [completions, setCompletions] = useState<WorkCompletion[]>([]);
-  const [reporting, setReporting] = useState<{ date: string; company: string } | null>(null);
+  const [completionBusy, setCompletionBusy] = useState(false);
+  const completionPending = useRef(false);
   const [editing, setEditing] = useState<ScheduleWithSubcompanies | null>(null);
   const [editingEntrant, setEditingEntrant] = useState<NewEntrantRecord | null>(null);
   const [message, setMessage] = useState("");
@@ -80,9 +81,44 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
   const scheduleMap = useMemo(() => Object.groupBy(schedules.filter((row) => !company || row.primary_company === company), (row) => row.work_date), [schedules, company]);
   const completionMap = useMemo(() => Object.groupBy(completions, (row) => row.work_date), [completions]);
   const selectedCompletions = completionMap[selectedDate] ?? [];
-  function completionControls(primaryCompany: string) {
-    const report = selectedCompletions.find((item) => item.primary_company === primaryCompany);
-    return <div className="mt-2 grid gap-1 border-t border-border pt-2">{report && <div className="rounded bg-emerald-100 p-2 text-emerald-900"><p className="font-bold">✓ 作業終了済み</p><p className="text-xs">報告時刻：{completionTime(report.reported_at)}</p>{report.notes && <p className="whitespace-pre-wrap break-words text-xs">備考：{report.notes}</p>}</div>}<button type="button" className="btn btn-secondary min-h-9 px-2 py-1 text-sm" onClick={() => setReporting({ date: selectedDate, company: primaryCompany })}>作業終了</button></div>;
+  async function saveCompletion(date: string, primaryCompany: string, report?: WorkCompletion) {
+    if (completionPending.current) return;
+    completionPending.current = true;
+    setCompletionBusy(true);
+    setMessage("");
+    try {
+      const response = await apiFetch("/api/work-completions", {
+        method: report ? "DELETE" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, primaryCompany, notes: "", expectedReportedAt: report?.reported_at }),
+      });
+      const body = await response.json();
+      if (response.ok || response.status === 409) {
+        setCompletions((current) => [
+          ...current.filter((item) => item.work_date !== date || item.primary_company !== primaryCompany),
+          ...(body.report ? [body.report] : []),
+        ]);
+      }
+      if (!response.ok) throw new Error(body.error || "作業終了報告を保存できませんでした。");
+      setVersion((value) => value + 1);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "作業終了報告を保存できませんでした。");
+    } finally {
+      completionPending.current = false;
+      setCompletionBusy(false);
+    }
+  }
+  function completionControls(primaryCompany: string, date = selectedDate, compact = false) {
+    const report = (completionMap[date] ?? []).find((item) => item.primary_company === primaryCompany);
+    return <div className={compact ? "mt-1" : "mt-2 grid gap-1 border-t border-border pt-2"}>
+      {report ? <div className="rounded bg-emerald-100 p-2 text-emerald-900">
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-bold">✓ 作業終了済み</p>
+          <button type="button" className="shrink-0 rounded border border-emerald-600 bg-white px-1.5 py-0.5 text-xs font-semibold disabled:opacity-50" disabled={completionBusy || loading} onClick={(event) => { event.stopPropagation(); void saveCompletion(date, primaryCompany, report); }}>取り消し</button>
+        </div>
+        {!compact && <><p className="text-xs">報告時刻：{completionTime(report.reported_at)}</p>{report.notes && <p className="whitespace-pre-wrap break-words text-xs">備考：{report.notes}</p>}</>}
+      </div> : <button type="button" className={compact ? "rounded border border-emerald-600 bg-white px-1 py-0.5 font-semibold disabled:opacity-50" : "btn btn-secondary min-h-9 px-2 py-1 text-sm"} disabled={completionBusy || loading} onClick={(event) => { event.stopPropagation(); void saveCompletion(date, primaryCompany); }}>作業終了</button>}
+    </div>;
   }
   const entrantMap = useMemo(() => Object.groupBy(entrants.filter((row) => !company || row.primary_company === company), (row) => row.entry_date), [entrants, company]);
   const companyPriority = useMemo(
@@ -184,7 +220,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                     {row.uses_tachiuma && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 font-bold leading-none text-white shadow-sm" title="立ち馬使用あり">立</span>}
                     <button type="button" className="rounded p-0.5 hover:bg-white/70" onClick={(event) => { event.stopPropagation(); setSelectedDate(date); setEditing(row); }} aria-label={`${date}の予定を編集`} title="予定を編集"><Pencil size={12} aria-hidden="true" /></button>
                   </div>
-                  {dayCompletions.some((item) => item.primary_company === row.primary_company) && <p className="font-bold text-emerald-800">✓ 作業終了済み</p>}<button type="button" className="mt-1 rounded border border-emerald-600 bg-white px-1 py-0.5 font-semibold" onClick={(event) => { event.stopPropagation(); setReporting({ date, company: row.primary_company }); }}>作業終了</button><p className="font-bold">{totalWorkers(row)}人</p>
+                  {completionControls(row.primary_company, date, true)}<p className="font-bold">{totalWorkers(row)}人</p>
                   <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
                   <p className="line-clamp-2 break-words" title={content ?? ""}>{content || "作業内容未入力"}</p>
                   {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="truncate font-semibold text-sky-800">高車：{row.aerial_work_vehicle_count}台</p>}
@@ -303,7 +339,6 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
         </div>}
       </section>
     </main>
-    {reporting && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3"><section role="dialog" aria-modal="true" aria-label="作業終了報告" className="panel max-h-[90dvh] w-full max-w-lg overflow-y-auto p-4"><div className="mb-4 flex items-center justify-between gap-2"><h2 className="text-lg font-bold">作業終了報告</h2><button type="button" className="btn btn-secondary" onClick={() => setReporting(null)}>閉じる</button></div><WorkCompletionForm date={reporting.date} primaryCompany={reporting.company} onSaved={() => setVersion((value) => value + 1)} /></section></div>}
     {editing && <AdminScheduleEditor schedule={editing} master={master} workerMode onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setVersion((v) => v + 1); }} />}
     {editingEntrant && <NewEntrantEditor record={editingEntrant} master={master} onClose={() => setEditingEntrant(null)} onSaved={() => { setEditingEntrant(null); setVersion((v) => v + 1); }} />}
   </div>;
