@@ -177,8 +177,8 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
               {company && daySchedules.map((row) => {
                 const area = row.work_area;
                 const content = row.work_content;
-                return <div key={row.id} className={`relative mt-1 min-w-0 rounded bg-emerald-100 p-1 text-[10px] leading-4 text-emerald-950 sm:text-xs ${((row.aerial_work_vehicle_count ?? 0) > 0 || row.uses_fire || row.uses_tachiuma) ? "pr-20" : "pr-6"}`}>
-                  <div className="absolute right-0.5 top-0.5 flex items-center gap-0.5">
+                return <div key={row.id} className="mt-1 min-w-0 rounded bg-emerald-100 p-1 text-[10px] leading-4 text-emerald-950 sm:text-xs">
+                  <div className="mb-1 flex items-center justify-end gap-0.5">
                     {(row.aerial_work_vehicle_count ?? 0) > 0 && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-600 font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
                     {row.uses_fire && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-600 font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
                     {row.uses_tachiuma && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 font-bold leading-none text-white shadow-sm" title="立ち馬使用あり">立</span>}
@@ -226,22 +226,24 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
             const content = row.work_content;
             const tradeRoles = master.primaryTradeRolesByPrimary[row.primary_company] ?? [];
             const totalWorkerCount = totalWorkers(row);
-            return <article key={row.id} className={`panel relative min-w-0 p-3 text-sm ${((row.aerial_work_vehicle_count ?? 0) > 0 || row.uses_fire || row.uses_tachiuma) ? "pr-32" : "pr-11"}`}>
-              <div className="absolute right-2 top-2 flex items-center gap-1">
+            return <article key={row.id} className="panel min-w-0 p-3 text-sm">
+              <div className="flex min-w-0 items-start justify-between gap-2">
+              <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+                <p className="min-w-0 truncate font-bold" title={row.primary_company}>
+                  <CopyValue value={row.primary_company} label="一次会社" compact stopPropagation />
+                </p>
+                {tradeRoles.length > 0 && (
+                  <span className="max-w-full truncate text-xs font-normal text-slate-400" title={tradeRoles.join("・")}>
+                    <CopyValue value={tradeRoles.join("・")} label="職種" compact stopPropagation />
+                  </span>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
                 {(row.aerial_work_vehicle_count ?? 0) > 0 && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-sm font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
                 {row.uses_fire && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-sm font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
                 {row.uses_tachiuma && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold leading-none text-white shadow-sm" title="立ち馬使用あり">立</span>}
                 <button type="button" className="btn btn-secondary h-8 min-h-8 w-8 p-0" onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
               </div>
-              <div className="flex min-w-0 items-center gap-2 pr-1">
-                <p className="min-w-0 truncate font-bold" title={row.primary_company}>
-                  <CopyValue value={row.primary_company} label="一次会社" compact stopPropagation />
-                </p>
-                {tradeRoles.length > 0 && (
-                  <span className="shrink-0 truncate text-xs font-normal text-slate-400" title={tradeRoles.join("・")}>
-                    <CopyValue value={tradeRoles.join("・")} label="職種" compact stopPropagation />
-                  </span>
-                )}
               </div>
               <details className="mt-2 rounded-md border border-border bg-slate-50">
                   <summary className="cursor-pointer px-2.5 py-2 font-semibold text-slate-700 marker:text-emerald-700">
