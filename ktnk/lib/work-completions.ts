@@ -9,3 +9,12 @@ export async function getWorkCompletions(from?: string | null, to?: string | nul
   if (error) throw new Error(error.code === "PGRST205" || error.code === "42P01" ? "作業終了報告のデータベース設定が必要です。" : error.message);
   return (data ?? []) as WorkCompletion[];
 }
+
+export async function getScheduledCompletionCompanies(date: string, company?: string) {
+  let query = createServerClient().from("schedule_groups")
+    .select("primary_company").eq("work_date", date);
+  if (company) query = query.eq("primary_company", company).limit(1);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return new Set((data ?? []).map((row) => row.primary_company as string));
+}

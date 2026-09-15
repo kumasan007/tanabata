@@ -332,10 +332,9 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
                   </div>)}
                 </div>
               </details>
-              {completionControls(primaryCompany)}
             </article>;
           })}
-          {selectedCompletions.filter((report) => !selectedSchedules.some((row) => row.primary_company === report.primary_company) && !selectedEntrantGroups.some((group) => group.primaryCompany === report.primary_company)).map((report) => <article key={`completion-${report.primary_company}`} className="panel p-3 text-sm"><p className="font-bold">{report.primary_company}</p>{completionControls(report.primary_company)}</article>)}
+          {selectedCompletions.filter((report) => !selectedSchedules.some((row) => row.primary_company === report.primary_company)).map((report) => <article key={`completion-${report.primary_company}`} className="panel p-3 text-sm"><p className="font-bold">{report.primary_company}</p>{completionControls(report.primary_company)}</article>)}
         </div>}
       </section>
     </main>

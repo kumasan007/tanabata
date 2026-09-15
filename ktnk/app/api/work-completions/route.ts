@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerClient } from "@/lib/supabase";
 import { getCompanyMaster } from "@/lib/companies";
-import { getWorkCompletions } from "@/lib/work-completions";
+import { getWorkCompletions, getScheduledCompletionCompanies } from "@/lib/work-completions";
 import { parseLocalDate, toDateStringInTimeZone, todayInTokyoString } from "@/lib/utils";
 const schema = z.object({
   date: z.string().refine((value) => Boolean(parseLocalDate(value)), "日付を選択してください。").optional(),
@@ -29,6 +29,9 @@ async function mutate(request: Request, cancel: boolean) {
     const expectedReportedAt = automaticDate && parsed.data.expectedReportedAt && toDateStringInTimeZone(new Date(parsed.data.expectedReportedAt), "Asia/Tokyo") !== date ? undefined : parsed.data.expectedReportedAt;
     const master = await getCompanyMaster();
     if (!master.primaryCompanies.includes(primaryCompany)) return NextResponse.json({ error: "一次会社を選択してください。" }, { status: 400 });
+    if (!cancel && !(await getScheduledCompletionCompanies(date, primaryCompany)).has(primaryCompany)) {
+      return NextResponse.json({ error: "その日に作業予定がある会社を選択してください。" }, { status: 400 });
+    }
     const db = createServerClient();
     if (cancel && !expectedReportedAt) return NextResponse.json({ error: "取り消す報告を確認してください。" }, { status: 400 });
     const value = { work_date: date, primary_company: primaryCompany, notes, reported_at: now.toISOString() };
