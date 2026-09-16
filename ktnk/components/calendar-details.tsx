@@ -5,9 +5,9 @@ import { CopyValue } from "@/components/copy-value";
 import { completionTime } from "@/lib/completion-time";
 import type { CalendarEntrant, CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 import type { WorkCompletion } from "@/lib/work-completions";
-export const CalendarDetails = memo(function CalendarDetails({ detail, master, selectedDate, completionBusy, onEdit: setEditing, onEditEntrant: setEditingEntrant, onCompletion: saveCompletion }: {
+export const CalendarDetails = memo(function CalendarDetails({ detail, master, selectedDate, isToday, completionBusy, onEdit: setEditing, onEditEntrant: setEditingEntrant, onCompletion: saveCompletion }: {
   detail: { schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[] };
-  master: CompanyMaster; selectedDate: string; completionBusy: boolean;
+  master: CompanyMaster; selectedDate: string; isToday: boolean; completionBusy: boolean;
   onEdit: (row: ScheduleWithSubcompanies) => void; onEditEntrant: (row: NewEntrantRecord) => void;
   onCompletion: (date: string, company: string, report?: WorkCompletion) => Promise<void>;
 }) {
@@ -31,11 +31,12 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
   }, [detail.schedules, detail.entrants, companyPriority]);
   function completionControls(primaryCompany: string) {
     const report = completionMap.get(primaryCompany);
+    if (!report && !isToday) return null;
     return <div className="mt-2 grid gap-1 border-t border-border pt-2">
       {report ? <div className="rounded bg-emerald-100 p-2 text-emerald-900">
         <div className="flex items-start justify-between gap-2">
           <p className="font-bold">✓ 作業終了済み</p>
-          <button type="button" className="shrink-0 rounded border border-emerald-600 bg-white px-1.5 py-0.5 text-xs font-semibold disabled:opacity-50" disabled={completionBusy} onClick={(event) => { event.stopPropagation(); void saveCompletion(selectedDate, primaryCompany, report); }}>取り消し</button>
+          {isToday && <button type="button" className="shrink-0 rounded border border-emerald-600 bg-white px-1.5 py-0.5 text-xs font-semibold disabled:opacity-50" disabled={completionBusy} onClick={(event) => { event.stopPropagation(); void saveCompletion(selectedDate, primaryCompany, report); }}>取り消し</button>}
         </div>
         <p className="text-xs">報告時刻：{completionTime(report.reported_at)}</p>{report.notes && <p className="whitespace-pre-wrap break-words text-xs">備考：{report.notes}</p>}
       </div> : <button type="button" className="btn btn-secondary min-h-9 px-2 py-1 text-sm" disabled={completionBusy} onClick={(event) => { event.stopPropagation(); void saveCompletion(selectedDate, primaryCompany); }}>作業終了</button>}

@@ -4,8 +4,8 @@ import { Pencil } from "lucide-react";
 import type { CalendarSchedule, CalendarEntrant } from "@/lib/types";
 import type { WorkCompletion } from "@/lib/work-completions";
 const EMPTY: never[] = [];
-export const CalendarDay = memo(function CalendarDay({ date, selected, company, schedules, entrants, completions, loading, completionBusy, onSelect, onEdit, onCompletion }: {
-  date: string; selected: boolean; company: string;
+export const CalendarDay = memo(function CalendarDay({ date, selected, isToday, company, schedules, entrants, completions, loading, completionBusy, onSelect, onEdit, onCompletion }: {
+  date: string; selected: boolean; isToday: boolean; company: string;
   schedules?: CalendarSchedule[]; entrants?: CalendarEntrant[]; completions?: WorkCompletion[];
   loading: boolean; completionBusy: boolean;
   onSelect: (date: string) => void; onEdit: (row: CalendarSchedule) => void;
@@ -20,7 +20,8 @@ export const CalendarDay = memo(function CalendarDay({ date, selected, company, 
   }
   function completionControls(primaryCompany: string) {
     const report = dayCompletions.find((row) => row.primary_company === primaryCompany);
-    return <div className="mt-1">{report ? <div className="rounded bg-emerald-100 p-2 text-emerald-900"><div className="flex items-start justify-between gap-2"><p className="font-bold">✓ 作業終了済み</p><button type="button" className="shrink-0 rounded border border-emerald-600 bg-white px-1.5 py-0.5 text-xs font-semibold disabled:opacity-50" disabled={completionBusy || loading} onClick={(event) => { event.stopPropagation(); void onCompletion(date, primaryCompany, report); }}>取り消し</button></div></div> : <button type="button" className="rounded border border-emerald-600 bg-white px-1 py-0.5 font-semibold disabled:opacity-50" disabled={completionBusy || loading} onClick={(event) => { event.stopPropagation(); void onCompletion(date, primaryCompany); }}>作業終了</button>}</div>;
+    if (!report && !isToday) return null;
+    return <div className="mt-1">{report ? <div className="rounded bg-emerald-100 p-2 text-emerald-900"><div className="flex items-start justify-between gap-2"><p className="font-bold">✓ 作業終了済み</p>{isToday && <button type="button" className="shrink-0 rounded border border-emerald-600 bg-white px-1.5 py-0.5 text-xs font-semibold disabled:opacity-50" disabled={completionBusy || loading} onClick={(event) => { event.stopPropagation(); void onCompletion(date, primaryCompany, report); }}>取り消し</button>}</div></div> : <button type="button" className="rounded border border-emerald-600 bg-white px-1 py-0.5 font-semibold disabled:opacity-50" disabled={completionBusy || loading} onClick={(event) => { event.stopPropagation(); void onCompletion(date, primaryCompany); }}>作業終了</button>}</div>;
   }
             const entrantStats = entrantSummary(dayEntrants);
             const total = daySchedules.reduce((sum, row) => sum + totalWorkers(row), 0);

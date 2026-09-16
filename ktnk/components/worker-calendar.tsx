@@ -219,7 +219,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
         </div>
         <div className={`grid grid-cols-6 bg-border/70 gap-px ${company ? "min-w-[56rem]" : ""}`}>
           {Array.from({ length: firstDayOffset }, (_, index) => <div key={`blank-${index}`} className="min-h-20 bg-slate-50" />)}
-          {days.map((date) => <CalendarDay key={date} date={date} selected={selectedDate === date} company={company}
+          {days.map((date) => <CalendarDay key={date} date={date} selected={selectedDate === date} isToday={date === initialDate} company={company}
             schedules={scheduleMap[date]} entrants={entrantMap[date]} completions={completionMap[date]}
             loading={loading} completionBusy={completionBusy} onSelect={selectDate} onEdit={editSummary} onCompletion={saveCompletion} />)}
 
@@ -249,7 +249,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
         </div>
         {detailMessage && <p role="alert" className="mb-3 notice-error">{detailMessage}</p>}
         {detailLoading ? <LoadingIndicator label="予定を読み込み中…" className="min-h-32" /> : detail.schedules.length === 0 && detail.entrants.length === 0 && detail.completions.length === 0 ? !detailMessage && <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className={`grid gap-2 transition-opacity sm:grid-cols-2 lg:grid-cols-3 ${loading ? "pointer-events-none opacity-60" : ""}`} aria-busy={loading}>
-          <CalendarDetails detail={detail} master={master} selectedDate={selectedDate} completionBusy={completionBusy}
+          <CalendarDetails detail={detail} master={master} selectedDate={selectedDate} isToday={selectedDate === initialDate} completionBusy={completionBusy}
             onEdit={setEditing} onEditEntrant={setEditingEntrant} onCompletion={saveCompletion} />
         </div>}
       </section>
