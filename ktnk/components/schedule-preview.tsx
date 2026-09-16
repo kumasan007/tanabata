@@ -6,17 +6,23 @@ export function SchedulePreview({
   schedule,
   primaryCompany,
   notes,
+  hideZeroSecondaryCompanies = false,
 }: {
   schedule: PreviousSchedule;
   primaryCompany: string;
   notes?: string | null;
+  hideZeroSecondaryCompanies?: boolean;
 }) {
   const companies = [
     {
       secondaryCompany: primaryCompany,
       workerCount: schedule.primaryCount ?? 0,
     },
-    ...schedule.subcompanies.filter((row) => row.secondaryCompany),
+    ...schedule.subcompanies.filter(
+      (row) =>
+        row.secondaryCompany &&
+        (!hideZeroSecondaryCompanies || (row.workerCount ?? 0) > 0),
+    ),
   ];
   return (
     <>

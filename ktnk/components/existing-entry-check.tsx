@@ -52,7 +52,7 @@ export function ExistingEntryCheck({ date, dates, company, kind, onNew, onOtherD
     <p className="text-lg font-bold">{existingDates.map(shortDateWithWeekday).join("、")}には、すでに作業が入力されています。</p>
     {schedules.map((row) => <article key={row.id} className="space-y-2 rounded-md bg-slate-50 p-4">
       <p className="font-semibold text-primary">{shortDateWithWeekday(row.work_date)}</p>
-      <SchedulePreview primaryCompany={row.primary_company} schedule={scheduleToCopyData(row)!} notes={row.notes} />
+      <SchedulePreview primaryCompany={row.primary_company} schedule={scheduleToCopyData(row)!} notes={row.notes} hideZeroSecondaryCompanies />
       {requested.length === 1 && <button type="button" className="btn btn-primary w-full" onClick={() => onSchedule?.(row)}>内容を変更する</button>}
     </article>)}
     {entrants.map((row) => <article key={row.id} className="space-y-2 rounded-md bg-slate-50 p-4">
