@@ -275,13 +275,13 @@ export function ScheduleForm({
     form.startDate,
   ]);
   const previous = previousResult?.key === previousKey ? previousResult.previous : null;
-  const previousCounts = new Map(
+  const previousCounts = useMemo(() => new Map(
     previous?.subcompanies.map((row) => [
       row.secondaryCompany,
       row.workerCount,
     ]) ?? [],
-  );
-  const dateOptions = workingDateOptions(today);
+  ), [previous]);
+  const dateOptions = useMemo(() => workingDateOptions(today), [today]);
 
   useEffect(() => {
     if (companyRetry === 0) return;
@@ -336,7 +336,11 @@ export function ScheduleForm({
   }, [form.primaryCompany, form.startDate, sourceRetry]);
 
   useEffect(() => {
-    if (!showEditor) return;
+    if (!showEditor || sourceLoading) return;
+    if (previousRetry === 0 && sourceResult?.company === form.primaryCompany && sourceResult.date === form.startDate && !sourceResult.error) {
+      setPreviousResult({ key: previousKey, previous: sourceResult.source, error: "" });
+      return;
+    }
     const controller = new AbortController();
     setPreviousResult(null);
     apiFetch(
@@ -368,6 +372,8 @@ export function ScheduleForm({
     return () => controller.abort();
   }, [
     showEditor,
+    sourceLoading,
+    sourceResult,
     form.primaryCompany,
     form.startDate,
     previousKey,

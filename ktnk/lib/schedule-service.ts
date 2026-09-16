@@ -1,3 +1,4 @@
+import { readAllRows } from "@/lib/read-all-rows";
 import { createServerClient } from "@/lib/supabase";
 import type {
   ScheduleGroupRow,
@@ -160,7 +161,7 @@ async function querySchedules(params: ScheduleSearchParams) {
       : query.ilike("primary_company", `%${escapeLike(params.primaryCompany)}%`);
   }
 
-  const { data, error } = await query;
+  const { data, error } = await readAllRows(query);
   if (error) throwSupabaseError(error, "予定の取得に失敗しました。");
 
   let schedules = (data ?? []).map((row) => normalizeScheduleRow(row));
@@ -183,7 +184,7 @@ const getCachedSchedules = unstable_cache(
     secondaryCompany: string,
     exactPrimaryCompany: boolean,
   ) => querySchedules({ dateFrom, dateTo, primaryCompany, secondaryCompany, exactPrimaryCompany }),
-  ["schedules-v1"],
+  ["schedules-v2"],
   { tags: [DATA_CACHE_TAGS.schedules], revalidate: 5 * 60 },
 );
 

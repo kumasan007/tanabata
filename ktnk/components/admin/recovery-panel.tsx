@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DatabaseBackup, Download, History, LoaderCircle, RotateCcw, Upload } from "lucide-react";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import { apiFetch } from "@/lib/api-client";
@@ -32,8 +32,9 @@ type PendingRestore = {
     kind: "import";
     file: File;
 };
-export function RecoveryPanel({ kind, onRestored }: {
+export function RecoveryPanel({ kind, active, onRestored }: {
     kind: "backups" | "auditLogs";
+    active: boolean;
     onRestored: () => void;
 }) {
     const { confirm, dialog: confirmationDialog } = useConfirmDialog();
@@ -47,10 +48,12 @@ export function RecoveryPanel({ kind, onRestored }: {
     const [auditError, setAuditError] = useState(false);
     const [pendingRestore, setPendingRestore] = useState<PendingRestore | null>(null);
     const [restorePassword, setRestorePassword] = useState("");
-    useEffect(() => { if (kind === "backups")
+    const loadedAt = useRef({ backups: 0, auditLogs: 0 });
+    useEffect(() => { if (!active || Date.now() - loadedAt.current[kind] < 30_000) return;
+    if (kind === "backups")
         void refreshBackups();
     else
-        void refreshAuditLogs(); }, [kind]);
+        void refreshAuditLogs(); }, [kind, active]);
     async function refreshBackups() {
         setBackupLoading(true);
         setBackupMessage("");
@@ -61,6 +64,7 @@ export function RecoveryPanel({ kind, onRestored }: {
             if (!response.ok)
                 throw new Error(body.error ?? "バックアップ履歴を取得できませんでした。");
             setBackups(body.backups ?? []);
+            loadedAt.current.backups = Date.now();
         }
         catch (error) {
             setBackupError(true);
@@ -79,6 +83,7 @@ export function RecoveryPanel({ kind, onRestored }: {
             const body = await response.json();
             if (!response.ok)
                 throw new Error(body.error ?? "バックアップを作成できませんでした。");
+            loadedAt.current.auditLogs = 0;
             await refreshBackups();
             setBackupMessage("バックアップを作成しました。");
         }
@@ -108,6 +113,7 @@ export function RecoveryPanel({ kind, onRestored }: {
             const body = await response.json();
             if (!response.ok)
                 throw new Error(body.error ?? "バックアップを取り込めませんでした。");
+            loadedAt.current = { backups: 0, auditLogs: 0 };
             onRestored();
             await refreshBackups();
             setBackupMessage("バックアップを取り込みました。");
@@ -139,6 +145,7 @@ export function RecoveryPanel({ kind, onRestored }: {
             const body = await response.json();
             if (!response.ok)
                 throw new Error(body.error ?? "バックアップを復元できませんでした。");
+            loadedAt.current = { backups: 0, auditLogs: 0 };
             onRestored();
             await refreshBackups();
             setBackupMessage("バックアップを復元しました。復元前のデータも保険として保存されています。");
@@ -161,6 +168,7 @@ export function RecoveryPanel({ kind, onRestored }: {
             if (!response.ok)
                 throw new Error(body.error ?? "操作履歴を取得できませんでした。");
             setAuditLogs(body.logs ?? []);
+            loadedAt.current.auditLogs = Date.now();
         }
         catch (error) {
             setAuditError(true);
@@ -190,6 +198,7 @@ export function RecoveryPanel({ kind, onRestored }: {
             }
             if (!response.ok)
                 throw new Error(body.error ?? "変更を戻せませんでした。");
+            loadedAt.current = { backups: 0, auditLogs: 0 };
             onRestored();
             await refreshAuditLogs();
             setAuditMessage("変更前の状態に戻しました。この復元操作も履歴に保存されています。");

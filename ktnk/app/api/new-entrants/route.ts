@@ -3,6 +3,7 @@ import { z } from "zod";
 import { isWorkingDate } from "@/lib/utils";
 import { ensureSecondaryCompanies, ensureSecondaryCompany } from "@/lib/companies";
 import { createServerClient } from "@/lib/supabase";
+import { calendarQueryRange } from "@/lib/calendar-dates";
 import { getNewEntrants } from "@/lib/new-entrants";
 import { invalidateEntrantData } from "@/lib/data-cache";
 
@@ -28,7 +29,9 @@ const updateSchema = personSchema.extend({
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    return NextResponse.json({ records: await getNewEntrants(url.searchParams.get("from"), url.searchParams.get("to")) });
+    const range = calendarQueryRange(url.searchParams.get("from"), url.searchParams.get("to"));
+    if (!range) return NextResponse.json({ error: "日付の範囲を366日以内で指定してください。" }, { status: 400 });
+    return NextResponse.json({ records: await getNewEntrants(range.from, range.to, url.searchParams.get("primaryCompany")) });
   } catch (error) {
     return NextResponse.json({ error: databaseErrorMessage(error) }, { status: 500 });
   }

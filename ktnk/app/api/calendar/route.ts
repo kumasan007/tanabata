@@ -1,26 +1,29 @@
 import { NextResponse } from "next/server";
 import { getSchedules } from "@/lib/schedule-service";
-import { getCalendarSchedules, getCalendarEntrants } from "@/lib/calendar-summary";
+import { getCalendarSchedules, getCalendarEntrants, getCalendarSummary } from "@/lib/calendar-summary";
 import { getNewEntrants } from "@/lib/new-entrants";
 
 import { getWorkCompletions } from "@/lib/work-completions";
-import { parseLocalDate } from "@/lib/utils";
+import { calendarQueryRange } from "@/lib/calendar-dates";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const dateFrom = url.searchParams.get("from");
-    const dateTo = url.searchParams.get("to");
+    const range = calendarQueryRange(url.searchParams.get("from"), url.searchParams.get("to"));
     const primaryCompany = url.searchParams.get("primaryCompany");
-    if ((dateFrom && !parseLocalDate(dateFrom)) || (dateTo && !parseLocalDate(dateTo)) || (dateFrom && dateTo && dateFrom > dateTo)) {
+    if (!range) {
       return NextResponse.json({ error: "表示する日付の範囲を確認してください。" }, { status: 400 });
     }
+    const { from: dateFrom, to: dateTo } = range;
     const kind = url.searchParams.get("kind");
     const includeSchedules = kind !== "entrant";
     const includeEntrants = kind !== "schedule";
     const summary = url.searchParams.get("view") === "summary";
+    if (summary && kind !== "schedule" && kind !== "entrant") {
+      return NextResponse.json(await getCalendarSummary(dateFrom ?? "", dateTo ?? "", primaryCompany?.trim() ?? ""));
+    }
     let completionWarning = "";
     const [schedules, entrants, completions] = await Promise.all([
       includeSchedules

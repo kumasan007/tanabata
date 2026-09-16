@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 import { SchedulePreview } from "@/components/schedule-preview";
 import { scheduleToCopyData } from "@/lib/schedule-copy";
 import { LoadingIndicator } from "@/components/loading-indicator";
@@ -26,7 +27,7 @@ export function ExistingEntryCheck({ date, dates, company, kind, onNew, onOtherD
   useEffect(() => {
     const controller = new AbortController();
     setResult(null); setError("");
-    fetch(`/api/calendar?${new URLSearchParams({ from: requested[0], to: requested.at(-1)!, primaryCompany: company, kind })}`, { signal: controller.signal, cache: "no-store" })
+    apiFetch(`/api/calendar?${new URLSearchParams({ from: requested[0], to: requested.at(-1)!, primaryCompany: company, kind })}`, { signal: controller.signal, cache: "no-store" })
       .then(async (response) => {
         const body = await response.json();
         if (!response.ok || body.warning) throw new Error(body.error ?? body.warning ?? "取得できませんでした。");

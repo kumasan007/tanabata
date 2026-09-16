@@ -1,5 +1,7 @@
 "use client";
 
+import { monthRange, shiftMonth, datesInMonth } from "@/lib/calendar-dates";
+import type { CalendarSummaryData } from "@/lib/calendar-summary";
 import { CalendarClientCache } from "@/lib/calendar-client-cache";
 import type { WorkCompletion } from "@/lib/work-completions";
 import { LoadingIndicator, LoadingOverlay } from "@/components/loading-indicator";
@@ -12,38 +14,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import type { CalendarSchedule, CalendarEntrant, CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 
+const loadCalendarDetails = () => import("@/components/calendar-details");
 const CalendarDetails = dynamic(() => import("@/components/calendar-details").then((module) => module.CalendarDetails), { loading: () => <LoadingIndicator /> });
 const AdminScheduleEditor = dynamic(() => import("@/components/admin-schedule-editor").then((module) => module.AdminScheduleEditor));
 const NewEntrantEditor = dynamic(() => import("@/components/new-entrant-editor").then((module) => module.NewEntrantEditor));
 
-function monthRange(month: string) {
-  const [year, value] = month.split("-").map(Number);
-  const last = new Date(year, value, 0).getDate();
-  return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, "0")}` };
-}
-function shiftMonth(month: string, offset: number) {
-  const [year, value] = month.split("-").map(Number);
-  const date = new Date(year, value - 1 + offset, 1);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-function datesInMonth(month: string) {
-  const range = monthRange(month);
-  const result: string[] = [];
-  for (let day = 1; day <= Number(range.to.slice(-2)); day++) result.push(`${month}-${String(day).padStart(2, "0")}`);
-  return result.filter(isWorkingDate);
-}
-export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: string; initialMaster: CompanyMaster }) {
+export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: { initialDate: string; initialMaster: CompanyMaster; initialSummary?: CalendarSummaryData | null }) {
   const [month, setMonth] = useState(initialDate.slice(0, 7));
   const [selectedDate, setSelectedDate] = useState(isWorkingDate(initialDate) ? initialDate : datesInMonth(initialDate.slice(0, 7)).find((date) => date > initialDate) ?? datesInMonth(initialDate.slice(0, 7))[0]);
   const [company, setCompany] = useState("");
   const [master, setMaster] = useState<CompanyMaster>(initialMaster);
-  const [schedules, setSchedules] = useState<CalendarSchedule[]>([]);
-  const [entrants, setEntrants] = useState<CalendarEntrant[]>([]);
-  const [completions, setCompletions] = useState<WorkCompletion[]>([]);
+  const [schedules, setSchedules] = useState<CalendarSchedule[]>(initialSummary?.schedules ?? []);
+  const [entrants, setEntrants] = useState<CalendarEntrant[]>(initialSummary?.entrants ?? []);
+  const [completions, setCompletions] = useState<WorkCompletion[]>(initialSummary?.completions ?? []);
   const [detail, setDetail] = useState<{ date: string; schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[] }>({ date: "", schedules: [], entrants: [], completions: [] });
   const [detailLoadedKey, setDetailLoadedKey] = useState("");
   const [detailMessage, setDetailMessage] = useState("");
-  const [completionVersion, setCompletionVersion] = useState(0);
   const summaryCache = useRef(new CalendarClientCache<{ schedules: CalendarSchedule[]; entrants: CalendarEntrant[]; completions: WorkCompletion[]; warning?: string }>());
   const detailCache = useRef(new CalendarClientCache<{ schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[]; warning?: string }>());
   const cacheVersion = useRef(0);
@@ -52,16 +38,22 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
   const completionPending = useRef(false);
   const [editing, setEditing] = useState<ScheduleWithSubcompanies | null>(null);
   const [editingEntrant, setEditingEntrant] = useState<NewEntrantRecord | null>(null);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(initialSummary?.warning ?? "");
   const [version, setVersion] = useState(0);
+  const [masterRefreshVersion, setMasterRefreshVersion] = useState(0);
   const masterVersion = useRef(0);
   const selectedDaySectionRef = useRef<HTMLElement>(null);
   const range = monthRange(month);
   const requestKey = JSON.stringify([month, company, version]);
-  const [loadedKey, setLoadedKey] = useState("");
+  const [loadedKey, setLoadedKey] = useState(initialSummary ? JSON.stringify([initialDate.slice(0, 7), "", 0]) : "");
+  const initialSummaryPending = useRef(Boolean(initialSummary));
   const loading = loadedKey !== requestKey;
   useEffect(() => {
     const controller = new AbortController();
+    if (initialSummaryPending.current) {
+      initialSummaryPending.current = false;
+      if (initialSummary && !initialSummary.warning) summaryCache.current.set(JSON.stringify([initialDate.slice(0, 7), "", 0]), initialSummary);
+    }
     if (cacheVersion.current !== version) {
       summaryCache.current.clear();
       detailCache.current.clear();
@@ -78,7 +70,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
     setMessage("");
     Promise.all([
       apiFetch(`/api/calendar?${params}`, { cache: "no-store", signal: controller.signal }),
-      version !== masterVersion.current
+      masterRefreshVersion !== masterVersion.current
         ? apiFetch("/api/companies", { cache: "no-store", signal: controller.signal })
         : Promise.resolve(null),
     ]).then(async ([response, masterResponse]) => {
@@ -88,7 +80,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
       if (controller.signal.aborted) return;
       if (nextMaster) {
         setMaster(nextMaster);
-        masterVersion.current = version;
+        masterVersion.current = masterRefreshVersion;
       }
       if (!body.warning) summaryCache.current.set(requestKey, body);
       setCompletions(body.completions ?? []); setSchedules(body.schedules ?? []); setEntrants(body.entrants ?? []); setMessage(body.warning ?? "");
@@ -96,8 +88,14 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
       if (!controller.signal.aborted) { setCompletions([]); setSchedules([]); setEntrants([]); setMessage(error instanceof Error ? error.message : "取得できませんでした。"); }
     }).finally(() => { if (!controller.signal.aborted) setLoadedKey(requestKey); });
     return () => controller.abort();
-  }, [month, company, version, range.from, range.to, requestKey]);
-  const detailKey = JSON.stringify([selectedDate, company, version, completionVersion]);
+  }, [month, company, version, range.from, range.to, requestKey, initialDate, initialSummary, masterRefreshVersion]);
+  const hasSelectedRecords = schedules.some(row => row.work_date === selectedDate)
+    || entrants.some(row => row.entry_date === selectedDate)
+    || completions.some(row => row.work_date === selectedDate);
+  useEffect(() => {
+    if (hasSelectedRecords) void loadCalendarDetails().catch(() => {});
+  }, [hasSelectedRecords]);
+  const detailKey = JSON.stringify([selectedDate, company, version]);
   const detailLoading = detailLoadedKey !== detailKey;
   useEffect(() => {
     const controller = new AbortController();
@@ -125,7 +123,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
         }
       }).finally(() => { if (!controller.signal.aborted) setDetailLoadedKey(detailKey); });
     return () => controller.abort();
-  }, [selectedDate, company, version, completionVersion, detailKey]);
+  }, [selectedDate, company, version, detailKey]);
   useEffect(() => {
     if (!pendingEditId || detailLoading) return;
     const row = detail.schedules.find((item) => item.id === pendingEditId);
@@ -163,14 +161,6 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
         setDetail((current) => ({ ...current, completions: date === current.date ? update(current.completions) : current.completions }));
         summaryCache.current.clear();
         detailCache.current.clear();
-        // Seed the next detail key from the mutation result when the day is already loaded.
-        // Otherwise let the effect abort the old request and fetch the current day.
-        if (!detailLoading && detail.date === selectedDate) {
-          detailCache.current.set(JSON.stringify([selectedDate, company, version, completionVersion + 1]), {
-            schedules: detail.schedules, entrants: detail.entrants, completions: update(detail.completions),
-          });
-        }
-        setCompletionVersion((value) => value + 1);
       }
       if (!response.ok) throw new Error(body.error || "作業終了報告を保存できませんでした。");
     } catch (error) {
@@ -179,7 +169,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
       completionPending.current = false;
       setCompletionBusy(false);
     }
-  }, [detailLoading, detail, selectedDate, company, version, completionVersion]);
+  }, []);
   const entrantMap = useMemo(() => Object.groupBy(entrants.filter((row) => !company || row.primary_company === company), (row) => row.entry_date), [entrants, company]);
   const firstDayOffset = (new Date(`${month}-01T00:00:00`).getDay() + 6) % 7 % 6;
   const weekdays = ["月", "火", "水", "木", "金", "土"];
@@ -222,7 +212,6 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
         <label className="flex w-full min-w-0 items-center gap-2 sm:ml-auto sm:w-64"><span className="shrink-0 text-sm font-semibold text-slate-700">一次会社</span><select className="input h-10 min-h-0 px-3 text-base" disabled={completionBusy} value={company} onChange={(e) => setCompany(e.target.value)}><option value="">すべて</option>{master?.primaryCompanies.map((item) => <option key={item}>{item}</option>)}</select></label>
       </div>
       {message && <p role="alert" className="mt-4 notice-error">{message}</p>}
-      {completionBusy && <LoadingIndicator label="作業終了報告を更新中…" className="mt-3 p-3" />}
       {!hasLoaded && loading ? <div className="panel mt-4 min-h-80"><LoadingIndicator label="カレンダーを読み込み中…" className="min-h-80" /></div> : <section className="panel relative mt-4 overflow-x-auto" aria-busy={loading}>
         {loading && <LoadingOverlay label="カレンダーを更新中…" />}
         <div className={`grid grid-cols-6 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500 ${company ? "min-w-[56rem]" : ""}`}>
@@ -241,7 +230,7 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h2 className="whitespace-nowrap text-lg font-bold">{Number(selectedDate.slice(5, 7))}月{Number(selectedDate.slice(8, 10))}日の予定</h2>
-            <button type="button" className="btn btn-secondary h-9 min-h-0 w-9 p-0" disabled={loading || detailLoading || completionBusy} onClick={() => setVersion((value) => value + 1)} aria-label={loading ? "予定を更新中" : "予定を更新"} title="予定を更新">
+            <button type="button" className="btn btn-secondary h-9 min-h-0 w-9 p-0" disabled={loading || detailLoading || completionBusy} onClick={() => { setMasterRefreshVersion((value) => value + 1); setVersion((value) => value + 1); }} aria-label={loading ? "予定を更新中" : "予定を更新"} title="予定を更新">
               <RefreshCw size={18} className={loading ? "animate-spin" : ""} aria-hidden="true" />
             </button>
           </div>
@@ -266,6 +255,6 @@ export function WorkerCalendar({ initialDate, initialMaster }: { initialDate: st
       </section>
     </main>
     {editing && <AdminScheduleEditor schedule={editing} master={master} workerMode onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setVersion((v) => v + 1); }} />}
-    {editingEntrant && <NewEntrantEditor record={editingEntrant} master={master} onClose={() => setEditingEntrant(null)} onSaved={() => { setEditingEntrant(null); setVersion((v) => v + 1); }} />}
+    {editingEntrant && <NewEntrantEditor record={editingEntrant} master={master} onClose={() => setEditingEntrant(null)} onSaved={() => { setEditingEntrant(null); setMasterRefreshVersion((v) => v + 1); setVersion((v) => v + 1); }} />}
   </div>;
 }

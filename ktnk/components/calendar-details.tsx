@@ -55,7 +55,7 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
 
   return <>
           {selectedSchedules.map((row) => {
-            const subs = row.subcompanies;
+            const subs = row.subcompanies.filter((sub) => (sub.worker_count ?? 0) > 0);
             const area = row.work_area;
             const content = row.work_content;
             const tradeRoles = master.primaryTradeRolesByPrimary[row.primary_company] ?? [];
@@ -84,7 +84,7 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
                     合計 <CopyValue value={totalWorkerCount} label="合計人数" compact stopPropagation>{totalWorkerCount}人</CopyValue>
                   </summary>
                   <div className="grid gap-1.5 border-t border-border p-2.5">
-                    <div className="flex min-w-0 items-baseline justify-between gap-3">
+                    {(row.primary_count ?? 0) > 0 && <div className="flex min-w-0 items-baseline justify-between gap-3">
                       <span className="min-w-0 break-words">
                         <CopyValue value={row.primary_company} label="一次会社名" compact stopPropagation />
                         <span className="ml-1 text-xs text-slate-400">一次</span>
@@ -92,7 +92,7 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
                       <span className="shrink-0 font-semibold text-primary">
                         <CopyValue value={row.primary_count ?? 0} label="一次会社人数" compact stopPropagation>{row.primary_count ?? 0}人</CopyValue>
                       </span>
-                    </div>
+                    </div>}
                     {subs.map((sub) => (
                       <div key={sub.id} className="flex min-w-0 items-baseline justify-between gap-3">
                         <span className="min-w-0 break-words">

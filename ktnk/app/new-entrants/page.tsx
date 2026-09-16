@@ -11,8 +11,7 @@ export default async function NewEntrantsPage({
     primaryCompany?: string | string[];
   }>;
 }) {
-  const params = await searchParams;
-  const master = await getCompanyMaster();
+  const [params, master] = await Promise.all([searchParams, getCompanyMaster()]);
   const initialDate =
     typeof params.date === "string" && isWorkingDate(params.date)
       ? params.date

@@ -13,8 +13,7 @@ export default async function SchedulePage({
   }>;
 }) {
   const today = todayInTokyoString();
-  const params = await searchParams;
-  const companyMaster = await getCompanyMaster();
+  const [params, companyMaster] = await Promise.all([searchParams, getCompanyMaster()]);
   const requestedDate = params.date;
   const initialDate =
     typeof requestedDate === "string" && isWorkingDate(requestedDate)
