@@ -6,6 +6,11 @@ export function aerialVehicleFields(vehicles: AerialWorkVehicleInput[]) {
         aerialWorkVehicleFloor: vehicles.map((row) => row.workArea).filter(Boolean).join("、"),
     };
 }
+export function parseTachiumaValue(value?: string | null) {
+    const text = value ?? "";
+    const match = text.match(/^(.*)（希望\s*(\d+)台）$/);
+    return match ? { area: match[1], count: Number(match[2]) } : { area: text, count: text ? 1 : null };
+}
 export function scheduleToFormData(row: ScheduleWithSubcompanies, secondaryCompanies?: string[]): ScheduleSubmitInput {
     const vehicles = row.aerialWorkVehicles?.length
         ? row.aerialWorkVehicles.map((vehicle) => ({ workArea: vehicle.work_area, vehicleCount: vehicle.vehicle_count }))
@@ -13,6 +18,7 @@ export function scheduleToFormData(row: ScheduleWithSubcompanies, secondaryCompa
             ? [{ workArea: row.aerial_work_vehicle_floor ?? "", vehicleCount: row.aerial_work_vehicle_count }]
             : [];
     const savedCounts = new Map(row.subcompanies.map((sub) => [sub.secondary_company ?? "", sub.worker_count]));
+    const tachiuma = parseTachiumaValue(row.tachiuma_notes);
     return {
         dates: [row.work_date], startDate: row.work_date, endDate: row.work_date, excludeWeekends: false,
         primaryCompany: row.primary_company, primaryCount: row.primary_count,
@@ -21,6 +27,6 @@ export function scheduleToFormData(row: ScheduleWithSubcompanies, secondaryCompa
         workArea: row.work_area ?? "", workContent: row.work_content ?? "",
         ...aerialVehicleFields(vehicles),
         usesFire: row.uses_fire, fireArea: row.fire_area ?? "", usesTachiuma: row.uses_tachiuma,
-        tachiumaNotes: row.tachiuma_notes ?? "", notes: row.notes ?? "",
+        tachiumaNotes: tachiuma.area, tachiumaCount: tachiuma.count, notes: row.notes ?? "",
     };
 }

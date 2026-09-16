@@ -3,7 +3,7 @@
 import { SchedulePreview } from "@/components/schedule-preview";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { CopyButton } from "@/components/copy-button";
-import {scheduleToFormData} from "@/lib/schedule-fields";
+import {parseTachiumaValue, scheduleToFormData} from "@/lib/schedule-fields";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type {
@@ -43,6 +43,7 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   fireArea: "",
   usesTachiuma: false,
   tachiumaNotes: "",
+  tachiumaCount: null,
   notes: "",
 });
 
@@ -470,7 +471,9 @@ export function ScheduleForm({
       next.usesFire = source.usesFire ?? false;
       next.fireArea = source.fireArea ?? "";
       next.usesTachiuma = source.usesTachiuma ?? false;
-      next.tachiumaNotes = source.tachiumaNotes ?? "";
+      const tachiuma = parseTachiumaValue(source.tachiumaNotes);
+      next.tachiumaNotes = tachiuma.area;
+      next.tachiumaCount = tachiuma.count;
     } else {
       next.primaryCount = null;
       next.currentSubcompanies = secondaryOptions.map((secondaryCompany) => ({
@@ -490,7 +493,9 @@ export function ScheduleForm({
       next.usesFire = source?.usesFire ?? false;
       next.fireArea = source?.fireArea ?? "";
       next.usesTachiuma = source?.usesTachiuma ?? false;
-      next.tachiumaNotes = source?.tachiumaNotes ?? "";
+      const tachiuma = parseTachiumaValue(source?.tachiumaNotes);
+      next.tachiumaNotes = tachiuma.area;
+      next.tachiumaCount = tachiuma.count;
     }
     setForm(next);
     setSecondaryWorkChoice(next.currentSubcompanies.length > 0);
@@ -975,6 +980,7 @@ export function ScheduleForm({
                         fireArea: form.fireArea,
                         usesTachiuma: form.usesTachiuma,
                         tachiumaNotes: form.tachiumaNotes,
+                        tachiumaCount: form.tachiumaCount,
                         subcompanies: activeRows,
                       }}
                     />
@@ -1268,8 +1274,8 @@ export function ScheduleForm({
                         {summary.aerialWorkVehicleCount > 0 && (
                           <p>高所作業車：{summary.aerialWorkVehicleCount}台{summary.aerialWorkVehicleFloor ? `（使用フロア：${summary.aerialWorkVehicleFloor}）` : ""}</p>
                         )}
-                        {summary.usesTachiuma && summary.tachiumaNotes && <p>立ち馬：{summary.tachiumaNotes}</p>}
-                        {summary.usesFire && <p>火気：{summary.fireArea}</p>}
+                        {summary.usesTachiuma && summary.tachiumaNotes && <p>立ち馬：{summary.tachiumaNotes}{form.tachiumaCount ? `（希望 ${form.tachiumaCount}台）` : ""}</p>}
+                        {summary.usesFire && <p>火気：使用あり</p>}
                         {summary.notes && <p>備考：{summary.notes}</p>}
                       </div>
                     ))

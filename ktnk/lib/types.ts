@@ -36,6 +36,7 @@ export type PreviousSchedule = {
   fireArea?: string | null;
   usesTachiuma?: boolean;
   tachiumaNotes?: string | null;
+  tachiumaCount?: number | null;
   subcompanies: { secondaryCompany: string; workerCount: number | null }[];
 };
 
@@ -57,6 +58,7 @@ export type ScheduleSubmitInput = {
   fireArea: string;
   usesTachiuma: boolean;
   tachiumaNotes: string;
+  tachiumaCount?: number | null;
   notes: string;
   overwriteExisting?: boolean;
   skipExisting?: boolean;

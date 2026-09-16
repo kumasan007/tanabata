@@ -6,9 +6,9 @@ import { CopyValue } from "@/components/copy-value";
 import { completionTime } from "@/lib/completion-time";
 import type { CalendarEntrant, CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 import type { WorkCompletion } from "@/lib/work-completions";
-export const CalendarDetails = memo(function CalendarDetails({ detail, master, selectedDate, isToday, completionBusy, onEdit: setEditing, onEditEntrant: setEditingEntrant, onCompletion: saveCompletion }: {
+export const CalendarDetails = memo(function CalendarDetails({ detail, master, selectedDate, isToday, completionBusy, detailsExpanded, onEdit: setEditing, onEditEntrant: setEditingEntrant, onCompletion: saveCompletion }: {
   detail: { schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[] };
-  master: CompanyMaster; selectedDate: string; isToday: boolean; completionBusy: boolean;
+  master: CompanyMaster; selectedDate: string; isToday: boolean; completionBusy: boolean; detailsExpanded: boolean;
   onEdit: (row: ScheduleWithSubcompanies) => void; onEditEntrant: (row: NewEntrantRecord) => void;
   onCompletion: (date: string, company: string, report?: WorkCompletion, notes?: string) => Promise<void>;
 }) {
@@ -83,6 +83,8 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
                 <button type="button" className="btn btn-secondary h-8 min-h-8 w-8 p-0" disabled={completionBusy} onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
               </div>
               </div>
+              <p className="mt-2 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label="作業エリア" compact stopPropagation /> : "エリア未入力"}</p>
+              <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" compact stopPropagation /> : "作業内容未入力"}</p>
               <details className="mt-2 rounded-md border border-border bg-slate-50">
                   <summary className="cursor-pointer px-2.5 py-2 font-semibold text-slate-700 marker:text-emerald-700">
                     合計 <CopyValue value={totalWorkerCount} label="合計人数" compact stopPropagation>{totalWorkerCount}人</CopyValue>
@@ -110,12 +112,12 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
                     ))}
                   </div>
               </details>
-              <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label="作業エリア" compact stopPropagation /> : "エリア未入力"}</p>
-              <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" compact stopPropagation /> : "作業内容未入力"}</p>
-              {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="mt-1 text-sky-800">高車：<CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数" compact stopPropagation>{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" compact stopPropagation />）</>}</p>}
-              {row.uses_tachiuma && row.tachiuma_notes && <p className="text-emerald-800">立ち馬：<CopyValue value={row.tachiuma_notes} label="立ち馬の使用内容" compact stopPropagation /></p>}
-              {row.uses_fire && <p className="text-rose-800">火気：{row.fire_area || "未入力"}</p>}
-              {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" compact stopPropagation /></p>}
+              {detailsExpanded && ((row.aerial_work_vehicle_count ?? 0) > 0 || row.uses_tachiuma || row.uses_fire || row.notes) && <div className="mt-2 grid gap-1 px-0.5">
+                {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="text-sky-800">高車：<CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数" compact stopPropagation>{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" compact stopPropagation />）</>}</p>}
+                {row.uses_tachiuma && <p className="text-emerald-800">立ち馬：{row.tachiuma_notes ? <CopyValue value={row.tachiuma_notes} label="立ち馬の使用内容" compact stopPropagation /> : "使用"}</p>}
+                {row.uses_fire && <p className="text-rose-800">火気：{row.fire_area || "使用場所未入力"}</p>}
+                {row.notes && <p className="whitespace-pre-wrap break-words border-t border-border pt-1.5 text-xs text-slate-500">備考：<CopyValue value={row.notes} label="備考" compact stopPropagation /></p>}
+              </div>}
               {completionControls(row.primary_company)}
             </article>;
           })}

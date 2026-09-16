@@ -7,7 +7,7 @@ import type { WorkCompletion } from "@/lib/work-completions";
 import { LoadingIndicator, LoadingOverlay } from "@/components/loading-indicator";
 import { CalendarDay } from "@/components/calendar-day";
 import { isWorkingDate } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -18,11 +18,13 @@ const loadCalendarDetails = () => import("@/components/calendar-details");
 const CalendarDetails = dynamic(() => import("@/components/calendar-details").then((module) => module.CalendarDetails), { loading: () => <LoadingIndicator /> });
 const AdminScheduleEditor = dynamic(() => import("@/components/admin-schedule-editor").then((module) => module.AdminScheduleEditor));
 const NewEntrantEditor = dynamic(() => import("@/components/new-entrant-editor").then((module) => module.NewEntrantEditor));
+const DETAILS_PREFERENCE_KEY = "calendar-supplement-expanded";
 
 export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: { initialDate: string; initialMaster: CompanyMaster; initialSummary?: CalendarSummaryData | null }) {
   const [month, setMonth] = useState(initialDate.slice(0, 7));
   const [selectedDate, setSelectedDate] = useState(isWorkingDate(initialDate) ? initialDate : datesInMonth(initialDate.slice(0, 7)).find((date) => date > initialDate) ?? datesInMonth(initialDate.slice(0, 7))[0]);
   const [company, setCompany] = useState("");
+  const [detailsExpanded, setDetailsExpanded] = useState(true);
   const [master, setMaster] = useState<CompanyMaster>(initialMaster);
   const [schedules, setSchedules] = useState<CalendarSchedule[]>(initialSummary?.schedules ?? []);
   const [entrants, setEntrants] = useState<CalendarEntrant[]>(initialSummary?.entrants ?? []);
@@ -33,6 +35,18 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
   const summaryCache = useRef(new CalendarClientCache<{ schedules: CalendarSchedule[]; entrants: CalendarEntrant[]; completions: WorkCompletion[]; warning?: string }>());
   const detailCache = useRef(new CalendarClientCache<{ schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[]; warning?: string }>());
   const cacheVersion = useRef(0);
+
+  useEffect(() => {
+    setDetailsExpanded(window.localStorage.getItem(DETAILS_PREFERENCE_KEY) !== "false");
+  }, []);
+
+  const toggleDetails = useCallback(() => {
+    setDetailsExpanded((current) => {
+      const next = !current;
+      window.localStorage.setItem(DETAILS_PREFERENCE_KEY, String(next));
+      return next;
+    });
+  }, []);
   const [pendingEditId, setPendingEditId] = useState<string | null>(null);
   const [completionBusy, setCompletionBusy] = useState(false);
   const completionPending = useRef(false);
@@ -232,6 +246,10 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
             <button type="button" className="btn btn-secondary h-9 min-h-0 w-9 p-0" disabled={loading || detailLoading || completionBusy} onClick={() => { setMasterRefreshVersion((value) => value + 1); setVersion((value) => value + 1); }} aria-label={loading ? "予定を更新中" : "予定を更新"} title="予定を更新">
               <RefreshCw size={18} className={loading ? "animate-spin" : ""} aria-hidden="true" />
             </button>
+            <button type="button" className="btn btn-secondary h-9 min-h-0 gap-1 px-2" onClick={toggleDetails} aria-pressed={detailsExpanded} aria-label={detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示"} title={detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示"}>
+              {detailsExpanded ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
+              <span className="hidden text-xs sm:inline">{detailsExpanded ? "補足を隠す" : "補足を表示"}</span>
+            </button>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {[{ label: "作業入力", pathname: "/schedule" }, { label: "新規入場", pathname: "/new-entrants" }].map((item) => (
@@ -248,7 +266,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
         </div>
         {detailMessage && <p role="alert" className="mb-3 notice-error">{detailMessage}</p>}
         {detailLoading ? <LoadingIndicator label="予定を読み込み中…" className="min-h-32" /> : detail.schedules.length === 0 && detail.entrants.length === 0 && detail.completions.length === 0 ? !detailMessage && <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className={`grid gap-2 transition-opacity sm:grid-cols-2 lg:grid-cols-3 ${loading ? "pointer-events-none opacity-60" : ""}`} aria-busy={loading}>
-          <CalendarDetails detail={detail} master={master} selectedDate={selectedDate} isToday={selectedDate === initialDate} completionBusy={completionBusy}
+          <CalendarDetails detail={detail} master={master} selectedDate={selectedDate} isToday={selectedDate === initialDate} completionBusy={completionBusy} detailsExpanded={detailsExpanded}
             onEdit={setEditing} onEditEntrant={setEditingEntrant} onCompletion={saveCompletion} />
         </div>}
       </section>
