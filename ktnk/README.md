@@ -56,7 +56,7 @@ anonキー運用では公開キーを知る利用者がSupabase REST APIを直�
 
 バックアップ機能を追加する場合は、Supabase DashboardのCronを有効にしてから `supabase/migrations/20260907_add_daily_backups.sql` と、それ以降のバックアップ用マイグレーションをSQL Editorで順番に1回実行します。毎日14:59 UTC（日本時間23:59）に業務データを `data_backups` へ保存し、10日を過ぎたバックアップだけを自動削除します。管理画面やAPIからの手動削除はできません。
 
-24時間の操作履歴と個別復元を有効にするには、最新の `supabase/migrations/202609110001_add_audit_logs_and_update_backups.sql` をSupabase SQL Editorで1回実行します。登録・編集・削除と復元操作はDBトリガーで `audit_logs` に記録され、24時間を過ぎたログはSupabase Cronが1日1回まとめて削除します。このSQLは高所作業車を既存バックアップの保存・復元対象にも追加します。
+24時間の操作履歴と個別復元を有効にするには、`supabase/migrations/202609110001_add_audit_logs_and_update_backups.sql` と、作業終了履歴を追加する `supabase/migrations/202609160002_add_work_completion_audit.sql` をSupabase SQL Editorで順番に1回実行します。登録・編集・削除と復元操作はDBトリガーで `audit_logs` に記録され、24時間を過ぎたログはSupabase Cronが1日1回まとめて削除します。
 
 登録時にDB列・制約のズレで失敗する場合は、既存データを削除してよければ `supabase/reset-schema.sql` をSupabase SQL Editorで実行します。`schedule_groups` と `schedule_subcompanies` を作り直します。
 

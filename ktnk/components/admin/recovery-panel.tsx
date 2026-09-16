@@ -315,6 +315,7 @@ export function RecoveryPanel({ kind, active, onRestored }: {
                         {log.restored_at ? <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">復元済み</span> : null}
                       </div>
                       <p className="mt-1 text-xs text-slate-500">{formatBackupTime(log.changed_at)}</p>
+                      <AuditChangeDetails log={log}/>
                     </div>
                     <button className="btn btn-secondary" type="button" disabled={auditLoading || Boolean(log.restored_at)} onClick={() => requestAuditChangeRestore(log)}>
                       <RotateCcw size={16} aria-hidden="true"/>
@@ -380,6 +381,7 @@ function auditLogDescription(log: AuditLogRow) {
         schedule_subcompanies: "二次会社の予定",
         schedule_aerial_work_vehicles: "高所作業車",
         new_entrant_records: "新規入場者",
+        work_completion_reports: "作業終了",
     };
     const details = [
         stringField(data, "work_date") || stringField(data, "entry_date"),
@@ -388,6 +390,68 @@ function auditLogDescription(log: AuditLogRow) {
         stringField(data, "person_names"),
     ].filter(Boolean);
     return `${tableLabels[log.table_name] ?? log.table_name}${details.length ? `（${details.join("・")}）` : ""}`;
+}
+const auditFieldLabels: Record<string, string> = {
+    work_date: "作業日",
+    entry_date: "入場日",
+    primary_company: "一次会社",
+    secondary_company: "二次会社",
+    primary_trade_roles: "職種",
+    primary_count: "一次会社人数",
+    worker_count: "人数",
+    person_count: "入場者数",
+    person_names: "氏名",
+    nationality_status: "国籍区分",
+    work_area: "作業場所",
+    work_content: "作業内容",
+    aerial_work_vehicle_count: "高所作業車台数",
+    aerial_work_vehicle_floor: "高所作業車使用階",
+    vehicle_count: "台数",
+    uses_fire: "火気使用",
+    uses_tachiuma: "立馬使用",
+    tachiuma_notes: "立馬備考",
+    notes: "備考",
+    sort_order: "表示順",
+    reported_at: "終了報告日時",
+};
+const hiddenAuditFields = new Set(["id", "schedule_group_id", "created_at", "updated_at"]);
+function AuditChangeDetails({ log }: { log: AuditLogRow }) {
+    const oldData = log.old_data ?? {};
+    const newData = log.new_data ?? {};
+    const keys = Array.from(new Set([...Object.keys(oldData), ...Object.keys(newData)]))
+        .filter((key) => !hiddenAuditFields.has(key))
+        .filter((key) => log.operation !== "UPDATE" || !sameAuditValue(oldData[key], newData[key]));
+    if (keys.length === 0)
+        return null;
+    return <dl className="mt-3 grid gap-1.5 rounded-md bg-slate-50 px-3 py-2 text-xs">
+      {keys.map((key) => <div key={key} className="grid min-w-0 gap-0.5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-2">
+        <dt className="font-semibold text-slate-600">{auditFieldLabels[key] ?? key}</dt>
+        <dd className="min-w-0 whitespace-pre-wrap break-words text-slate-800">
+          {log.operation === "UPDATE"
+            ? <><span className="text-slate-500">{formatAuditValue(key, oldData[key])}</span><span className="mx-1.5" aria-label="から">→</span><span>{formatAuditValue(key, newData[key])}</span></>
+            : formatAuditValue(key, (log.operation === "INSERT" ? newData : oldData)[key])}
+        </dd>
+      </div>)}
+    </dl>;
+}
+function sameAuditValue(left: unknown, right: unknown) {
+    return JSON.stringify(left) === JSON.stringify(right);
+}
+function formatAuditValue(key: string, value: unknown) {
+    if (value === null || value === undefined || value === "")
+        return "未設定";
+    if (key === "nationality_status")
+        return value === "japanese_only" ? "日本人のみ" : value === "includes_foreign" ? "外国籍を含む" : String(value);
+    if (typeof value === "boolean")
+        return value ? "あり" : "なし";
+    if (Array.isArray(value))
+        return value.length ? value.map(String).join("、") : "未設定";
+    if ((key === "reported_at" || key.endsWith("_at")) && typeof value === "string") {
+        const date = new Date(value);
+        if (!Number.isNaN(date.getTime()))
+            return formatBackupTime(value);
+    }
+    return String(value);
 }
 function stringField(data: Record<string, unknown>, key: string) {
     return typeof data[key] === "string" ? data[key] : "";

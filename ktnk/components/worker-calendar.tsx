@@ -139,7 +139,6 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
   const days = useMemo(() => datesInMonth(month), [month]);
   const hasLoaded = loadedKey !== "";
   const scheduleMap = useMemo(() => Object.groupBy(schedules.filter((row) => !company || row.primary_company === company), (row) => row.work_date), [schedules, company]);
-  const completionMap = useMemo(() => Object.groupBy(completions, (row) => row.work_date), [completions]);
   const saveCompletion = useCallback(async function saveCompletion(date: string, primaryCompany: string, report?: WorkCompletion) {
     if (completionPending.current) return;
     completionPending.current = true;
@@ -219,9 +218,9 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
         </div>
         <div className={`grid grid-cols-6 bg-border/70 gap-px ${company ? "min-w-[56rem]" : ""}`}>
           {Array.from({ length: firstDayOffset }, (_, index) => <div key={`blank-${index}`} className="min-h-20 bg-slate-50" />)}
-          {days.map((date) => <CalendarDay key={date} date={date} selected={selectedDate === date} isToday={date === initialDate} company={company}
-            schedules={scheduleMap[date]} entrants={entrantMap[date]} completions={completionMap[date]}
-            loading={loading} completionBusy={completionBusy} onSelect={selectDate} onEdit={editSummary} onCompletion={saveCompletion} />)}
+          {days.map((date) => <CalendarDay key={date} date={date} selected={selectedDate === date} company={company}
+            schedules={scheduleMap[date]} entrants={entrantMap[date]}
+            loading={loading} completionBusy={completionBusy} onSelect={selectDate} onEdit={editSummary} />)}
 
         </div>
       </section>}
