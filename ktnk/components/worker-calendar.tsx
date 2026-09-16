@@ -139,16 +139,16 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
   const days = useMemo(() => datesInMonth(month), [month]);
   const hasLoaded = loadedKey !== "";
   const scheduleMap = useMemo(() => Object.groupBy(schedules.filter((row) => !company || row.primary_company === company), (row) => row.work_date), [schedules, company]);
-  const saveCompletion = useCallback(async function saveCompletion(date: string, primaryCompany: string, report?: WorkCompletion) {
+  const saveCompletion = useCallback(async function saveCompletion(date: string, primaryCompany: string, report?: WorkCompletion, notes?: string) {
     if (completionPending.current) return;
     completionPending.current = true;
     setCompletionBusy(true);
     setMessage("");
     try {
       const response = await apiFetch("/api/work-completions", {
-        method: report ? "DELETE" : "POST",
+        method: report && notes === undefined ? "DELETE" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, primaryCompany, notes: "", expectedReportedAt: report?.reported_at }),
+        body: JSON.stringify({ date, primaryCompany, notes: notes ?? "", expectedReportedAt: report?.reported_at }),
       });
       const body = await response.json();
       if (response.ok || response.status === 409) {

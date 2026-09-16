@@ -1,6 +1,7 @@
 "use client";
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import { Pencil } from "lucide-react";
+import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CopyValue } from "@/components/copy-value";
 import { completionTime } from "@/lib/completion-time";
 import type { CalendarEntrant, CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
@@ -9,8 +10,10 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
   detail: { schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[] };
   master: CompanyMaster; selectedDate: string; isToday: boolean; completionBusy: boolean;
   onEdit: (row: ScheduleWithSubcompanies) => void; onEditEntrant: (row: NewEntrantRecord) => void;
-  onCompletion: (date: string, company: string, report?: WorkCompletion) => Promise<void>;
+  onCompletion: (date: string, company: string, report?: WorkCompletion, notes?: string) => Promise<void>;
 }) {
+  const { confirm, dialog: confirmationDialog } = useConfirmDialog();
+  const [notesEditor, setNotesEditor] = useState<{ report: WorkCompletion; notes: string } | null>(null);
   const selectedCompletions = detail.completions;
   const completionMap = useMemo(() => new Map(detail.completions.map((row) => [row.primary_company, row])), [detail.completions]);
   const companyPriority = useMemo(
@@ -36,7 +39,7 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
       {report ? <div className="rounded bg-emerald-100 p-2 text-emerald-900">
         <div className="flex items-start justify-between gap-2">
           <p className="font-bold">✓ 作業終了済み</p>
-          {isToday && <button type="button" className="shrink-0 rounded border border-emerald-600 bg-white px-1.5 py-0.5 text-xs font-semibold disabled:opacity-50" disabled={completionBusy} onClick={(event) => { event.stopPropagation(); void saveCompletion(selectedDate, primaryCompany, report); }}>取り消し</button>}
+          {isToday && <div className="flex items-center gap-1"><button type="button" className="inline-flex h-7 w-7 items-center justify-center rounded border border-emerald-600 bg-white disabled:opacity-50" disabled={completionBusy} aria-label="備考を編集" title="備考を編集" onClick={(event) => { event.stopPropagation(); setNotesEditor({ report, notes: report.notes ?? "" }); }}><Pencil size={14} aria-hidden="true" /></button><button type="button" className="inline-flex h-7 shrink-0 items-center justify-center rounded border border-emerald-600 bg-white px-2 text-xs font-semibold disabled:opacity-50" disabled={completionBusy} onClick={async (event) => { event.stopPropagation(); if (await confirm("作業終了報告を取り消しますか？", `${primaryCompany}の作業終了報告を取り消します。`, "取り消す")) void saveCompletion(selectedDate, primaryCompany, report); }}>取り消し</button></div>}
         </div>
         <p className="text-xs">報告時刻：{completionTime(report.reported_at)}</p>{report.notes && <p className="whitespace-pre-wrap break-words text-xs">備考：{report.notes}</p>}
       </div> : <button type="button" className="btn btn-secondary min-h-9 px-2 py-1 text-sm" disabled={completionBusy} onClick={(event) => { event.stopPropagation(); void saveCompletion(selectedDate, primaryCompany); }}>作業終了</button>}
@@ -75,8 +78,8 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 {(row.aerial_work_vehicle_count ?? 0) > 0 && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-sm font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
-                {row.uses_fire && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-sm font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
                 {row.uses_tachiuma && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold leading-none text-white shadow-sm" title="立ち馬使用あり">立</span>}
+                {row.uses_fire && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-sm font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
                 <button type="button" className="btn btn-secondary h-8 min-h-8 w-8 p-0" disabled={completionBusy} onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
               </div>
               </div>
@@ -110,9 +113,8 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
               <p className="mt-1 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label="作業エリア" compact stopPropagation /> : "エリア未入力"}</p>
               <p className="truncate text-slate-600" title={content ?? ""}>{content ? <CopyValue value={content} label="作業内容" compact stopPropagation /> : "作業内容未入力"}</p>
               {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="mt-1 text-sky-800">高車：<CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数" compact stopPropagation>{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" compact stopPropagation />）</>}</p>}
-              {row.uses_fire && <p className="text-red-700">火気：使用</p>}
-              {row.uses_tachiuma && <p className="text-emerald-700">立ち馬：使用</p>}
-              {row.uses_tachiuma && row.tachiuma_notes && <p className="text-emerald-700">立ち馬の使用内容：<CopyValue value={row.tachiuma_notes} label="立ち馬の使用内容" compact stopPropagation /></p>}
+              {row.uses_tachiuma && row.tachiuma_notes && <p className="text-emerald-800">立ち馬：<CopyValue value={row.tachiuma_notes} label="立ち馬の使用内容" compact stopPropagation /></p>}
+              {row.uses_fire && <p className="text-rose-800">火気：{row.fire_area || "未入力"}</p>}
               {row.notes && <p className="mt-1 truncate border-t border-border pt-1 text-xs text-slate-500" title={row.notes}>備考：<CopyValue value={row.notes} label="備考" compact stopPropagation /></p>}
               {completionControls(row.primary_company)}
             </article>;
@@ -134,5 +136,7 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
             </article>;
           })}
           {selectedCompletions.filter((report) => !scheduledCompanies.has(report.primary_company)).map((report) => <article key={`completion-${report.primary_company}`} className="panel p-3 text-sm"><p className="font-bold">{report.primary_company}</p>{completionControls(report.primary_company)}</article>)}
+          {notesEditor && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !completionBusy) setNotesEditor(null); }}><section role="dialog" aria-modal="true" aria-labelledby="completion-notes-title" className="panel w-full max-w-md p-5 shadow-xl"><h2 id="completion-notes-title" className="text-lg font-bold">作業終了の備考を編集</h2><p className="mt-1 text-sm text-slate-600">{notesEditor.report.primary_company}</p><label className="field mt-4"><span className="label">備考<span className="ml-2 text-sm font-normal text-slate-600">任意</span></span><textarea className="textarea" maxLength={2000} value={notesEditor.notes} onChange={(event) => setNotesEditor({ ...notesEditor, notes: event.target.value })} /></label><div className="mt-4 flex justify-end gap-2"><button type="button" className="btn btn-secondary" disabled={completionBusy} onClick={() => setNotesEditor(null)}>キャンセル</button><button type="button" className="btn btn-primary" disabled={completionBusy || notesEditor.notes.trim() === (notesEditor.report.notes ?? "")} onClick={async () => { await saveCompletion(selectedDate, notesEditor.report.primary_company, notesEditor.report, notesEditor.notes); setNotesEditor(null); }}>保存</button></div></section></div>}
+          {confirmationDialog}
   </>;
 });

@@ -20,7 +20,7 @@ export function scheduleToFormData(row: ScheduleWithSubcompanies, secondaryCompa
             .map((secondaryCompany) => ({ secondaryCompany, workerCount: savedCounts.get(secondaryCompany) ?? 0 })),
         workArea: row.work_area ?? "", workContent: row.work_content ?? "",
         ...aerialVehicleFields(vehicles),
-        usesFire: row.uses_fire, usesTachiuma: row.uses_tachiuma,
+        usesFire: row.uses_fire, fireArea: row.fire_area ?? "", usesTachiuma: row.uses_tachiuma,
         tachiumaNotes: row.tachiuma_notes ?? "", notes: row.notes ?? "",
     };
 }

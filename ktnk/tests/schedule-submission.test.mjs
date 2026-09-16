@@ -315,6 +315,7 @@ function serviceWithDatabase(previous = null, rpcError = null) {
       let previousQuery = false;
       const query = {
       select: () => query,
+      update: () => query,
       eq: () => query,
       in: async () => ({ data: [], error: null }),
         order: () => query,
@@ -552,7 +553,7 @@ test("予定保存は複数日と全明細を一回のRPCへ渡す", async () =>
   const input = scheduleSubmitSchema.parse(submission({
     dates: ["2026-09-16", "2026-09-15"], startDate: "2026-09-15", endDate: "2026-09-16",
     currentSubcompanies: [{secondaryCompany:"二次会社",workerCount:2}],
-    aerialWorkVehicles:[{workArea:"10階",vehicleCount:3}], usesFire:true,usesTachiuma:true,tachiumaNotes:"10階で2個",
+    aerialWorkVehicles:[{workArea:"10階",vehicleCount:3}], usesFire:true,fireArea:"10階",usesTachiuma:true,tachiumaNotes:"10階で2個",
     overwriteExisting:true,
   }));
   const result = await service.saveScheduleSubmission(input);
@@ -563,6 +564,7 @@ test("予定保存は複数日と全明細を一回のRPCへ渡す", async () =>
   assert.equal(call.data.p_subcompanies[0].worker_count,2);
   assert.equal(call.data.p_vehicles[0].vehicle_count,3);
   assert.equal(call.data.p_groups[0].tachiuma_notes,"10階で2個");
+  assert.equal(call.data.p_groups[0].fire_area,"10階");
   assert.equal(call.data.p_overwrite,true);
   assert.deepEqual(Array.from(result.dates),["2026-09-15","2026-09-16"]);
 });

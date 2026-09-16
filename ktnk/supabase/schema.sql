@@ -77,6 +77,7 @@ create table if not exists public.schedule_groups (
   aerial_work_vehicle_count integer check (aerial_work_vehicle_count is null or aerial_work_vehicle_count >= 0),
   aerial_work_vehicle_floor text,
   uses_fire boolean not null default false,
+  fire_area text,
   uses_tachiuma boolean not null default false,
   tachiuma_notes text,
   notes text,
@@ -105,6 +106,7 @@ alter table public.schedule_groups add column if not exists notes text;
 alter table public.schedule_groups add column if not exists aerial_work_vehicle_count integer
   check (aerial_work_vehicle_count is null or aerial_work_vehicle_count >= 0);
 alter table public.schedule_groups add column if not exists aerial_work_vehicle_floor text;
+alter table public.schedule_groups add column if not exists fire_area text;
 alter table public.schedule_groups add column if not exists uses_fire boolean not null default false;
 alter table public.schedule_groups add column if not exists uses_tachiuma boolean not null default false;
 alter table public.schedule_groups add column if not exists tachiuma_notes text;

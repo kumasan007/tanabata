@@ -33,6 +33,7 @@ export type PreviousSchedule = {
   aerialWorkVehicleFloor?: string | null;
   aerialWorkVehicles?: AerialWorkVehicleInput[];
   usesFire?: boolean;
+  fireArea?: string | null;
   usesTachiuma?: boolean;
   tachiumaNotes?: string | null;
   subcompanies: { secondaryCompany: string; workerCount: number | null }[];
@@ -53,6 +54,7 @@ export type ScheduleSubmitInput = {
   aerialWorkVehicleFloor: string;
   aerialWorkVehicles?: AerialWorkVehicleInput[];
   usesFire: boolean;
+  fireArea: string;
   usesTachiuma: boolean;
   tachiumaNotes: string;
   notes: string;
@@ -70,6 +72,7 @@ export type ScheduleGroupRow = {
   aerial_work_vehicle_count: number | null;
   aerial_work_vehicle_floor: string | null;
   uses_fire: boolean;
+  fire_area: string | null;
   uses_tachiuma: boolean;
   tachiuma_notes: string | null;
   notes: string | null;
@@ -106,6 +109,7 @@ export type ScheduleSummary = {
   aerialWorkVehicleCount: number;
   aerialWorkVehicleFloor: string;
   usesFire: boolean;
+  fireArea: string;
   usesTachiuma: boolean;
   tachiumaNotes: string;
   companyText: string;
@@ -129,6 +133,7 @@ export type CalendarSchedule = Pick<ScheduleWithSubcompanies, "id" | "work_date"
   total_workers: number;
   work_area?: string | null;
   work_content?: string | null;
+  fire_area?: string | null;
   tachiuma_notes?: string | null;
 };
 export type CalendarEntrant = Pick<NewEntrantRecord, "entry_date" | "primary_company" | "secondary_company" | "person_count">;

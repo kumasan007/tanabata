@@ -29,6 +29,14 @@ export function SiteHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={active ? (event) => {
+                    event.preventDefault();
+                    if (window.location.search) {
+                      window.location.assign(item.href);
+                    } else {
+                      window.location.reload();
+                    }
+                  } : undefined}
                   aria-current={active ? "page" : undefined}
                   className={`inline-flex min-h-9 min-w-0 items-center justify-center rounded-md px-1 text-center text-xs font-bold leading-tight transition-colors sm:min-h-11 sm:px-4 sm:text-base ${active ? "bg-emerald-800 text-white" : "text-slate-700 hover:bg-emerald-50 hover:text-emerald-900"}`}
                 >

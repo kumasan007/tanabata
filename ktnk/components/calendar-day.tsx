@@ -41,17 +41,16 @@ export const CalendarDay = memo(function CalendarDay({ date, selected, company, 
                 return <div key={row.id} className="mt-1 min-w-0 rounded bg-emerald-100 p-1 text-[10px] leading-4 text-emerald-950 sm:text-xs">
                   <div className="mb-1 flex items-center justify-end gap-0.5">
                     {(row.aerial_work_vehicle_count ?? 0) > 0 && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-600 font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
-                    {row.uses_fire && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-600 font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
                     {row.uses_tachiuma && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 font-bold leading-none text-white shadow-sm" title="立ち馬使用あり">立</span>}
+                    {row.uses_fire && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-600 font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
                     <button type="button" className="rounded p-0.5 hover:bg-white/70" disabled={loading || completionBusy} onClick={(event) => { event.stopPropagation(); onEdit(row); }} aria-label={`${date}の予定を編集`} title="予定を編集"><Pencil size={12} aria-hidden="true" /></button>
                   </div>
                   <p className="font-bold">{totalWorkers(row)}人</p>
                   <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
                   <p className="line-clamp-2 break-words" title={content ?? ""}>{content || "作業内容未入力"}</p>
                   {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="truncate font-semibold text-sky-800">高車：{row.aerial_work_vehicle_count}台</p>}
-                  {row.uses_fire && <p className="truncate font-semibold text-red-700">火気：使用</p>}
-                  {row.uses_tachiuma && <p className="truncate font-semibold text-emerald-700">立ち馬：使用</p>}
-                  {row.uses_tachiuma && row.tachiuma_notes && <p className="truncate text-emerald-700" title={row.tachiuma_notes}>{row.tachiuma_notes}</p>}
+                  {row.uses_tachiuma && row.tachiuma_notes && <p className="truncate font-semibold text-emerald-800" title={row.tachiuma_notes}>立ち馬：{row.tachiuma_notes}</p>}
+                  {row.uses_fire && <p className="truncate font-semibold text-rose-800">火気：{row.fire_area || "使用"}</p>}
                 </div>;
               })}
               {company && dayEntrants.length > 0 && <div className="mt-1 min-w-0 rounded bg-amber-100 p-1 text-[10px] leading-4 text-amber-900 sm:text-xs"><p className="truncate font-semibold">新規入場</p><p>{entrantStats.companies}社・{entrantStats.people}人</p></div>}

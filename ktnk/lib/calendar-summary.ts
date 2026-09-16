@@ -8,7 +8,7 @@ import type { CalendarSchedule, CalendarEntrant } from "@/lib/types";
 export const getCalendarSchedules = unstable_cache(async (from: string, to: string, company: string): Promise<CalendarSchedule[]> => {
   let query = createServerClient().from("schedule_groups").select(
     `id,work_date,primary_company,primary_count,aerial_work_vehicle_count,uses_fire,uses_tachiuma,
-    ${company ? "work_area,work_content,tachiuma_notes," : ""}schedule_subcompanies(worker_count)`,
+    ${company ? "work_area,work_content,tachiuma_notes,fire_area," : ""}schedule_subcompanies(worker_count)`,
   ).order("work_date").order("id");
   if (from) query = query.gte("work_date", from);
   if (to) query = query.lte("work_date", to);

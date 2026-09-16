@@ -40,6 +40,7 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   aerialWorkVehicleFloor: "",
   aerialWorkVehicles: [],
   usesFire: false,
+  fireArea: "",
   usesTachiuma: false,
   tachiumaNotes: "",
   notes: "",
@@ -118,7 +119,7 @@ function WorkField({
           {required ? (
             <span className="required-mark">必須</span>
           ) : (
-            <span className="ml-2 text-sm font-normal text-slate-600">任意・未定可</span>
+            <span className="ml-2 text-sm font-normal text-slate-600">任意</span>
           )}
         </label>
         <CopyButton
@@ -467,6 +468,7 @@ export function ScheduleForm({
           ? [{ workArea: source.aerialWorkVehicleFloor ?? "", vehicleCount: source.aerialWorkVehicleCount ?? 1 }]
           : [];
       next.usesFire = source.usesFire ?? false;
+      next.fireArea = source.fireArea ?? "";
       next.usesTachiuma = source.usesTachiuma ?? false;
       next.tachiumaNotes = source.tachiumaNotes ?? "";
     } else {
@@ -486,6 +488,7 @@ export function ScheduleForm({
           ? [{ workArea: source?.aerialWorkVehicleFloor ?? "", vehicleCount: source?.aerialWorkVehicleCount ?? 1 }]
           : [];
       next.usesFire = source?.usesFire ?? false;
+      next.fireArea = source?.fireArea ?? "";
       next.usesTachiuma = source?.usesTachiuma ?? false;
       next.tachiumaNotes = source?.tachiumaNotes ?? "";
     }
@@ -904,6 +907,7 @@ export function ScheduleForm({
                           <SchedulePreview
                             schedule={source}
                             primaryCompany={form.primaryCompany}
+                            hideZeroSecondaryCompanies
                           />
                           <div className="mt-5 grid grid-cols-2 gap-3">
                             <button
@@ -968,6 +972,7 @@ export function ScheduleForm({
                         aerialWorkVehicleFloor: form.aerialWorkVehicleFloor,
                         aerialWorkVehicles: form.aerialWorkVehicles,
                         usesFire: form.usesFire,
+                        fireArea: form.fireArea,
                         usesTachiuma: form.usesTachiuma,
                         tachiumaNotes: form.tachiumaNotes,
                         subcompanies: activeRows,
@@ -1055,7 +1060,7 @@ export function ScheduleForm({
                           }
                         />
                       </>
-                      <ScheduleEquipmentFields form={form} onChange={patch} />
+                      <ScheduleEquipmentFields form={form} previous={previous} onChange={patch} />
                       <WorkField
                         key={`${previousKey}-${copyVersion}-notes`}
                         label="備考"
@@ -1263,9 +1268,8 @@ export function ScheduleForm({
                         {summary.aerialWorkVehicleCount > 0 && (
                           <p>高所作業車：{summary.aerialWorkVehicleCount}台{summary.aerialWorkVehicleFloor ? `（使用フロア：${summary.aerialWorkVehicleFloor}）` : ""}</p>
                         )}
-                        <p>火気の使用：{summary.usesFire ? "する" : "しない"}</p>
-                        <p>立ち馬の使用：{summary.usesTachiuma ? "する" : "しない"}</p>
-                        {summary.usesTachiuma && summary.tachiumaNotes && <p>立ち馬の使用内容：{summary.tachiumaNotes}</p>}
+                        {summary.usesTachiuma && summary.tachiumaNotes && <p>立ち馬：{summary.tachiumaNotes}</p>}
+                        {summary.usesFire && <p>火気：{summary.fireArea}</p>}
                         {summary.notes && <p>備考：{summary.notes}</p>}
                       </div>
                     ))

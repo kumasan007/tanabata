@@ -1,32 +1,15 @@
 "use client";
-import type { ScheduleSubmitInput } from "@/lib/types";
+import { CopyButton } from "@/components/copy-button";
 import { aerialVehicleFields } from "@/lib/schedule-fields";
-type Equipment = Pick<ScheduleSubmitInput, "aerialWorkVehicles" | "usesFire" | "usesTachiuma" | "tachiumaNotes">;
-export function ScheduleEquipmentFields({ form, onChange }: {
-    form: Equipment;
-    onChange: (fields: Partial<ScheduleSubmitInput>) => void;
-}) {
-    function setAerialVehicles(vehicles: NonNullable<ScheduleSubmitInput["aerialWorkVehicles"]>) { onChange(aerialVehicleFields(vehicles)); }
-    return (<div className="space-y-3">
-          <div className="rounded-md border border-sky-300 bg-sky-50/60 p-3">
-            <label className="flex cursor-pointer items-center gap-2 font-bold text-sky-950"><input type="checkbox" className="h-5 w-5 accent-sky-600" checked={(form.aerialWorkVehicles?.length ?? 0) > 0} onChange={(event) => setAerialVehicles(event.target.checked ? [{ workArea: "", vehicleCount: 1 }] : [])}/>高所作業車</label>
-          {(form.aerialWorkVehicles?.length ?? 0) > 0 && <div className="mt-3 border-t border-sky-200 pt-3">
-          <p className="font-bold text-sky-900">高所作業車の使用内容</p>
-          <p className="mt-1 text-sm text-sky-800">使用場所と台数を入力してください。</p>
-          {(form.aerialWorkVehicles ?? []).map((vehicle, index) => <div key={index} className="mt-3 grid gap-2 rounded-md border border-sky-200 bg-white p-3 sm:grid-cols-[1fr_7rem_auto]">
-            <label className="field"><span className="label">使用場所（必須）</span><input className="input" required maxLength={100} value={vehicle.workArea} placeholder="例：10階" onChange={(event) => setAerialVehicles((form.aerialWorkVehicles ?? []).map((row, rowIndex) => rowIndex === index ? { ...row, workArea: event.target.value } : row))}/></label>
-            <label className="field"><span className="label">台数</span><input className="input" type="number" inputMode="numeric" min={1} step={1} required value={vehicle.vehicleCount ?? ""} onChange={(event) => setAerialVehicles((form.aerialWorkVehicles ?? []).map((row, rowIndex) => rowIndex === index ? { ...row, vehicleCount: event.target.value === "" ? null : Math.max(1, Number(event.target.value)) } : row))}/></label>
-            <button type="button" className="btn btn-secondary self-end px-4 text-xl" aria-label={`${index + 1}件目の高所作業車を削除`} onClick={() => setAerialVehicles((form.aerialWorkVehicles ?? []).filter((_, rowIndex) => rowIndex !== index))}>×</button>
-          </div>)}
-          {(form.aerialWorkVehicles?.length ?? 0) > 0 && <button type="button" className="btn btn-secondary mt-3 w-full" onClick={() => setAerialVehicles([...(form.aerialWorkVehicles ?? []), { workArea: "", vehicleCount: 1 }])}>使用場所を追加</button>}
-          </div>}
-          </div>
-          <div className="rounded-md border border-emerald-300 bg-emerald-50/60 p-3">
-            <label className="flex cursor-pointer items-center gap-2 font-bold text-emerald-950"><input type="checkbox" className="h-5 w-5 accent-emerald-600" checked={form.usesTachiuma} onChange={(event) => onChange({ usesTachiuma: event.target.checked, tachiumaNotes: event.target.checked ? form.tachiumaNotes : "" })}/>立ち馬</label>
-            {form.usesTachiuma && <div className="mt-3 border-t border-emerald-200 pt-3"><p className="font-bold text-emerald-900">立ち馬の使用内容</p><p className="mt-1 text-sm text-emerald-800">使用する階と個数を入力してください。</p><label className="field mt-3"><span className="label">使用場所・個数（任意）</span><textarea className="textarea" maxLength={500} value={form.tachiumaNotes} placeholder="例：10階で3個使用" onChange={(event) => onChange({ tachiumaNotes: event.target.value })}/></label></div>}
-          </div>
-          <div className="rounded-md border border-red-300 bg-red-50/60 p-3">
-            <label className="flex cursor-pointer items-center gap-2 font-bold text-red-950"><input type="checkbox" className="h-5 w-5 accent-red-600" checked={form.usesFire} onChange={(event) => onChange({ usesFire: event.target.checked })}/>火気使用</label>
-          </div>
-        </div>);
+import type { PreviousSchedule, ScheduleSubmitInput } from "@/lib/types";
+type Equipment = Pick<ScheduleSubmitInput, "aerialWorkVehicles" | "usesFire" | "fireArea" | "usesTachiuma" | "tachiumaNotes" | "workArea">;
+export function ScheduleEquipmentFields({ form, previous, onChange }: { form: Equipment; previous?: PreviousSchedule | null; onChange: (fields: Partial<ScheduleSubmitInput>) => void }) {
+  const aerial = form.aerialWorkVehicles?.[0]?.workArea ?? "";
+  const previousAerial = previous?.aerialWorkVehicles?.[0]?.workArea || previous?.aerialWorkVehicleFloor || "";
+  const usesAerial = Boolean(form.aerialWorkVehicles?.length);
+  return <div className="space-y-2">
+    <div className="rounded-md border border-sky-300 bg-sky-50/60 p-2"><label className="flex min-h-8 cursor-pointer items-center gap-2 font-bold text-sky-950"><input type="checkbox" className="h-5 w-5" checked={usesAerial} onChange={(e) => onChange(aerialVehicleFields(e.target.checked ? [{ workArea: "", vehicleCount: 1 }] : []))} />高所作業車</label>{usesAerial && <div className="mt-2 border-t border-sky-200 pt-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><span className="label">使用場所と台数を入力。<span className="required-mark">必須</span></span><CopyButton label="高所作業車を前回と同じにする" disabled={!previousAerial} onCopy={() => onChange(aerialVehicleFields([{ workArea: previousAerial, vehicleCount: 1 }]))} /></div><textarea aria-label="高所作業車の使用場所と台数" className="textarea" required maxLength={500} value={aerial} placeholder={"例：B2F 3台、2F 3台\n高車についての連絡事項はこちらに入力。"} onChange={(e) => onChange(aerialVehicleFields([{ workArea: e.target.value, vehicleCount: 1 }]))} /></div>}</div>
+    <div className="rounded-md border border-emerald-300 bg-emerald-50/60 p-2"><label className="flex min-h-8 cursor-pointer items-center gap-2 font-bold text-emerald-950"><input type="checkbox" className="h-5 w-5" checked={form.usesTachiuma} onChange={(e) => onChange({ usesTachiuma: e.target.checked, tachiumaNotes: e.target.checked ? form.tachiumaNotes : "" })} />立ち馬</label>{form.usesTachiuma && <div className="mt-2 border-t border-emerald-200 pt-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><span className="label">使用場所と台数を入力。<span className="required-mark">必須</span></span><CopyButton label="立ち馬を前回と同じにする" disabled={!previous?.tachiumaNotes} onCopy={() => onChange({ tachiumaNotes: previous?.tachiumaNotes ?? "" })} /></div><textarea aria-label="立ち馬の使用場所と台数" className="textarea" required maxLength={500} value={form.tachiumaNotes} placeholder={"例：B2F 3台、2F 3台\n立ち馬についての連絡事項はこちらに入力。"} onChange={(e) => onChange({ tachiumaNotes: e.target.value })} /></div>}</div>
+    <div className="rounded-md border border-rose-300 bg-rose-50/60 p-2"><label className="flex min-h-8 cursor-pointer items-center gap-2 font-bold text-rose-950"><input type="checkbox" className="h-5 w-5" checked={form.usesFire} onChange={(e) => onChange({ usesFire: e.target.checked, fireArea: e.target.checked ? form.fireArea : "" })} />火気使用</label>{form.usesFire && <div className="mt-2 border-t border-rose-200 pt-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><label className="label" htmlFor="fire-area">使用エリアを入力してください。<span className="required-mark">必須</span></label><button type="button" className="btn btn-secondary min-h-10 py-1.5 text-sm" onClick={() => onChange({ fireArea: form.workArea })}>作業エリアと同じ</button></div><input id="fire-area" className="input" required maxLength={200} value={form.fireArea} placeholder="例：B2F" onChange={(e) => onChange({ fireArea: e.target.value })} /></div>}</div>
+  </div>;
 }

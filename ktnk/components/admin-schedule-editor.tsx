@@ -22,6 +22,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
     ...schedule.subcompanies.map((row) => row.secondary_company ?? ""),
   ])].filter(Boolean);
   const dialog = useRef<HTMLDialogElement>(null);
+  const pointerStartedOnBackdrop = useRef(false);
   const titleId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -59,10 +60,17 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
   return <><dialog
     ref={dialog} aria-labelledby={titleId}
     onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
+    onPointerDown={(event) => {
+      const bounds = event.currentTarget.getBoundingClientRect();
+      pointerStartedOnBackdrop.current =
+        event.clientX < bounds.left || event.clientX > bounds.right ||
+        event.clientY < bounds.top || event.clientY > bounds.bottom;
+    }}
     onClick={(event) => {
-      if (busy || event.target !== event.currentTarget) return;
+      if (busy || !pointerStartedOnBackdrop.current) return;
       const bounds = event.currentTarget.getBoundingClientRect();
       const clickedOutside = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+      pointerStartedOnBackdrop.current = false;
       if (clickedOutside) onClose();
     }}
     className="admin-dashboard m-auto max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-2xl overflow-y-auto rounded-md border border-border p-4 backdrop:bg-slate-950/45"

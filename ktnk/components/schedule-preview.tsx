@@ -18,12 +18,8 @@ export function SchedulePreview({
       secondaryCompany: primaryCompany,
       workerCount: schedule.primaryCount ?? 0,
     },
-    ...schedule.subcompanies.filter(
-      (row) =>
-        row.secondaryCompany &&
-        (!hideZeroSecondaryCompanies || (row.workerCount ?? 0) > 0),
-    ),
-  ];
+    ...schedule.subcompanies.filter((row) => row.secondaryCompany),
+  ].filter((row) => !hideZeroSecondaryCompanies || (row.workerCount ?? 0) > 0);
   return (
     <>
     <div className="overflow-hidden rounded-md border border-border text-base">
@@ -80,7 +76,7 @@ export function SchedulePreview({
           <dd className="whitespace-pre-wrap break-words">
             {schedule.workContent || "未入力"}
           </dd>
-          <dt className="text-slate-500">高所作業車</dt>
+          <dt className="text-slate-500">高車</dt>
           <dd className="space-y-1">
             {schedule.aerialWorkVehicles?.length ? (
               schedule.aerialWorkVehicles.map((vehicle, index) => (
@@ -96,11 +92,8 @@ export function SchedulePreview({
               "使用しない"
             )}
           </dd>
-          <dt className="text-slate-500">火気の使用</dt>
-          <dd>{schedule.usesFire ? "する" : "しない"}</dd>
-          <dt className="text-slate-500">立ち馬の使用</dt>
-          <dd>{schedule.usesTachiuma ? "する" : "しない"}</dd>
-          {schedule.usesTachiuma && schedule.tachiumaNotes && <><dt className="text-slate-500">立ち馬の使用内容</dt><dd className="whitespace-pre-wrap break-words">{schedule.tachiumaNotes}</dd></>}
+          {schedule.usesTachiuma && schedule.tachiumaNotes && <><dt className="text-slate-500">立ち馬</dt><dd className="whitespace-pre-wrap break-words">{schedule.tachiumaNotes}</dd></>}
+          {schedule.usesFire && <><dt className="text-slate-500">火気</dt><dd className="whitespace-pre-wrap break-words">{schedule.fireArea}</dd></>}
         </dl>
     </div>
     {notes && <div className="mt-4 rounded-md bg-amber-50 p-4 text-sm"><span className="font-semibold">備考：</span><span className="whitespace-pre-wrap break-words">{notes}</span></div>}

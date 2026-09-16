@@ -33,10 +33,11 @@ export const scheduleSubmitSchema = z
     aerialWorkVehicleCount: countSchema.default(null),
     aerialWorkVehicleFloor: z.string().max(100, "高所作業車の使用フロアは100文字以内で入力してください。").default(""),
     aerialWorkVehicles: z.array(z.object({
-      workArea: z.string().trim().min(1, "高所作業車の使用場所を入力してください。").max(100),
+      workArea: z.string().trim().min(1, "高所作業車の使用場所と台数を入力してください。").max(500),
       vehicleCount: countSchema.refine((value) => value !== null && value >= 1, "台数は1以上で入力してください。"),
     })).optional().default([]),
     usesFire: z.boolean().default(false),
+    fireArea: z.string().max(200, "火気使用エリアは200文字以内で入力してください。").default(""),
     usesTachiuma: z.boolean().default(false),
     tachiumaNotes: z.string().max(500).default(""),
     notes: z.string().max(2000, "備考は2000文字以内で入力してください。").default(""),
@@ -72,6 +73,8 @@ export const scheduleSubmitSchema = z
     if ((value.aerialWorkVehicleCount ?? 0) > 0 && !value.aerialWorkVehicleFloor.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["aerialWorkVehicleFloor"], message: "高所作業車の使用フロアを入力してください。" });
     }
+    if (value.usesFire && !value.fireArea.trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["fireArea"], message: "火気の使用エリアを入力してください。" });
+    if (value.usesTachiuma && !value.tachiumaNotes.trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["tachiumaNotes"], message: "立ち馬の使用場所と台数を入力してください。" });
 
     for (const [index, subcompany] of value.currentSubcompanies.entries()) {
       if (subcompany.secondaryCompany.trim() !== "" && !subcompany.usePreviousWorkerCount && subcompany.workerCount === null) {

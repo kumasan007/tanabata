@@ -34,12 +34,11 @@ async function mutate(request: Request, cancel: boolean) {
     }
     const db = createServerClient();
     if (cancel && !expectedReportedAt) return NextResponse.json({ error: "取り消す報告を確認してください。" }, { status: 400 });
-    const value = { work_date: date, primary_company: primaryCompany, notes, reported_at: now.toISOString() };
     const query = cancel
       ? db.from("work_completion_reports").delete().eq("work_date", date).eq("primary_company", primaryCompany).eq("reported_at", expectedReportedAt!)
       : expectedReportedAt
-        ? db.from("work_completion_reports").update(value).eq("work_date", date).eq("primary_company", primaryCompany).eq("reported_at", expectedReportedAt)
-        : db.from("work_completion_reports").insert(value);
+        ? db.from("work_completion_reports").update({ notes }).eq("work_date", date).eq("primary_company", primaryCompany).eq("reported_at", expectedReportedAt)
+        : db.from("work_completion_reports").insert({ work_date: date, primary_company: primaryCompany, notes, reported_at: now.toISOString() });
     const { data, error } = await query.select().maybeSingle();
     if (error && error.code !== "23505") throw error;
     if (error || !data) {
