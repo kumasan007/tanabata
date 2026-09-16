@@ -356,7 +356,6 @@ function formatBackupTime(value: string) {
         day: "2-digit",
         hour: "2-digit",
         minute: "2-digit",
-        second: "2-digit",
     }).format(new Date(value));
 }
 function auditOperationLabel(operation: AuditLogRow["operation"]) {
@@ -414,7 +413,7 @@ const auditFieldLabels: Record<string, string> = {
     sort_order: "表示順",
     reported_at: "終了報告日時",
 };
-const hiddenAuditFields = new Set(["id", "schedule_group_id", "created_at", "updated_at"]);
+const hiddenAuditFields = new Set(["id", "schedule_group_id", "created_at", "updated_at", "sort_order"]);
 function AuditChangeDetails({ log }: { log: AuditLogRow }) {
     const oldData = log.old_data ?? {};
     const newData = log.new_data ?? {};
