@@ -4,6 +4,7 @@ import { Pencil } from "lucide-react";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CopyValue } from "@/components/copy-value";
 import { completionTime } from "@/lib/completion-time";
+import { parseTachiumaValue } from "@/lib/schedule-fields";
 import type { CalendarEntrant, CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 import type { WorkCompletion } from "@/lib/work-completions";
 export const CalendarDetails = memo(function CalendarDetails({ detail, master, selectedDate, isToday, completionBusy, detailsExpanded, onEdit: setEditing, onEditEntrant: setEditingEntrant, onCompletion: saveCompletion }: {
@@ -62,6 +63,7 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
             const subs = row.subcompanies.filter((sub) => (sub.worker_count ?? 0) > 0);
             const area = row.work_area;
             const content = row.work_content;
+            const tachiumaNotes = parseTachiumaValue(row.tachiuma_notes).area;
             const tradeRoles = master.primaryTradeRolesByPrimary[row.primary_company] ?? [];
             const totalWorkerCount = totalWorkers(row);
             return <article key={row.id} className="panel min-w-0 p-3 text-sm">
@@ -114,7 +116,7 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
               </details>
               {detailsExpanded && ((row.aerial_work_vehicle_count ?? 0) > 0 || row.uses_tachiuma || row.uses_fire || row.notes) && <div className="mt-2 grid gap-1 px-0.5">
                 {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="text-sky-800">高車：{row.aerial_work_vehicle_floor ? <CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用内容" compact stopPropagation /> : "使用あり"}</p>}
-                {row.uses_tachiuma && <p className="text-emerald-800">立ち馬：{row.tachiuma_notes ? <CopyValue value={row.tachiuma_notes} label="立ち馬の使用内容" compact stopPropagation /> : "使用"}</p>}
+                {row.uses_tachiuma && <p className="text-emerald-800">立ち馬：{tachiumaNotes ? <CopyValue value={tachiumaNotes} label="立ち馬の使用内容" compact stopPropagation /> : "使用"}</p>}
                 {row.uses_fire && row.fire_area && <p className="text-rose-800">火気連絡事項：{row.fire_area}</p>}
                 {row.notes && <p className="whitespace-pre-wrap break-words border-t border-border pt-1.5 text-xs text-slate-500">備考：<CopyValue value={row.notes} label="備考" compact stopPropagation /></p>}
               </div>}

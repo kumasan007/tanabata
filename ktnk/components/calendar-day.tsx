@@ -2,6 +2,7 @@
 import { memo } from "react";
 import { Pencil } from "lucide-react";
 import type { CalendarSchedule, CalendarEntrant } from "@/lib/types";
+import { parseTachiumaValue } from "@/lib/schedule-fields";
 const EMPTY: never[] = [];
 export const CalendarDay = memo(function CalendarDay({ date, selected, company, schedules, entrants, loading, completionBusy, onSelect, onEdit }: {
   date: string; selected: boolean; company: string;
@@ -35,6 +36,7 @@ export const CalendarDay = memo(function CalendarDay({ date, selected, company, 
               {company && daySchedules.map((row) => {
                 const area = row.work_area;
                 const content = row.work_content;
+                const tachiumaNotes = parseTachiumaValue(row.tachiuma_notes).area;
                 return <div key={row.id} className="mt-1 min-w-0 rounded bg-emerald-100 p-1 text-[10px] leading-4 text-emerald-950 sm:text-xs">
                   <div className="mb-1 flex items-center justify-end gap-0.5">
                     {(row.aerial_work_vehicle_count ?? 0) > 0 && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-600 font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
@@ -45,7 +47,7 @@ export const CalendarDay = memo(function CalendarDay({ date, selected, company, 
                   <p className="font-bold">{totalWorkers(row)}人</p>
                   <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
                   <p className="line-clamp-2 break-words" title={content ?? ""}>{content || "作業内容未入力"}</p>
-                  {row.uses_tachiuma && row.tachiuma_notes && <p className="truncate font-semibold text-emerald-800" title={row.tachiuma_notes}>立ち馬：{row.tachiuma_notes}</p>}
+                  {row.uses_tachiuma && tachiumaNotes && <p className="truncate font-semibold text-emerald-800" title={tachiumaNotes}>立ち馬：{tachiumaNotes}</p>}
                   {row.uses_fire && row.fire_area && <p className="truncate font-semibold text-rose-800" title={row.fire_area}>火気：{row.fire_area}</p>}
                 </div>;
               })}
