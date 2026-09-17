@@ -103,13 +103,6 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expect
     invalidateScheduleData();
     throw new Error("保存した予定の確認に失敗しました。");
   }
-  if (input.usesFire) {
-    const { error: fireAreaError } = await supabase
-      .from("schedule_groups")
-      .update({ fire_area: emptyToNull(input.fireArea) })
-      .in("id", result.savedIds);
-    if (fireAreaError) throwSupabaseError(fireAreaError, "火気使用エリアの保存に失敗しました。");
-  }
   invalidateScheduleData();
   return result;
 }
