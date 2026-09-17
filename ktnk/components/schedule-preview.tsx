@@ -92,7 +92,7 @@ export function SchedulePreview({
               "使用しない"
             )}
           </dd>
-          {schedule.usesTachiuma && schedule.tachiumaNotes && <><dt className="text-slate-500">立ち馬</dt><dd className="whitespace-pre-wrap break-words">{schedule.tachiumaNotes}{schedule.tachiumaCount ? `（希望 ${schedule.tachiumaCount}台）` : ""}</dd></>}
+          {schedule.usesTachiuma && schedule.tachiumaNotes && <><dt className="text-slate-500">立ち馬連絡事項</dt><dd className="whitespace-pre-wrap break-words">{schedule.tachiumaNotes}</dd></>}
           {schedule.usesFire && <><dt className="text-slate-500">火気</dt><dd className="whitespace-pre-wrap break-words">{schedule.fireArea}</dd></>}
         </dl>
     </div>

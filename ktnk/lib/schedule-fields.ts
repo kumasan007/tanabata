@@ -8,8 +8,7 @@ export function aerialVehicleFields(vehicles: AerialWorkVehicleInput[]) {
 }
 export function parseTachiumaValue(value?: string | null) {
     const text = value ?? "";
-    const match = text.match(/^(.*)（希望\s*(\d+)台）$/);
-    return match ? { area: match[1], count: Number(match[2]) } : { area: text, count: text ? 1 : null };
+    return { area: text, count: null };
 }
 export function scheduleToFormData(row: ScheduleWithSubcompanies, secondaryCompanies?: string[]): ScheduleSubmitInput {
     const vehicles = row.aerialWorkVehicles?.length

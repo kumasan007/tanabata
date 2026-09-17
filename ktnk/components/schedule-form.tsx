@@ -1274,7 +1274,7 @@ export function ScheduleForm({
                         {summary.aerialWorkVehicleCount > 0 && (
                           <p>高所作業車：{summary.aerialWorkVehicleCount}台{summary.aerialWorkVehicleFloor ? `（使用フロア：${summary.aerialWorkVehicleFloor}）` : ""}</p>
                         )}
-                        {summary.usesTachiuma && summary.tachiumaNotes && <p>立ち馬：{summary.tachiumaNotes}{form.tachiumaCount ? `（希望 ${form.tachiumaCount}台）` : ""}</p>}
+                        {summary.usesTachiuma && summary.tachiumaNotes && <p>立ち馬連絡事項：{summary.tachiumaNotes}</p>}
                         {summary.usesFire && <p>火気：使用あり</p>}
                         {summary.notes && <p>備考：{summary.notes}</p>}
                       </div>

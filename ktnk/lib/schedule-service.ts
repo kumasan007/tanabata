@@ -63,7 +63,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expect
       uses_fire: input.usesFire,
       fire_area: input.usesFire ? emptyToNull(input.fireArea) : null,
       uses_tachiuma: input.usesTachiuma,
-      tachiuma_notes: input.usesTachiuma ? emptyToNull(`${input.tachiumaNotes.trim()}（希望 ${input.tachiumaCount}台）`) : null,
+      tachiuma_notes: input.usesTachiuma ? emptyToNull(input.tachiumaNotes) : null,
       notes: emptyToNull(input.notes),
     };
 
