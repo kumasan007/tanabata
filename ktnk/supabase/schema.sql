@@ -74,8 +74,8 @@ create table if not exists public.schedule_groups (
   primary_count integer check (primary_count is null or primary_count >= 0),
   work_area text,
   work_content text,
-  aerial_work_vehicle_count integer check (aerial_work_vehicle_count is null or aerial_work_vehicle_count >= 0),
-  aerial_work_vehicle_floor text,
+  uses_aerial_work_vehicle boolean not null default false,
+  aerial_work_vehicle_notes text,
   uses_fire boolean not null default false,
   fire_area text,
   uses_tachiuma boolean not null default false,
@@ -94,18 +94,9 @@ create table if not exists public.schedule_subcompanies (
   sort_order integer not null default 0
 );
 
-create table if not exists public.schedule_aerial_work_vehicles (
-  id uuid primary key default gen_random_uuid(),
-  schedule_group_id uuid not null references public.schedule_groups(id) on delete cascade,
-  work_area text not null check (btrim(work_area) <> ''),
-  vehicle_count integer not null check (vehicle_count > 0),
-  sort_order integer not null default 0
-);
-
 alter table public.schedule_groups add column if not exists notes text;
-alter table public.schedule_groups add column if not exists aerial_work_vehicle_count integer
-  check (aerial_work_vehicle_count is null or aerial_work_vehicle_count >= 0);
-alter table public.schedule_groups add column if not exists aerial_work_vehicle_floor text;
+alter table public.schedule_groups add column if not exists uses_aerial_work_vehicle boolean not null default false;
+alter table public.schedule_groups add column if not exists aerial_work_vehicle_notes text;
 alter table public.schedule_groups add column if not exists fire_area text;
 alter table public.schedule_groups add column if not exists uses_fire boolean not null default false;
 alter table public.schedule_groups add column if not exists uses_tachiuma boolean not null default false;
@@ -140,9 +131,6 @@ create index if not exists schedule_subcompanies_group_id_idx
 create index if not exists schedule_subcompanies_secondary_company_idx
   on public.schedule_subcompanies (secondary_company);
 
-create index if not exists schedule_aerial_work_vehicles_group_idx
-  on public.schedule_aerial_work_vehicles (schedule_group_id, sort_order);
-
 create index if not exists new_entrant_records_primary_date_idx
   on public.new_entrant_records (primary_company, entry_date);
 
@@ -152,7 +140,6 @@ create index if not exists new_entrant_records_company_date_idx
 alter table public.company_master enable row level security;
 alter table public.schedule_groups enable row level security;
 alter table public.schedule_subcompanies enable row level security;
-alter table public.schedule_aerial_work_vehicles enable row level security;
 alter table public.new_entrant_records enable row level security;
 
 grant usage on schema public to anon, authenticated, service_role;
@@ -160,7 +147,6 @@ grant usage on schema public to anon, authenticated, service_role;
 grant select, insert, update, delete on public.company_master to anon, authenticated, service_role;
 grant select, insert, update, delete on public.schedule_groups to anon, authenticated, service_role;
 grant select, insert, update, delete on public.schedule_subcompanies to anon, authenticated, service_role;
-grant select, insert, update, delete on public.schedule_aerial_work_vehicles to anon, authenticated, service_role;
 grant select, insert, update, delete on public.new_entrant_records to anon, authenticated, service_role;
 
 -- Next.js API routesはservice roleとanonキーのどちらでも利用できる。
@@ -187,10 +173,6 @@ for all
 to anon, authenticated
 using (true)
 with check (true);
-
-drop policy if exists schedule_aerial_work_vehicles_app_all on public.schedule_aerial_work_vehicles;
-create policy schedule_aerial_work_vehicles_app_all on public.schedule_aerial_work_vehicles
-for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists new_entrant_records_app_all on public.new_entrant_records;
 create policy new_entrant_records_app_all on public.new_entrant_records
@@ -219,12 +201,11 @@ for each row execute function public.set_updated_at();
 notify pgrst, 'reload schema';
 
 
--- 親予定・二次会社・高所作業車を一つのトランザクションで保存する。
+-- 親予定と二次会社を一つのトランザクションで保存する。
 -- SECURITY INVOKER: 既存のテーブル権限・RLSを維持する。
 create or replace function public.save_schedule_atomically(
   p_groups jsonb,
   p_subcompanies jsonb,
-  p_vehicles jsonb,
   p_overwrite boolean default false,
   p_skip_existing boolean default false,
   p_expected_id uuid default null
@@ -244,8 +225,7 @@ declare
 begin
   if jsonb_typeof(p_groups) is distinct from 'array'
     or jsonb_array_length(p_groups) not between 1 and 180
-    or jsonb_typeof(p_subcompanies) is distinct from 'array'
-    or jsonb_typeof(p_vehicles) is distinct from 'array' then
+    or jsonb_typeof(p_subcompanies) is distinct from 'array' then
     raise exception 'Invalid schedule payload';
   end if;
   primary_name := p_groups->0->>'primary_company';
@@ -300,6 +280,8 @@ begin
       or (item->>'primary_count')::integer < 0
       or coalesce(btrim(item->>'work_area'), '') = ''
       or coalesce(btrim(item->>'work_content'), '') = ''
+      or (coalesce((item->>'uses_aerial_work_vehicle')::boolean, false)
+        and coalesce(btrim(item->>'aerial_work_vehicle_notes'), '') = '')
       or ((item->>'primary_count')::integer = 0 and coalesce((
         select sum((sub->>'worker_count')::integer) from jsonb_array_elements(p_subcompanies) sub
       ), 0) < 1) then
@@ -308,16 +290,17 @@ begin
     -- ロックを使わない直接insertとの競合でも、未確認の上書きをしない。
     insert into public.schedule_groups (
       work_date, primary_company, primary_count, work_area, work_content,
-      aerial_work_vehicle_count, aerial_work_vehicle_floor, uses_fire, uses_tachiuma, tachiuma_notes, notes
+      uses_aerial_work_vehicle, aerial_work_vehicle_notes, uses_fire, uses_tachiuma, tachiuma_notes, notes
     ) values (
       work_day, primary_name, (item->>'primary_count')::integer, item->>'work_area', item->>'work_content',
-      (item->>'aerial_work_vehicle_count')::integer, item->>'aerial_work_vehicle_floor',
+      coalesce((item->>'uses_aerial_work_vehicle')::boolean, false),
+      case when coalesce((item->>'uses_aerial_work_vehicle')::boolean, false) then item->>'aerial_work_vehicle_notes' else null end,
       (item->>'uses_fire')::boolean, (item->>'uses_tachiuma')::boolean,
       case when (item->>'uses_tachiuma')::boolean then item->>'tachiuma_notes' else null end, item->>'notes'
     ) on conflict (work_date, primary_company) do update set
       primary_count = excluded.primary_count, work_area = excluded.work_area, work_content = excluded.work_content,
-      aerial_work_vehicle_count = excluded.aerial_work_vehicle_count,
-      aerial_work_vehicle_floor = excluded.aerial_work_vehicle_floor, uses_fire = excluded.uses_fire,
+      uses_aerial_work_vehicle = excluded.uses_aerial_work_vehicle,
+      aerial_work_vehicle_notes = excluded.aerial_work_vehicle_notes, uses_fire = excluded.uses_fire,
       uses_tachiuma = excluded.uses_tachiuma, tachiuma_notes = excluded.tachiuma_notes, notes = excluded.notes
     where p_overwrite
     returning id into group_id;
@@ -326,13 +309,9 @@ begin
     end if;
 
     delete from public.schedule_subcompanies where schedule_group_id = group_id;
-    delete from public.schedule_aerial_work_vehicles where schedule_group_id = group_id;
     insert into public.schedule_subcompanies (schedule_group_id, secondary_company, worker_count, sort_order)
       select group_id, sub->>'secondary_company', (sub->>'worker_count')::integer, (ordinality - 1)::integer
       from jsonb_array_elements(p_subcompanies) with ordinality as entries(sub, ordinality);
-    insert into public.schedule_aerial_work_vehicles (schedule_group_id, work_area, vehicle_count, sort_order)
-      select group_id, vehicle->>'work_area', (vehicle->>'vehicle_count')::integer, (ordinality - 1)::integer
-      from jsonb_array_elements(p_vehicles) with ordinality as entries(vehicle, ordinality);
     saved_dates := array_append(saved_dates, work_day);
     saved_ids := array_append(saved_ids, group_id);
   end loop;
@@ -340,8 +319,8 @@ begin
 end;
 $$;
 
-revoke all on function public.save_schedule_atomically(jsonb, jsonb, jsonb, boolean, boolean, uuid) from public;
-grant execute on function public.save_schedule_atomically(jsonb, jsonb, jsonb, boolean, boolean, uuid) to anon, authenticated, service_role;
+revoke all on function public.save_schedule_atomically(jsonb, jsonb, boolean, boolean, uuid) from public;
+grant execute on function public.save_schedule_atomically(jsonb, jsonb, boolean, boolean, uuid) to anon, authenticated, service_role;
 
 notify pgrst, 'reload schema';
 

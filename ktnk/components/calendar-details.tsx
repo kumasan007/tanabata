@@ -79,7 +79,7 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-1">
-                {(row.aerial_work_vehicle_count ?? 0) > 0 && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-sm font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
+                {row.uses_aerial_work_vehicle && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-sm font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
                 {row.uses_tachiuma && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold leading-none text-white shadow-sm" title="立ち馬使用あり">立</span>}
                 {row.uses_fire && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-sm font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
                 <button type="button" className="btn btn-secondary h-8 min-h-8 w-8 p-0" disabled={completionBusy} onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
@@ -114,8 +114,8 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
                     ))}
                   </div>
               </details>
-              {detailsExpanded && ((row.aerial_work_vehicle_count ?? 0) > 0 || row.uses_tachiuma || row.uses_fire || row.notes) && <div className="mt-2 grid gap-1 px-0.5">
-                {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="text-sky-800">高車：{row.aerial_work_vehicle_floor ? <CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用内容" compact stopPropagation /> : "使用あり"}</p>}
+              {detailsExpanded && (row.uses_aerial_work_vehicle || row.uses_tachiuma || row.uses_fire || row.notes) && <div className="mt-2 grid gap-1 px-0.5">
+                {row.uses_aerial_work_vehicle && <p className="text-sky-800">高車：{row.aerial_work_vehicle_notes ? <CopyValue value={row.aerial_work_vehicle_notes} label="高車の使用内容" compact stopPropagation /> : "使用あり"}</p>}
                 {row.uses_tachiuma && <p className="text-emerald-800">立ち馬：{tachiumaNotes ? <CopyValue value={tachiumaNotes} label="立ち馬の使用内容" compact stopPropagation /> : "使用"}</p>}
                 {row.uses_fire && row.fire_area && <p className="text-rose-800">火気連絡事項：{row.fire_area}</p>}
                 {row.notes && <p className="whitespace-pre-wrap break-words border-t border-border pt-1.5 text-xs text-slate-500">備考：<CopyValue value={row.notes} label="備考" compact stopPropagation /></p>}

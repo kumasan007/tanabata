@@ -36,9 +36,8 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   currentSubcompanies: [],
   workArea: "",
   workContent: "",
-  aerialWorkVehicleCount: 0,
-  aerialWorkVehicleFloor: "",
-  aerialWorkVehicles: [],
+  usesAerialWorkVehicle: false,
+  aerialWorkVehicleNotes: "",
   usesFire: false,
   fireArea: "",
   usesTachiuma: false,
@@ -461,13 +460,8 @@ export function ScheduleForm({
       next.workArea = source.workArea ?? "";
       next.workContent = source.workContent ?? "";
       next.currentSubcompanies = copiedRows;
-      next.aerialWorkVehicleCount = source.aerialWorkVehicleCount ?? 0;
-      next.aerialWorkVehicleFloor = source.aerialWorkVehicleFloor ?? "";
-      next.aerialWorkVehicles = source.aerialWorkVehicles?.length
-        ? source.aerialWorkVehicles
-        : (source.aerialWorkVehicleCount ?? 0) > 0
-          ? [{ workArea: source.aerialWorkVehicleFloor ?? "", vehicleCount: source.aerialWorkVehicleCount ?? 1 }]
-          : [];
+      next.usesAerialWorkVehicle = source.usesAerialWorkVehicle ?? false;
+      next.aerialWorkVehicleNotes = source.aerialWorkVehicleNotes ?? "";
       next.usesFire = source.usesFire ?? false;
       next.fireArea = source.fireArea ?? "";
       next.usesTachiuma = source.usesTachiuma ?? false;
@@ -483,13 +477,8 @@ export function ScheduleForm({
       }));
       next.workArea = "";
       next.workContent = "";
-      next.aerialWorkVehicleCount = source?.aerialWorkVehicleCount ?? null;
-      next.aerialWorkVehicleFloor = source?.aerialWorkVehicleFloor ?? "";
-      next.aerialWorkVehicles = source?.aerialWorkVehicles?.length
-        ? source.aerialWorkVehicles
-        : (source?.aerialWorkVehicleCount ?? 0) > 0
-          ? [{ workArea: source?.aerialWorkVehicleFloor ?? "", vehicleCount: source?.aerialWorkVehicleCount ?? 1 }]
-          : [];
+      next.usesAerialWorkVehicle = source?.usesAerialWorkVehicle ?? false;
+      next.aerialWorkVehicleNotes = source?.aerialWorkVehicleNotes ?? "";
       next.usesFire = source?.usesFire ?? false;
       next.fireArea = source?.fireArea ?? "";
       next.usesTachiuma = source?.usesTachiuma ?? false;
@@ -589,22 +578,10 @@ export function ScheduleForm({
       });
       return;
     }
-    if (form.aerialWorkVehicleCount === null) {
+    if (form.usesAerialWorkVehicle && !form.aerialWorkVehicleNotes.trim()) {
       setStep("edit");
       setEditorPart("content");
-      setSubmitState({ status: "error", message: "高所作業車を使用するか選択してください。" });
-      return;
-    }
-    if ((form.aerialWorkVehicles ?? []).some((row) => (row.vehicleCount ?? 0) < 1)) {
-      setStep("edit");
-      setEditorPart("content");
-      setSubmitState({ status: "error", message: "高所作業車の希望台数を1以上の整数で入力してください。" });
-      return;
-    }
-    if ((form.aerialWorkVehicles ?? []).some((row) => !row.workArea.trim())) {
-      setStep("edit");
-      setEditorPart("content");
-      setSubmitState({ status: "error", message: "高所作業車の使用フロアを入力してください。" });
+      setSubmitState({ status: "error", message: "高所作業車の使用内容を入力してください。" });
       return;
     }
     if (
@@ -973,9 +950,8 @@ export function ScheduleForm({
                         primaryCount: activeCount,
                         workArea: area,
                         workContent: content,
-                        aerialWorkVehicleCount: form.aerialWorkVehicleCount,
-                        aerialWorkVehicleFloor: form.aerialWorkVehicleFloor,
-                        aerialWorkVehicles: form.aerialWorkVehicles,
+                        usesAerialWorkVehicle: form.usesAerialWorkVehicle,
+                        aerialWorkVehicleNotes: form.aerialWorkVehicleNotes,
                         usesFire: form.usesFire,
                         fireArea: form.fireArea,
                         usesTachiuma: form.usesTachiuma,
@@ -1129,19 +1105,8 @@ export function ScheduleForm({
                           });
                           return;
                         }
-                        if (editorPart === "content" && form.aerialWorkVehicleCount === null) {
-                          setSubmitState({ status: "error", message: "高所作業車を使用するか選択してください。" });
-                          return;
-                        }
-                        if (
-                          editorPart === "content" &&
-                          (form.aerialWorkVehicles ?? []).some((row) => (row.vehicleCount ?? 0) < 1)
-                        ) {
-                          setSubmitState({ status: "error", message: "高所作業車の希望台数を1以上の整数で入力してください。" });
-                          return;
-                        }
-                        if (editorPart === "content" && (form.aerialWorkVehicles ?? []).some((row) => !row.workArea.trim())) {
-                          setSubmitState({ status: "error", message: "高所作業車の使用フロアを入力してください。" });
+                        if (editorPart === "content" && form.usesAerialWorkVehicle && !form.aerialWorkVehicleNotes.trim()) {
+                          setSubmitState({ status: "error", message: "高所作業車の使用内容を入力してください。" });
                           return;
                         }
                         setSubmitState({ status: "idle" });
@@ -1271,8 +1236,8 @@ export function ScheduleForm({
                             .filter(Boolean)
                             .join(" / ")}
                         </p>
-                        {summary.aerialWorkVehicleCount > 0 && (
-                          <p>高所作業車：{summary.aerialWorkVehicleFloor || "使用あり"}</p>
+                        {summary.usesAerialWorkVehicle && (
+                          <p>高所作業車：{summary.aerialWorkVehicleNotes || "使用あり"}</p>
                         )}
                         {summary.usesTachiuma && summary.tachiumaNotes && <p>立ち馬連絡事項：{summary.tachiumaNotes}</p>}
                         {summary.usesFire && summary.fireArea && <p>火気連絡事項：{summary.fireArea}</p>}

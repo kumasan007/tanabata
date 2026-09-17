@@ -30,12 +30,8 @@ export const scheduleSubmitSchema = z
     currentSubcompanies: z.array(subcompanySchema).default([]),
     workArea: z.string().default(""),
     workContent: z.string().default(""),
-    aerialWorkVehicleCount: countSchema.default(null),
-    aerialWorkVehicleFloor: z.string().max(100, "高所作業車の使用フロアは100文字以内で入力してください。").default(""),
-    aerialWorkVehicles: z.array(z.object({
-      workArea: z.string().trim().min(1, "高所作業車の使用場所と台数を入力してください。").max(500),
-      vehicleCount: countSchema.refine((value) => value !== null && value >= 1, "台数は1以上で入力してください。"),
-    })).optional().default([]),
+    usesAerialWorkVehicle: z.boolean().default(false),
+    aerialWorkVehicleNotes: z.string().max(500, "高所作業車の使用内容は500文字以内で入力してください。").default(""),
     usesFire: z.boolean().default(false),
     fireArea: z.string().max(200, "火気使用エリアは200文字以内で入力してください。").default(""),
     usesTachiuma: z.boolean().default(false),
@@ -71,8 +67,8 @@ export const scheduleSubmitSchema = z
     if (!value.usePreviousPrimaryCount && value.primaryCount === 0 && secondaryTotal < 1 && !hasPreviousSecondaryCount) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["currentSubcompanies"], message: "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。" });
     }
-    if ((value.aerialWorkVehicleCount ?? 0) > 0 && !value.aerialWorkVehicleFloor.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["aerialWorkVehicleFloor"], message: "高所作業車の使用フロアを入力してください。" });
+    if (value.usesAerialWorkVehicle && !value.aerialWorkVehicleNotes.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["aerialWorkVehicleNotes"], message: "高所作業車の使用内容を入力してください。" });
     }
     for (const [index, subcompany] of value.currentSubcompanies.entries()) {
       if (subcompany.secondaryCompany.trim() !== "" && !subcompany.usePreviousWorkerCount && subcompany.workerCount === null) {

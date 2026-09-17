@@ -18,7 +18,7 @@ export const CalendarDay = memo(function CalendarDay({ date, selected, company, 
   }
             const entrantStats = entrantSummary(dayEntrants);
             const total = daySchedules.reduce((sum, row) => sum + totalWorkers(row), 0);
-            const aerialCompanyCount = daySchedules.filter((row) => (row.aerial_work_vehicle_count ?? 0) > 0).length;
+            const aerialCompanyCount = daySchedules.filter((row) => row.uses_aerial_work_vehicle).length;
             const fireCompanyCount = daySchedules.filter((row) => row.uses_fire).length;
             const tachiumaCompanyCount = daySchedules.filter((row) => row.uses_tachiuma).length;
             const isSaturday = new Date(`${date}T00:00:00`).getDay() === 6;
@@ -39,7 +39,7 @@ export const CalendarDay = memo(function CalendarDay({ date, selected, company, 
                 const tachiumaNotes = parseTachiumaValue(row.tachiuma_notes).area;
                 return <div key={row.id} className="mt-1 min-w-0 rounded bg-emerald-100 p-1 text-[10px] leading-4 text-emerald-950 sm:text-xs">
                   <div className="mb-1 flex items-center justify-end gap-0.5">
-                    {(row.aerial_work_vehicle_count ?? 0) > 0 && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-600 font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
+                    {row.uses_aerial_work_vehicle && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-600 font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
                     {row.uses_tachiuma && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 font-bold leading-none text-white shadow-sm" title="立ち馬使用あり">立</span>}
                     {row.uses_fire && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-600 font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
                     <button type="button" className="rounded p-0.5 hover:bg-white/70" disabled={loading || completionBusy} onClick={(event) => { event.stopPropagation(); onEdit(row); }} aria-label={`${date}の予定を編集`} title="予定を編集"><Pencil size={12} aria-hidden="true" /></button>

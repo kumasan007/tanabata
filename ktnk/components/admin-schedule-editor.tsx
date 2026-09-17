@@ -32,12 +32,8 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
   async function submit(remove = false) {
     if (busy) return;
     if (remove && !await confirm("この予定を削除しますか？", `${schedule.work_date}「${schedule.primary_company}」\n二次会社の人数内訳も削除されます。`, "削除する")) return;
-    if (!remove && (form.aerialWorkVehicles ?? []).some((row) => (row.vehicleCount ?? 0) < 1)) {
-      setError("高所作業車の希望台数を1以上の整数で入力してください。");
-      return;
-    }
-    if (!remove && (form.aerialWorkVehicles ?? []).some((row) => !row.workArea.trim())) {
-      setError("高所作業車の使用場所を入力してください。");
+    if (!remove && form.usesAerialWorkVehicle && !form.aerialWorkVehicleNotes.trim()) {
+      setError("高所作業車の使用内容を入力してください。");
       return;
     }
     setBusy(true); setError("");

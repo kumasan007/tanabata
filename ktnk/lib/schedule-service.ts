@@ -3,7 +3,6 @@ import { createServerClient } from "@/lib/supabase";
 import type {
   ScheduleGroupRow,
   ScheduleSummary,
-  ScheduleAerialWorkVehicleRow,
   ScheduleSubcompanyRow,
   ScheduleWithSubcompanies,
   SubcompanyInput,
@@ -45,21 +44,14 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expect
   );
 
   const payloads = targetDates.map((workDate) => {
-    const aerialVehicles = input.aerialWorkVehicles ?? [];
-    const aerialCount = aerialVehicles.length
-      ? aerialVehicles.reduce((sum, row) => sum + (row.vehicleCount ?? 0), 0)
-      : input.aerialWorkVehicleCount;
-    const aerialAreas = aerialVehicles.length
-      ? aerialVehicles.map((row) => row.workArea).join("、")
-      : input.aerialWorkVehicleFloor;
     const payload = {
       work_date: workDate,
       primary_company: input.primaryCompany,
       primary_count: resolvePreviousNumber(input.primaryCount, input.usePreviousPrimaryCount, previous?.primary_count, "一次会社人数"),
       work_area: emptyToNull(resolvePreviousText(input.workArea, previous?.work_area, "作業エリア")),
       work_content: emptyToNull(resolvePreviousText(input.workContent, previous?.work_content, "作業内容")),
-      aerial_work_vehicle_count: aerialCount,
-      aerial_work_vehicle_floor: emptyToNull(aerialAreas),
+      uses_aerial_work_vehicle: input.usesAerialWorkVehicle,
+      aerial_work_vehicle_notes: input.usesAerialWorkVehicle ? emptyToNull(input.aerialWorkVehicleNotes) : null,
       uses_fire: input.usesFire,
       fire_area: input.usesFire ? emptyToNull(input.fireArea) : null,
       uses_tachiuma: input.usesTachiuma,
@@ -76,11 +68,8 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expect
   const subcompanies = resolvedSubcompanies
     .map((sub) => ({ secondary_company: emptyToNull(sub.secondaryCompany), worker_count: sub.workerCount }))
     .filter((sub) => sub.secondary_company || (sub.worker_count !== null && sub.worker_count > 0));
-  const vehicles = (input.aerialWorkVehicles ?? []).map((vehicle) => ({
-    work_area: vehicle.workArea.trim(), vehicle_count: vehicle.vehicleCount,
-  }));
   const { data, error } = await supabase.rpc("save_schedule_atomically", {
-    p_groups: payloads, p_subcompanies: subcompanies, p_vehicles: vehicles,
+    p_groups: payloads, p_subcompanies: subcompanies,
     p_overwrite: input.overwriteExisting, p_skip_existing: input.skipExisting,
     p_expected_id: expectedId ?? null,
   });
@@ -135,13 +124,10 @@ async function querySchedules(params: ScheduleSearchParams) {
     .select(
       `
       id, work_date, primary_company, primary_count, work_area,
-      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor, uses_fire, fire_area, uses_tachiuma, tachiuma_notes,
+      work_content, uses_aerial_work_vehicle, aerial_work_vehicle_notes, uses_fire, fire_area, uses_tachiuma, tachiuma_notes,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
-      ),
-      schedule_aerial_work_vehicles (
-        id, schedule_group_id, work_area, vehicle_count, sort_order
       )
     `,
     )
@@ -206,13 +192,10 @@ async function queryPreviousScheduleForCopy(primaryCompany: string, workDate: st
     .select(
       `
       id, work_date, primary_company, primary_count, work_area,
-      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor, uses_fire, fire_area, uses_tachiuma, tachiuma_notes,
+      work_content, uses_aerial_work_vehicle, aerial_work_vehicle_notes, uses_fire, fire_area, uses_tachiuma, tachiuma_notes,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
-      ),
-      schedule_aerial_work_vehicles (
-        id, schedule_group_id, work_area, vehicle_count, sort_order
       )
     `,
     )
@@ -241,13 +224,10 @@ async function queryWorkScheduleOnDate(primaryCompany: string, workDate: string)
     .from("schedule_groups")
     .select(`
       id, work_date, primary_company, primary_count, work_area,
-      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor, uses_fire, fire_area, uses_tachiuma, tachiuma_notes,
+      work_content, uses_aerial_work_vehicle, aerial_work_vehicle_notes, uses_fire, fire_area, uses_tachiuma, tachiuma_notes,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
-      ),
-      schedule_aerial_work_vehicles (
-        id, schedule_group_id, work_area, vehicle_count, sort_order
       )
     `)
     .eq("primary_company", primaryCompany)
@@ -278,13 +258,10 @@ async function queryScheduleSummariesByPrimaryCompany(primaryCompany: string): P
     .select(
       `
       id, work_date, primary_company, primary_count, work_area,
-      work_content, aerial_work_vehicle_count, aerial_work_vehicle_floor, uses_fire, fire_area, uses_tachiuma, tachiuma_notes,
+      work_content, uses_aerial_work_vehicle, aerial_work_vehicle_notes, uses_fire, fire_area, uses_tachiuma, tachiuma_notes,
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
-      ),
-      schedule_aerial_work_vehicles (
-        id, schedule_group_id, work_area, vehicle_count, sort_order
       )
     `,
     )
@@ -310,8 +287,8 @@ async function queryScheduleSummariesByPrimaryCompany(primaryCompany: string): P
       workDate: schedule.work_date,
       workArea: schedule.work_area ?? "",
       workContent: schedule.work_content ?? "",
-      aerialWorkVehicleCount: schedule.aerial_work_vehicle_count ?? 0,
-      aerialWorkVehicleFloor: schedule.aerial_work_vehicle_floor ?? "",
+      usesAerialWorkVehicle: schedule.uses_aerial_work_vehicle,
+      aerialWorkVehicleNotes: schedule.aerial_work_vehicle_notes ?? "",
       usesFire: schedule.uses_fire,
       fireArea: schedule.fire_area ?? "",
       usesTachiuma: schedule.uses_tachiuma,
@@ -385,14 +362,12 @@ function resolvePreviousNumber(
 function normalizeScheduleRow(
   row: ScheduleGroupRow & {
     schedule_subcompanies?: ScheduleSubcompanyRow[];
-    schedule_aerial_work_vehicles?: ScheduleAerialWorkVehicleRow[];
   },
 ): ScheduleWithSubcompanies {
-  const { schedule_subcompanies, schedule_aerial_work_vehicles, ...group } = row;
+  const { schedule_subcompanies, ...group } = row;
   return {
     ...group,
     subcompanies: (schedule_subcompanies ?? []).sort((a, b) => a.sort_order - b.sort_order),
-    aerialWorkVehicles: (schedule_aerial_work_vehicles ?? []).sort((a, b) => a.sort_order - b.sort_order),
   };
 }
 

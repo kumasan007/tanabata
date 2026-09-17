@@ -118,7 +118,7 @@ test("monthly query aggregates workers and omits names, notes and vehicle detail
   assert.equal("schedule_subcompanies" in row, false);
   assert.doesNotMatch(selections[0], /notes|person_names|aerial_work_vehicles|work_content/);
   await getCalendarSchedules("2026-09-01", "2026-09-30", "A");
-  assert.match(selections[1], /work_area,work_content,tachiuma_notes/);
+  assert.match(selections[1], /work_area,work_content,aerial_work_vehicle_notes,tachiuma_notes/);
   assert.equal(tags[0][0], "schedules");
 });
 
@@ -556,7 +556,7 @@ test("予定保存は複数日と全明細を一回のRPCへ渡す", async () =>
   const input = scheduleSubmitSchema.parse(submission({
     dates: ["2026-09-16", "2026-09-15"], startDate: "2026-09-15", endDate: "2026-09-16",
     currentSubcompanies: [{secondaryCompany:"二次会社",workerCount:2}],
-    aerialWorkVehicles:[{workArea:"10階",vehicleCount:3}], usesFire:true,fireArea:"10階",usesTachiuma:true,tachiumaNotes:"2F、3Fで3台使用。",
+    usesAerialWorkVehicle:true,aerialWorkVehicleNotes:"10階",usesFire:true,fireArea:"10階",usesTachiuma:true,tachiumaNotes:"2F、3Fで3台使用。",
     overwriteExisting:true,
   }));
   const result = await service.saveScheduleSubmission(input);
@@ -565,7 +565,9 @@ test("予定保存は複数日と全明細を一回のRPCへ渡す", async () =>
   assert.equal(call.name,"save_schedule_atomically");
   assert.equal(call.data.p_groups.length,2);
   assert.equal(call.data.p_subcompanies[0].worker_count,2);
-  assert.equal(call.data.p_vehicles[0].vehicle_count,3);
+  assert.equal("p_vehicles" in call.data,false);
+  assert.equal(call.data.p_groups[0].uses_aerial_work_vehicle,true);
+  assert.equal(call.data.p_groups[0].aerial_work_vehicle_notes,"10階");
   assert.equal(call.data.p_groups[0].tachiuma_notes,"2F、3Fで3台使用。");
   assert.equal(call.data.p_groups[0].fire_area,"10階");
   assert.equal(call.data.p_overwrite,true);
@@ -587,14 +589,14 @@ test("RPC失敗時は従来の個別保存へフォールバックしない", as
   assert.equal(service.mutations.length,1);
 });
 
-test("編集フォーム変換は過去の高所作業車データと人数を維持する",()=>{
+test("編集フォーム変換は高所作業車の使用内容と人数を維持する",()=>{
   const {scheduleToFormData}=loadModule("lib/schedule-fields.ts");
   const row={work_date:"2026-09-15",primary_company:"A",primary_count:0,work_area:"10階",work_content:"配管",
-    aerial_work_vehicle_count:2,aerial_work_vehicle_floor:"10階",uses_fire:true,uses_tachiuma:true,tachiuma_notes:"2個",
+    uses_aerial_work_vehicle:true,aerial_work_vehicle_notes:"10階",uses_fire:true,uses_tachiuma:true,tachiuma_notes:"2個",
     subcompanies:[{secondary_company:"B",worker_count:3}]};
   const form=scheduleToFormData(row,["B","C"]);
-  assert.equal(form.aerialWorkVehicles[0].vehicleCount,2);
-  assert.equal(form.aerialWorkVehicles[0].workArea,"10階");
+  assert.equal(form.usesAerialWorkVehicle,true);
+  assert.equal(form.aerialWorkVehicleNotes,"10階");
   assert.equal(form.currentSubcompanies[0].workerCount,3);
   assert.equal(form.currentSubcompanies[1].workerCount,0);
   assert.equal(form.primaryCount,0); assert.equal(form.tachiumaNotes,"2個");

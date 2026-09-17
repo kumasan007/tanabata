@@ -179,7 +179,7 @@ export function RecoveryPanel({ kind, active, onRestored }: {
         }
     }
     async function requestAuditChangeRestore(log: AuditLogRow) {
-        if (!await confirm("変更前の状態へ戻しますか？", auditLogDescription(log), "復元へ進む"))
+        if (!await confirm("変更前の状態へ戻しますか？", auditLogDescription(log, auditLogs), "復元へ進む"))
             return;
         setRestorePassword("");
         setPendingRestore({ kind: "audit", log });
@@ -308,7 +308,7 @@ export function RecoveryPanel({ kind, active, onRestored }: {
                 {auditLogs.map((log) => (<div key={log.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-slate-900">{auditLogDescription(log)}</p>
+                        <p className="font-semibold text-slate-900">{auditLogDescription(log, auditLogs)}</p>
                         <span className={`rounded px-2 py-0.5 text-xs font-bold ${auditOperationClass(log.operation)}`}>
                           {auditOperationLabel(log.operation)}
                         </span>
@@ -372,19 +372,27 @@ function auditOperationClass(operation: AuditLogRow["operation"]) {
         return "bg-sky-100 text-sky-800";
     return "bg-red-100 text-red-800";
 }
-function auditLogDescription(log: AuditLogRow) {
+function auditLogDescription(log: AuditLogRow, logs: AuditLogRow[] = []) {
     const data = log.new_data ?? log.old_data ?? {};
     const tableLabels: Record<string, string> = {
         company_master: "会社マスタ",
         schedule_groups: "作業予定",
         schedule_subcompanies: "二次会社の予定",
-        schedule_aerial_work_vehicles: "高所作業車",
         new_entrant_records: "新規入場者",
         work_completion_reports: "作業終了",
     };
+    const scheduleGroupId = stringField(data, "schedule_group_id");
+    const relatedSchedule = scheduleGroupId
+        ? logs.find((candidate) => {
+            if (candidate.transaction_id !== log.transaction_id || candidate.table_name !== "schedule_groups") return false;
+            const candidateData = candidate.new_data ?? candidate.old_data ?? {};
+            return stringField(candidateData, "id") === scheduleGroupId;
+        })
+        : undefined;
+    const relatedScheduleData = relatedSchedule?.new_data ?? relatedSchedule?.old_data ?? {};
     const details = [
         stringField(data, "work_date") || stringField(data, "entry_date"),
-        stringField(data, "primary_company"),
+        stringField(data, "primary_company") || stringField(relatedScheduleData, "primary_company"),
         stringField(data, "secondary_company"),
         stringField(data, "person_names"),
     ].filter(Boolean);
@@ -403,9 +411,8 @@ const auditFieldLabels: Record<string, string> = {
     nationality_status: "国籍区分",
     work_area: "作業場所",
     work_content: "作業内容",
-    aerial_work_vehicle_count: "高所作業車台数",
-    aerial_work_vehicle_floor: "高所作業車使用階",
-    vehicle_count: "台数",
+    uses_aerial_work_vehicle: "高所作業車使用",
+    aerial_work_vehicle_notes: "高所作業車使用内容",
     uses_fire: "火気使用",
     uses_tachiuma: "立馬使用",
     tachiuma_notes: "立馬備考",

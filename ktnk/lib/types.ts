@@ -19,19 +19,13 @@ export type SubcompanyInput = {
   usePreviousWorkerCount?: boolean;
 };
 
-export type AerialWorkVehicleInput = {
-  workArea: string;
-  vehicleCount: number | null;
-};
-
 export type PreviousSchedule = {
   workDate: string;
   primaryCount: number | null;
   workArea: string | null;
   workContent: string | null;
-  aerialWorkVehicleCount?: number | null;
-  aerialWorkVehicleFloor?: string | null;
-  aerialWorkVehicles?: AerialWorkVehicleInput[];
+  usesAerialWorkVehicle?: boolean;
+  aerialWorkVehicleNotes?: string | null;
   usesFire?: boolean;
   fireArea?: string | null;
   usesTachiuma?: boolean;
@@ -51,9 +45,8 @@ export type ScheduleSubmitInput = {
   currentSubcompanies: SubcompanyInput[];
   workArea: string;
   workContent: string;
-  aerialWorkVehicleCount: number | null;
-  aerialWorkVehicleFloor: string;
-  aerialWorkVehicles?: AerialWorkVehicleInput[];
+  usesAerialWorkVehicle: boolean;
+  aerialWorkVehicleNotes: string;
   usesFire: boolean;
   fireArea: string;
   usesTachiuma: boolean;
@@ -71,8 +64,8 @@ export type ScheduleGroupRow = {
   primary_count: number | null;
   work_area: string | null;
   work_content: string | null;
-  aerial_work_vehicle_count: number | null;
-  aerial_work_vehicle_floor: string | null;
+  uses_aerial_work_vehicle: boolean;
+  aerial_work_vehicle_notes: string | null;
   uses_fire: boolean;
   fire_area: string | null;
   uses_tachiuma: boolean;
@@ -90,17 +83,8 @@ export type ScheduleSubcompanyRow = {
   sort_order: number;
 };
 
-export type ScheduleAerialWorkVehicleRow = {
-  id: string;
-  schedule_group_id: string;
-  work_area: string;
-  vehicle_count: number;
-  sort_order: number;
-};
-
 export type ScheduleWithSubcompanies = ScheduleGroupRow & {
   subcompanies: ScheduleSubcompanyRow[];
-  aerialWorkVehicles?: ScheduleAerialWorkVehicleRow[];
 };
 
 export type ScheduleSummary = {
@@ -108,8 +92,8 @@ export type ScheduleSummary = {
   workDate: string;
   workArea: string;
   workContent: string;
-  aerialWorkVehicleCount: number;
-  aerialWorkVehicleFloor: string;
+  usesAerialWorkVehicle: boolean;
+  aerialWorkVehicleNotes: string;
   usesFire: boolean;
   fireArea: string;
   usesTachiuma: boolean;
@@ -131,10 +115,11 @@ export type NewEntrantRecord = {
   updated_at: string;
 };
 
-export type CalendarSchedule = Pick<ScheduleWithSubcompanies, "id" | "work_date" | "primary_company" | "aerial_work_vehicle_count" | "uses_fire" | "uses_tachiuma"> & {
+export type CalendarSchedule = Pick<ScheduleWithSubcompanies, "id" | "work_date" | "primary_company" | "uses_aerial_work_vehicle" | "uses_fire" | "uses_tachiuma"> & {
   total_workers: number;
   work_area?: string | null;
   work_content?: string | null;
+  aerial_work_vehicle_notes?: string | null;
   fire_area?: string | null;
   tachiuma_notes?: string | null;
 };
