@@ -598,6 +598,12 @@ test("編集フォーム変換は過去の高所作業車データと人数を�
   assert.equal(form.primaryCount,0); assert.equal(form.tachiumaNotes,"2個");
 });
 
+test("旧形式で自動付加された立ち馬の希望1台を入力欄へ戻さない",()=>{
+  const {parseTachiumaValue}=loadModule("lib/schedule-fields.ts");
+  assert.equal(parseTachiumaValue("2F（希望 1台）").area,"2F");
+  assert.equal(parseTachiumaValue("2Fで3台使用。").area,"2Fで3台使用。");
+});
+
 
 test("calendar summary combines database entrant totals and keeps schedules when reports fail", async () => {
   const entrants = [

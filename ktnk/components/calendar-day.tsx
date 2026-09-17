@@ -17,10 +17,7 @@ export const CalendarDay = memo(function CalendarDay({ date, selected, company, 
   }
             const entrantStats = entrantSummary(dayEntrants);
             const total = daySchedules.reduce((sum, row) => sum + totalWorkers(row), 0);
-            const totalAerialVehicles = daySchedules.reduce(
-              (sum, row) => sum + (row.aerial_work_vehicle_count ?? 0),
-              0,
-            );
+            const aerialCompanyCount = daySchedules.filter((row) => (row.aerial_work_vehicle_count ?? 0) > 0).length;
             const fireCompanyCount = daySchedules.filter((row) => row.uses_fire).length;
             const tachiumaCompanyCount = daySchedules.filter((row) => row.uses_tachiuma).length;
             const isSaturday = new Date(`${date}T00:00:00`).getDay() === 6;
@@ -30,7 +27,7 @@ export const CalendarDay = memo(function CalendarDay({ date, selected, company, 
                 <span className="mt-1 flex flex-col text-sm font-semibold leading-5 text-emerald-900"><span>{daySchedules.length}社</span><span>{total}人</span></span>
               </>}
               {!company && (daySchedules.length > 0 || dayEntrants.length > 0) && <span className="mt-1 hidden flex-wrap gap-x-2 gap-y-1 text-sm font-semibold sm:flex">
-                {totalAerialVehicles > 0 && <span className="inline-flex items-center gap-0.5 text-sky-800" title={`高所作業車 ${totalAerialVehicles}台`}><span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-sky-600 text-[10px] font-bold leading-none text-white">高</span>{totalAerialVehicles}</span>}
+                {aerialCompanyCount > 0 && <span className="inline-flex items-center text-sky-800" title={`高所作業車使用 ${aerialCompanyCount}社`}><span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-sky-600 text-[10px] font-bold leading-none text-white">高</span></span>}
                 {tachiumaCompanyCount > 0 && <span className="inline-flex items-center gap-0.5 text-emerald-700" title={`立ち馬使用 ${tachiumaCompanyCount}社`}><span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold leading-none text-white">立</span>{tachiumaCompanyCount}</span>}
                 {fireCompanyCount > 0 && <span className="inline-flex items-center gap-0.5 text-red-700" title={`火気使用 ${fireCompanyCount}社`}><span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold leading-none text-white">火</span>{fireCompanyCount}</span>}
                 {dayEntrants.length > 0 && <span className="inline-flex items-center gap-0.5 text-amber-700" title={`新規入場 ${entrantStats.companies}社・${entrantStats.people}人`}><span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-600 text-[10px] font-bold leading-none text-white">新</span>{entrantStats.people}</span>}
@@ -48,7 +45,6 @@ export const CalendarDay = memo(function CalendarDay({ date, selected, company, 
                   <p className="font-bold">{totalWorkers(row)}人</p>
                   <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
                   <p className="line-clamp-2 break-words" title={content ?? ""}>{content || "作業内容未入力"}</p>
-                  {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="truncate font-semibold text-sky-800">高車：{row.aerial_work_vehicle_count}台</p>}
                   {row.uses_tachiuma && row.tachiuma_notes && <p className="truncate font-semibold text-emerald-800" title={row.tachiuma_notes}>立ち馬：{row.tachiuma_notes}</p>}
                   {row.uses_fire && <p className="truncate font-semibold text-rose-800">火気：{row.fire_area || "使用"}</p>}
                 </div>;

@@ -113,7 +113,7 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
                   </div>
               </details>
               {detailsExpanded && ((row.aerial_work_vehicle_count ?? 0) > 0 || row.uses_tachiuma || row.uses_fire || row.notes) && <div className="mt-2 grid gap-1 px-0.5">
-                {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="text-sky-800">高車：<CopyValue value={row.aerial_work_vehicle_count ?? 0} label="高車台数" compact stopPropagation>{row.aerial_work_vehicle_count}台</CopyValue>{row.aerial_work_vehicle_floor && <>（<CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用フロア" compact stopPropagation />）</>}</p>}
+                {(row.aerial_work_vehicle_count ?? 0) > 0 && <p className="text-sky-800">高車：{row.aerial_work_vehicle_floor ? <CopyValue value={row.aerial_work_vehicle_floor} label="高車の使用内容" compact stopPropagation /> : "使用あり"}</p>}
                 {row.uses_tachiuma && <p className="text-emerald-800">立ち馬：{row.tachiuma_notes ? <CopyValue value={row.tachiuma_notes} label="立ち馬の使用内容" compact stopPropagation /> : "使用"}</p>}
                 {row.uses_fire && <p className="text-rose-800">火気：{row.fire_area || "使用場所未入力"}</p>}
                 {row.notes && <p className="whitespace-pre-wrap break-words border-t border-border pt-1.5 text-xs text-slate-500">備考：<CopyValue value={row.notes} label="備考" compact stopPropagation /></p>}

@@ -81,12 +81,12 @@ export function SchedulePreview({
             {schedule.aerialWorkVehicles?.length ? (
               schedule.aerialWorkVehicles.map((vehicle, index) => (
                 <p key={index} className="whitespace-pre-wrap break-words">
-                  {vehicle.workArea || "使用場所未入力"}・{vehicle.vehicleCount ?? 0}台
+                  {vehicle.workArea || "使用内容未入力"}
                 </p>
               ))
             ) : (schedule.aerialWorkVehicleCount ?? 0) > 0 ? (
               <p className="whitespace-pre-wrap break-words">
-                {schedule.aerialWorkVehicleFloor || "使用場所未入力"}・{schedule.aerialWorkVehicleCount}台
+                {schedule.aerialWorkVehicleFloor || "使用内容未入力"}
               </p>
             ) : (
               "使用しない"

@@ -1272,7 +1272,7 @@ export function ScheduleForm({
                             .join(" / ")}
                         </p>
                         {summary.aerialWorkVehicleCount > 0 && (
-                          <p>高所作業車：{summary.aerialWorkVehicleCount}台{summary.aerialWorkVehicleFloor ? `（使用フロア：${summary.aerialWorkVehicleFloor}）` : ""}</p>
+                          <p>高所作業車：{summary.aerialWorkVehicleFloor || "使用あり"}</p>
                         )}
                         {summary.usesTachiuma && summary.tachiumaNotes && <p>立ち馬連絡事項：{summary.tachiumaNotes}</p>}
                         {summary.usesFire && <p>火気：使用あり</p>}
