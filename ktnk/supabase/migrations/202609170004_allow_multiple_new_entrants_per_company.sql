@@ -5,6 +5,9 @@ begin;
 alter table public.new_entrant_records
   drop constraint if exists new_entrant_records_entry_date_primary_company_secondary_company_key;
 
+alter table public.new_entrant_records
+  drop constraint if exists new_entrant_records_date_company_key;
+
 drop index if exists public.new_entrant_records_date_company_idx;
 
 create index if not exists new_entrant_records_company_date_idx
