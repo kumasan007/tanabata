@@ -4,6 +4,7 @@ import { createServerClient } from "@/lib/supabase";
 import { getCompanyMaster } from "@/lib/companies";
 import { getWorkCompletions, getScheduledCompletionCompanies } from "@/lib/work-completions";
 import { parseLocalDate, toDateStringInTimeZone, todayInTokyoString } from "@/lib/utils";
+import { invalidateWorkCompletionData } from "@/lib/data-cache";
 const schema = z.object({
   date: z.string().refine((value) => Boolean(parseLocalDate(value)), "日付を選択してください。").optional(),
   automaticDate: z.boolean().default(false),
@@ -45,6 +46,7 @@ async function mutate(request: Request, cancel: boolean) {
       const reports = await getWorkCompletions(date, date, primaryCompany);
       return NextResponse.json({ error: reports.length ? "すでに作業終了報告をしています。" : "報告が取り消されています。再度確認してください。", report: reports[0] ?? null }, { status: 409 });
     }
+    invalidateWorkCompletionData();
     return NextResponse.json({ report: cancel ? null : data });
   } catch (error) { return failure(error); }
 }

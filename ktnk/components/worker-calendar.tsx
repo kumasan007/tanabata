@@ -113,11 +113,20 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
   const detailLoading = detailLoadedKey !== detailKey;
   useEffect(() => {
     const controller = new AbortController();
+    if (loading) return () => controller.abort();
     const cached = detailCache.current.get(detailKey);
     if (cached) {
       setDetail({ date: selectedDate, ...cached });
       setDetailMessage(cached.warning ?? ""); setDetailLoadedKey(detailKey);
       return;
+    }
+    if (!hasSelectedRecords) {
+      const empty = { schedules: [], entrants: [], completions: [] };
+      detailCache.current.set(detailKey, empty);
+      setDetail({ date: selectedDate, ...empty });
+      setDetailMessage("");
+      setDetailLoadedKey(detailKey);
+      return () => controller.abort();
     }
     const params = new URLSearchParams({ from: selectedDate, to: selectedDate });
     if (company) params.set("primaryCompany", company);
@@ -137,7 +146,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
         }
       }).finally(() => { if (!controller.signal.aborted) setDetailLoadedKey(detailKey); });
     return () => controller.abort();
-  }, [selectedDate, company, version, detailKey]);
+  }, [selectedDate, company, version, detailKey, loading, hasSelectedRecords]);
   useEffect(() => {
     if (!pendingEditId || detailLoading) return;
     const row = detail.schedules.find((item) => item.id === pendingEditId);

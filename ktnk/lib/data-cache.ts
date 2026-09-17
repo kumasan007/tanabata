@@ -4,6 +4,7 @@ export const DATA_CACHE_TAGS = {
   companies: "company-master",
   schedules: "schedules",
   entrants: "new-entrants",
+  completions: "work-completions",
 } as const;
 
 function expire(tag: string) {
@@ -22,8 +23,13 @@ export function invalidateEntrantData() {
   expire(DATA_CACHE_TAGS.entrants);
 }
 
+export function invalidateWorkCompletionData() {
+  expire(DATA_CACHE_TAGS.completions);
+}
+
 export function invalidateAllOperationalData() {
   invalidateCompanyData();
   invalidateScheduleData();
   invalidateEntrantData();
+  invalidateWorkCompletionData();
 }
