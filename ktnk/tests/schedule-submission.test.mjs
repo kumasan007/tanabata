@@ -416,6 +416,8 @@ test("通常の作業予定はエリア・内容の未入力や空白だけを�
   }
   assert.equal(scheduleSubmitSchema.safeParse(submission()).success, true);
   assert.equal(scheduleSubmitSchema.safeParse(submission({ usesTachiuma: true, tachiumaNotes: "" })).success, true);
+  assert.equal(scheduleSubmitSchema.safeParse(submission({ usesFire: true, fireArea: "" })).success, true);
+  assert.equal(scheduleSubmitSchema.safeParse(submission({ usesFire: true, fireArea: "2F、3F" })).success, true);
 });
 
 test("company deletion requires admin and exactly one target", async () => {

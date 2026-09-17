@@ -93,7 +93,7 @@ export function SchedulePreview({
             )}
           </dd>
           {schedule.usesTachiuma && schedule.tachiumaNotes && <><dt className="text-slate-500">立ち馬連絡事項</dt><dd className="whitespace-pre-wrap break-words">{schedule.tachiumaNotes}</dd></>}
-          {schedule.usesFire && <><dt className="text-slate-500">火気</dt><dd className="whitespace-pre-wrap break-words">{schedule.fireArea}</dd></>}
+          {schedule.usesFire && schedule.fireArea && <><dt className="text-slate-500">火気連絡事項</dt><dd className="whitespace-pre-wrap break-words">{schedule.fireArea}</dd></>}
         </dl>
     </div>
     {notes && <div className="mt-4 rounded-md bg-amber-50 p-4 text-sm"><span className="font-semibold">備考：</span><span className="whitespace-pre-wrap break-words">{notes}</span></div>}

@@ -1275,7 +1275,7 @@ export function ScheduleForm({
                           <p>高所作業車：{summary.aerialWorkVehicleFloor || "使用あり"}</p>
                         )}
                         {summary.usesTachiuma && summary.tachiumaNotes && <p>立ち馬連絡事項：{summary.tachiumaNotes}</p>}
-                        {summary.usesFire && <p>火気：使用あり</p>}
+                        {summary.usesFire && summary.fireArea && <p>火気連絡事項：{summary.fireArea}</p>}
                         {summary.notes && <p>備考：{summary.notes}</p>}
                       </div>
                     ))
