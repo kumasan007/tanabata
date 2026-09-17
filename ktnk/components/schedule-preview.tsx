@@ -20,6 +20,7 @@ export function SchedulePreview({
     },
     ...schedule.subcompanies.filter((row) => row.secondaryCompany),
   ].filter((row) => !hideZeroSecondaryCompanies || (row.workerCount ?? 0) > 0);
+  const hasAerialWorkVehicle = Boolean(schedule.aerialWorkVehicles?.length) || (schedule.aerialWorkVehicleCount ?? 0) > 0;
   return (
     <>
     <div className="overflow-hidden rounded-md border border-border text-base">
@@ -76,7 +77,7 @@ export function SchedulePreview({
           <dd className="whitespace-pre-wrap break-words">
             {schedule.workContent || "未入力"}
           </dd>
-          <dt className="text-slate-500">高車</dt>
+          {hasAerialWorkVehicle && <><dt className="text-slate-500">高車</dt>
           <dd className="space-y-1">
             {schedule.aerialWorkVehicles?.length ? (
               schedule.aerialWorkVehicles.map((vehicle, index) => (
@@ -84,14 +85,12 @@ export function SchedulePreview({
                   {vehicle.workArea || "使用内容未入力"}
                 </p>
               ))
-            ) : (schedule.aerialWorkVehicleCount ?? 0) > 0 ? (
+            ) : (
               <p className="whitespace-pre-wrap break-words">
                 {schedule.aerialWorkVehicleFloor || "使用内容未入力"}
               </p>
-            ) : (
-              "使用しない"
             )}
-          </dd>
+          </dd></>}
           {schedule.usesTachiuma && schedule.tachiumaNotes && <><dt className="text-slate-500">立ち馬連絡事項</dt><dd className="whitespace-pre-wrap break-words">{schedule.tachiumaNotes}</dd></>}
           {schedule.usesFire && schedule.fireArea && <><dt className="text-slate-500">火気連絡事項</dt><dd className="whitespace-pre-wrap break-words">{schedule.fireArea}</dd></>}
         </dl>
