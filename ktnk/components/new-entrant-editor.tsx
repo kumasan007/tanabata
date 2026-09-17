@@ -20,6 +20,7 @@ export function NewEntrantEditor({ record, master, onClose, onSaved }: { record:
   const [personName, setPersonName] = useState(record.person_names ?? "");
   const [nationalityStatus, setNationalityStatus] = useState(record.nationality_status ?? "");
   const [notes, setNotes] = useState(record.notes ?? "");
+  const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const legacy = record.person_count > 1;
@@ -35,8 +36,10 @@ export function NewEntrantEditor({ record, master, onClose, onSaved }: { record:
     setBusy(true); setError("");
     try {
       const response = await fetch(`/api/new-entrants${remove ? `?id=${encodeURIComponent(record.id)}` : ""}`, {
-        method: remove ? "DELETE" : "PATCH", headers: { "content-type": "application/json" },
-        ...(!remove ? { body: JSON.stringify({ id: record.id, entryDate: record.entry_date, primaryCompany: record.primary_company, secondaryCompany, personName, nationalityStatus, notes }) } : {}),
+        method: remove ? "DELETE" : adding ? "POST" : "PATCH", headers: { "content-type": "application/json" },
+        ...(!remove ? { body: JSON.stringify(adding
+          ? { entryDate: record.entry_date, primaryCompany: record.primary_company, people: [{ secondaryCompany, personName, nationalityStatus, notes }] }
+          : { id: record.id, entryDate: record.entry_date, primaryCompany: record.primary_company, secondaryCompany, personName, nationalityStatus, notes }) } : {}),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "保存に失敗しました。");
@@ -45,11 +48,21 @@ export function NewEntrantEditor({ record, master, onClose, onSaved }: { record:
     finally { setBusy(false); }
   }
 
+  function startAdding() {
+    setAdding(true);
+    setCompanyChoice(initialCompany);
+    setNewCompany(initialCompany === NEW_COMPANY ? record.secondary_company ?? "" : "");
+    setPersonName("");
+    setNationalityStatus("");
+    setNotes("");
+    setError("");
+  }
+
   return <><dialog ref={dialog} aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }} className="admin-dashboard m-auto max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-2xl overflow-y-auto rounded-md border border-border p-4 backdrop:bg-slate-950/45">
-    <form onSubmit={(event) => { event.preventDefault(); void submit(); }}><div className="flex items-center justify-between gap-3"><h2 id={titleId} className="text-lg font-bold">新規入場者を編集</h2><button type="button" className="btn btn-secondary h-9 min-h-9 px-3" disabled={busy} onClick={onClose}><X size={16} />閉じる</button></div><p className="mb-4 text-sm text-slate-600">{record.entry_date} / {record.primary_company}</p>
-      {legacy && <p className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">旧形式で登録された{record.person_count}人分のデータです。内容を保持するため、個人編集はできません。</p>}
-      <fieldset disabled={busy || legacy} className="grid gap-3"><div className="field"><span className="label">所属会社（必須）</span><div className="flex flex-col gap-2 sm:flex-row"><select className="input min-w-0 flex-1" value={companyChoice === NEW_COMPANY ? "" : companyChoice} onChange={(event) => { setCompanyChoice(event.target.value); setNewCompany(""); }} disabled={companyChoice === NEW_COMPANY}>{secondaryOptions.map((company) => <option key={company}>{company}</option>)}<option value={PRIMARY}>{record.primary_company}</option></select><button type="button" className="btn btn-secondary h-[46px] min-h-[46px] shrink-0 px-3" onClick={() => { setCompanyChoice(NEW_COMPANY); setNewCompany(""); }}><Plus size={18} aria-hidden="true" />新しい二次会社を追加</button></div>{companyChoice === NEW_COMPANY && <div className="mt-2 flex gap-2"><input autoFocus className="input min-w-0 flex-1" aria-label="新しい二次会社名" value={newCompany} maxLength={200} onChange={(event) => setNewCompany(event.target.value)} placeholder="新しい二次会社名" /><button type="button" className="btn btn-secondary h-[46px] min-h-[46px] w-[46px] shrink-0 p-0" onClick={() => { setCompanyChoice(initialCompany === NEW_COMPANY ? PRIMARY : initialCompany); setNewCompany(""); }} aria-label="追加を取り消す"><X size={18} /></button></div>}</div>
+    <form onSubmit={(event) => { event.preventDefault(); void submit(); }}><div className="flex items-center justify-between gap-3"><h2 id={titleId} className="text-lg font-bold">{adding ? "同じ会社に新規入場者を追加" : "新規入場者を編集"}</h2><button type="button" className="btn btn-secondary h-9 min-h-9 px-3" disabled={busy} onClick={onClose}><X size={16} />閉じる</button></div><p className="mb-4 text-sm text-slate-600">{record.entry_date} / {record.primary_company}</p>
+      {legacy && !adding && <p className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">旧形式で登録された{record.person_count}人分のデータです。内容を保持するため、個人編集はできません。</p>}
+      <fieldset disabled={busy || (legacy && !adding)} className="grid gap-3"><div className="field"><span className="label">所属会社（必須）</span><div className="flex flex-col gap-2 sm:flex-row"><select className="input min-w-0 flex-1" value={companyChoice === NEW_COMPANY ? "" : companyChoice} onChange={(event) => { setCompanyChoice(event.target.value); setNewCompany(""); }} disabled={companyChoice === NEW_COMPANY}>{secondaryOptions.map((company) => <option key={company}>{company}</option>)}<option value={PRIMARY}>{record.primary_company}</option></select><button type="button" className="btn btn-secondary h-[46px] min-h-[46px] shrink-0 px-3" onClick={() => { setCompanyChoice(NEW_COMPANY); setNewCompany(""); }}><Plus size={18} aria-hidden="true" />新しい二次会社に変更</button></div>{companyChoice === NEW_COMPANY && <div className="mt-2 flex gap-2"><input autoFocus className="input min-w-0 flex-1" aria-label="新しい二次会社名" value={newCompany} maxLength={200} onChange={(event) => setNewCompany(event.target.value)} placeholder="新しい二次会社名" /><button type="button" className="btn btn-secondary h-[46px] min-h-[46px] w-[46px] shrink-0 p-0" onClick={() => { setCompanyChoice(initialCompany === NEW_COMPANY ? PRIMARY : initialCompany); setNewCompany(""); }} aria-label="変更を取り消す"><X size={18} /></button></div>}</div>
         <label className="field"><span className="label">氏名（必須）</span><input className="input" required value={personName} onChange={(event) => setPersonName(event.target.value)} /></label><fieldset className="field"><legend className="label">国籍（必須）</legend><div className="grid grid-cols-2 gap-2"><button type="button" className="status-option" aria-pressed={nationalityStatus === "japanese_only"} onClick={() => setNationalityStatus("japanese_only")}>日本籍</button><button type="button" className="status-option" aria-pressed={nationalityStatus === "includes_foreign"} onClick={() => setNationalityStatus("includes_foreign")}>外国籍</button></div></fieldset><label className="field"><span className="label">備考（任意）</span><textarea className="textarea" rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label></fieldset>
-      {error && <p role="alert" className="mt-3 text-sm notice-error">{error}</p>}<div className="mt-4 flex flex-wrap gap-2"><button type="submit" className="btn btn-primary" disabled={busy || legacy}>保存</button><button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>閉じる</button><button type="button" className="btn btn-secondary ml-auto text-red-700" disabled={busy} onClick={() => void submit(true)}>削除</button></div>
+      {error && <p role="alert" className="mt-3 text-sm notice-error">{error}</p>}<div className="mt-4 flex flex-wrap gap-2"><button type="submit" className="btn btn-primary" disabled={busy || (legacy && !adding)}>{adding ? "この会社に追加" : "保存"}</button>{!adding && <button type="button" className="btn btn-secondary" disabled={busy} onClick={startAdding}><Plus size={18} aria-hidden="true" />この会社に人を追加</button>}<button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>閉じる</button>{!adding && <button type="button" className="btn btn-secondary ml-auto text-red-700" disabled={busy} onClick={() => void submit(true)}>削除</button>}</div>
     </form></dialog>{confirmationDialog}</>;
 }
