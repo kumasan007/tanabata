@@ -415,7 +415,8 @@ test("通常の作業予定はエリア・内容の未入力や空白だけを�
     }
   }
   assert.equal(scheduleSubmitSchema.safeParse(submission()).success, true);
-  assert.equal(scheduleSubmitSchema.safeParse(submission({ usesTachiuma: true, tachiumaNotes: "" })).success, true);
+  assert.equal(scheduleSubmitSchema.safeParse(submission({ usesTachiuma: true, tachiumaNotes: "" })).success, false);
+  assert.equal(scheduleSubmitSchema.safeParse(submission({ usesTachiuma: true, tachiumaRequests: [{ floorId: "11111111-1111-4111-8111-111111111111", count: 2 }] })).success, true);
   assert.equal(scheduleSubmitSchema.safeParse(submission({ usesFire: true, fireArea: "" })).success, true);
   assert.equal(scheduleSubmitSchema.safeParse(submission({ usesFire: true, fireArea: "2F、3F" })).success, true);
 });

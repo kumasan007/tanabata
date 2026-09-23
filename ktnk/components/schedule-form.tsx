@@ -38,11 +38,12 @@ const emptyForm = (date: string): ScheduleSubmitInput => ({
   workContent: "",
   usesAerialWorkVehicle: false,
   aerialWorkVehicleNotes: "",
+  aerialWorkVehicleRequests: [],
   usesFire: false,
   fireArea: "",
   usesTachiuma: false,
   tachiumaNotes: "",
-  tachiumaCount: null,
+  tachiumaRequests: [],
   notes: "",
 });
 
@@ -462,12 +463,13 @@ export function ScheduleForm({
       next.currentSubcompanies = copiedRows;
       next.usesAerialWorkVehicle = source.usesAerialWorkVehicle ?? false;
       next.aerialWorkVehicleNotes = source.aerialWorkVehicleNotes ?? "";
+      next.aerialWorkVehicleRequests = source.aerialWorkVehicleRequests ?? [];
       next.usesFire = source.usesFire ?? false;
       next.fireArea = source.fireArea ?? "";
       next.usesTachiuma = source.usesTachiuma ?? false;
       const tachiuma = parseTachiumaValue(source.tachiumaNotes);
       next.tachiumaNotes = tachiuma.area;
-      next.tachiumaCount = tachiuma.count;
+      next.tachiumaRequests = source.tachiumaRequests ?? [];
     } else {
       next.primaryCount = null;
       next.currentSubcompanies = secondaryOptions.map((secondaryCompany) => ({
@@ -479,12 +481,13 @@ export function ScheduleForm({
       next.workContent = "";
       next.usesAerialWorkVehicle = source?.usesAerialWorkVehicle ?? false;
       next.aerialWorkVehicleNotes = source?.aerialWorkVehicleNotes ?? "";
+      next.aerialWorkVehicleRequests = source?.aerialWorkVehicleRequests ?? [];
       next.usesFire = source?.usesFire ?? false;
       next.fireArea = source?.fireArea ?? "";
       next.usesTachiuma = source?.usesTachiuma ?? false;
       const tachiuma = parseTachiumaValue(source?.tachiumaNotes);
       next.tachiumaNotes = tachiuma.area;
-      next.tachiumaCount = tachiuma.count;
+      next.tachiumaRequests = source?.tachiumaRequests ?? [];
     }
     setForm(next);
     setSecondaryWorkChoice(next.currentSubcompanies.length > 0);
@@ -576,12 +579,6 @@ export function ScheduleForm({
         status: "error",
         message: "作業予定がある場合は、合計人数を1人以上にしてください。",
       });
-      return;
-    }
-    if (form.usesAerialWorkVehicle && !form.aerialWorkVehicleNotes.trim()) {
-      setStep("edit");
-      setEditorPart("content");
-      setSubmitState({ status: "error", message: "高所作業車の使用内容を入力してください。" });
       return;
     }
     if (
@@ -952,11 +949,12 @@ export function ScheduleForm({
                         workContent: content,
                         usesAerialWorkVehicle: form.usesAerialWorkVehicle,
                         aerialWorkVehicleNotes: form.aerialWorkVehicleNotes,
+                        aerialWorkVehicleRequests: form.aerialWorkVehicleRequests,
                         usesFire: form.usesFire,
                         fireArea: form.fireArea,
                         usesTachiuma: form.usesTachiuma,
                         tachiumaNotes: form.tachiumaNotes,
-                        tachiumaCount: form.tachiumaCount,
+                        tachiumaRequests: form.tachiumaRequests,
                         subcompanies: activeRows,
                       }}
                     />
@@ -1103,10 +1101,6 @@ export function ScheduleForm({
                               ? "作業エリアを入力してください。"
                               : "作業内容を入力してください。",
                           });
-                          return;
-                        }
-                        if (editorPart === "content" && form.usesAerialWorkVehicle && !form.aerialWorkVehicleNotes.trim()) {
-                          setSubmitState({ status: "error", message: "高所作業車の使用内容を入力してください。" });
                           return;
                         }
                         setSubmitState({ status: "idle" });

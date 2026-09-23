@@ -76,13 +76,16 @@ export function SchedulePreview({
           <dd className="whitespace-pre-wrap break-words">
             {schedule.workContent || "未入力"}
           </dd>
-          {schedule.usesAerialWorkVehicle && <><dt className="text-slate-500">高車</dt>
-          <dd className="whitespace-pre-wrap break-words">{schedule.aerialWorkVehicleNotes || "使用内容未入力"}</dd></>}
-          {schedule.usesTachiuma && schedule.tachiumaNotes && <><dt className="text-slate-500">立ち馬連絡事項</dt><dd className="whitespace-pre-wrap break-words">{schedule.tachiumaNotes}</dd></>}
+          {schedule.usesAerialWorkVehicle && <><dt className="text-slate-500">高車</dt><dd>{formatRequests(schedule.aerialWorkVehicleRequests, schedule.aerialWorkVehicleNotes)}</dd></>}
+          {schedule.usesTachiuma && <><dt className="text-slate-500">立ち馬</dt><dd>{formatRequests(schedule.tachiumaRequests, schedule.tachiumaNotes)}</dd></>}
           {schedule.usesFire && schedule.fireArea && <><dt className="text-slate-500">火気連絡事項</dt><dd className="whitespace-pre-wrap break-words">{schedule.fireArea}</dd></>}
         </dl>
     </div>
     {notes && <div className="mt-4 rounded-md bg-amber-50 p-4 text-sm"><span className="font-semibold">備考：</span><span className="whitespace-pre-wrap break-words">{notes}</span></div>}
     </>
   );
+}
+
+function formatRequests(rows: PreviousSchedule["aerialWorkVehicleRequests"], legacy?: string | null) {
+  return rows?.length ? rows.map(row => `${row.floorName || "フロア"} ${row.count}台`).join("、") : legacy || "使用あり";
 }

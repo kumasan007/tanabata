@@ -115,8 +115,8 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
                   </div>
               </details>
               {detailsExpanded && (row.uses_aerial_work_vehicle || row.uses_tachiuma || row.uses_fire || row.notes) && <div className="mt-2 grid gap-1 px-0.5">
-                {row.uses_aerial_work_vehicle && <p className="text-sky-800">高車：{row.aerial_work_vehicle_notes ? <CopyValue value={row.aerial_work_vehicle_notes} label="高車の使用内容" compact stopPropagation /> : "使用あり"}</p>}
-                {row.uses_tachiuma && <p className="text-emerald-800">立ち馬：{tachiumaNotes ? <CopyValue value={tachiumaNotes} label="立ち馬の使用内容" compact stopPropagation /> : "使用"}</p>}
+                {row.uses_aerial_work_vehicle && <p className="text-sky-800">高車：<CopyValue value={equipmentText(row, "aerial_work_vehicle") || row.aerial_work_vehicle_notes || "使用あり"} label="高車の希望内容" compact stopPropagation /></p>}
+                {row.uses_tachiuma && <p className="text-emerald-800">立ち馬：<CopyValue value={equipmentText(row, "tachiuma") || tachiumaNotes || "使用"} label="立ち馬の希望内容" compact stopPropagation /></p>}
                 {row.uses_fire && row.fire_area && <p className="text-rose-800">火気連絡事項：{row.fire_area}</p>}
                 {row.notes && <p className="whitespace-pre-wrap break-words border-t border-border pt-1.5 text-xs text-slate-500">備考：<CopyValue value={row.notes} label="備考" compact stopPropagation /></p>}
               </div>}
@@ -144,3 +144,10 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
           {confirmationDialog}
   </>;
 });
+
+function equipmentText(row: ScheduleWithSubcompanies, type: "aerial_work_vehicle" | "tachiuma") {
+  return (row.equipmentRequests ?? []).filter(item => item.equipment_type === type).map(item => {
+    const floor = Array.isArray(item.equipment_floor_master) ? item.equipment_floor_master[0] : item.equipment_floor_master;
+    return `${floor?.name ?? "フロア"} ${item.requested_count}台`;
+  }).join("、");
+}

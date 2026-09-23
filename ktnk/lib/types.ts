@@ -19,6 +19,19 @@ export type SubcompanyInput = {
   usePreviousWorkerCount?: boolean;
 };
 
+export type EquipmentType = "aerial_work_vehicle" | "tachiuma";
+export type EquipmentRequestInput = { floorId: string; floorName?: string; count: number | null };
+export type EquipmentFloorRow = { id: string; name: string; sort_order: number };
+export type ScheduleEquipmentRequestRow = {
+  id: string;
+  schedule_group_id: string;
+  equipment_type: EquipmentType;
+  floor_id: string;
+  requested_count: number;
+  sort_order: number;
+  equipment_floor_master?: EquipmentFloorRow | EquipmentFloorRow[] | null;
+};
+
 export type PreviousSchedule = {
   workDate: string;
   primaryCount: number | null;
@@ -26,11 +39,12 @@ export type PreviousSchedule = {
   workContent: string | null;
   usesAerialWorkVehicle?: boolean;
   aerialWorkVehicleNotes?: string | null;
+  aerialWorkVehicleRequests?: EquipmentRequestInput[];
   usesFire?: boolean;
   fireArea?: string | null;
   usesTachiuma?: boolean;
   tachiumaNotes?: string | null;
-  tachiumaCount?: number | null;
+  tachiumaRequests?: EquipmentRequestInput[];
   subcompanies: { secondaryCompany: string; workerCount: number | null }[];
 };
 
@@ -47,11 +61,12 @@ export type ScheduleSubmitInput = {
   workContent: string;
   usesAerialWorkVehicle: boolean;
   aerialWorkVehicleNotes: string;
+  aerialWorkVehicleRequests: EquipmentRequestInput[];
   usesFire: boolean;
   fireArea: string;
   usesTachiuma: boolean;
   tachiumaNotes: string;
-  tachiumaCount?: number | null;
+  tachiumaRequests: EquipmentRequestInput[];
   notes: string;
   overwriteExisting?: boolean;
   skipExisting?: boolean;
@@ -85,6 +100,7 @@ export type ScheduleSubcompanyRow = {
 
 export type ScheduleWithSubcompanies = ScheduleGroupRow & {
   subcompanies: ScheduleSubcompanyRow[];
+  equipmentRequests: ScheduleEquipmentRequestRow[];
 };
 
 export type ScheduleSummary = {
@@ -122,5 +138,6 @@ export type CalendarSchedule = Pick<ScheduleWithSubcompanies, "id" | "work_date"
   aerial_work_vehicle_notes?: string | null;
   fire_area?: string | null;
   tachiuma_notes?: string | null;
+  schedule_equipment_requests?: Array<Pick<ScheduleEquipmentRequestRow, "equipment_type" | "requested_count"> & { equipment_floor_master?: EquipmentFloorRow | EquipmentFloorRow[] | null }>;
 };
 export type CalendarEntrant = Pick<NewEntrantRecord, "entry_date" | "primary_company" | "secondary_company" | "person_count">;

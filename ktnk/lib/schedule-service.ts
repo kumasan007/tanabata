@@ -68,8 +68,12 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expect
   const subcompanies = resolvedSubcompanies
     .map((sub) => ({ secondary_company: emptyToNull(sub.secondaryCompany), worker_count: sub.workerCount }))
     .filter((sub) => sub.secondary_company || (sub.worker_count !== null && sub.worker_count > 0));
+  const equipmentRequests = [
+    ...(input.usesAerialWorkVehicle ? input.aerialWorkVehicleRequests.map((row) => ({ equipment_type: "aerial_work_vehicle", floor_id: row.floorId, requested_count: row.count })) : []),
+    ...(input.usesTachiuma ? input.tachiumaRequests.map((row) => ({ equipment_type: "tachiuma", floor_id: row.floorId, requested_count: row.count })) : []),
+  ];
   const { data, error } = await supabase.rpc("save_schedule_atomically", {
-    p_groups: payloads, p_subcompanies: subcompanies,
+    p_groups: payloads, p_subcompanies: subcompanies, p_equipment_requests: equipmentRequests,
     p_overwrite: input.overwriteExisting, p_skip_existing: input.skipExisting,
     p_expected_id: expectedId ?? null,
   });
@@ -128,7 +132,7 @@ async function querySchedules(params: ScheduleSearchParams) {
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
-      )
+      ), schedule_equipment_requests (id, schedule_group_id, equipment_type, floor_id, requested_count, sort_order, equipment_floor_master(id, name, sort_order))
     `,
     )
     .order("work_date", { ascending: true })
@@ -196,7 +200,7 @@ async function queryPreviousScheduleForCopy(primaryCompany: string, workDate: st
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
-      )
+      ), schedule_equipment_requests (id, schedule_group_id, equipment_type, floor_id, requested_count, sort_order, equipment_floor_master(id, name, sort_order))
     `,
     )
     .eq("primary_company", primaryCompany)
@@ -228,7 +232,7 @@ async function queryWorkScheduleOnDate(primaryCompany: string, workDate: string)
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
-      )
+      ), schedule_equipment_requests (id, schedule_group_id, equipment_type, floor_id, requested_count, sort_order, equipment_floor_master(id, name, sort_order))
     `)
     .eq("primary_company", primaryCompany)
     .eq("work_date", workDate)
@@ -262,7 +266,7 @@ async function queryScheduleSummariesByPrimaryCompany(primaryCompany: string): P
       notes, created_at, updated_at,
       schedule_subcompanies (
         id, schedule_group_id, secondary_company, worker_count, sort_order
-      )
+      ), schedule_equipment_requests (id, schedule_group_id, equipment_type, floor_id, requested_count, sort_order, equipment_floor_master(id, name, sort_order))
     `,
     )
     .eq("primary_company", primaryCompany)
@@ -362,12 +366,14 @@ function resolvePreviousNumber(
 function normalizeScheduleRow(
   row: ScheduleGroupRow & {
     schedule_subcompanies?: ScheduleSubcompanyRow[];
+    schedule_equipment_requests?: import("@/lib/types").ScheduleEquipmentRequestRow[];
   },
 ): ScheduleWithSubcompanies {
-  const { schedule_subcompanies, ...group } = row;
+  const { schedule_subcompanies, schedule_equipment_requests, ...group } = row;
   return {
     ...group,
     subcompanies: (schedule_subcompanies ?? []).sort((a, b) => a.sort_order - b.sort_order),
+    equipmentRequests: (schedule_equipment_requests ?? []).sort((a, b) => a.sort_order - b.sort_order),
   };
 }
 

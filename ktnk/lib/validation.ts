@@ -18,6 +18,12 @@ export const subcompanySchema = z.object({
   usePreviousWorkerCount: z.boolean().optional().default(false),
 });
 
+const equipmentRequestSchema = z.object({
+  floorId: z.string().uuid("フロアを選択してください。"),
+  floorName: z.string().optional(),
+  count: countSchema.refine((value) => value !== null && value > 0, "台数は1以上で入力してください。"),
+});
+
 export const scheduleSubmitSchema = z
   .object({
     dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(MAX_SUBMISSION_DATES).optional(),
@@ -32,11 +38,12 @@ export const scheduleSubmitSchema = z
     workContent: z.string().default(""),
     usesAerialWorkVehicle: z.boolean().default(false),
     aerialWorkVehicleNotes: z.string().max(500, "高所作業車の使用内容は500文字以内で入力してください。").default(""),
+    aerialWorkVehicleRequests: z.array(equipmentRequestSchema).max(20).default([]),
     usesFire: z.boolean().default(false),
     fireArea: z.string().max(200, "火気使用エリアは200文字以内で入力してください。").default(""),
     usesTachiuma: z.boolean().default(false),
     tachiumaNotes: z.string().max(500).default(""),
-    tachiumaCount: countSchema.default(null),
+    tachiumaRequests: z.array(equipmentRequestSchema).max(20).default([]),
     notes: z.string().max(2000, "備考は2000文字以内で入力してください。").default(""),
     overwriteExisting: z.boolean().optional().default(false),
     skipExisting: z.boolean().optional().default(false),
@@ -67,8 +74,12 @@ export const scheduleSubmitSchema = z
     if (!value.usePreviousPrimaryCount && value.primaryCount === 0 && secondaryTotal < 1 && !hasPreviousSecondaryCount) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["currentSubcompanies"], message: "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。" });
     }
-    if (value.usesAerialWorkVehicle && !value.aerialWorkVehicleNotes.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["aerialWorkVehicleNotes"], message: "高所作業車の使用内容を入力してください。" });
+    for (const [enabled, requests, legacyNotes, path, label] of [
+      [value.usesAerialWorkVehicle, value.aerialWorkVehicleRequests, value.aerialWorkVehicleNotes, "aerialWorkVehicleRequests", "高所作業車"],
+      [value.usesTachiuma, value.tachiumaRequests, value.tachiumaNotes, "tachiumaRequests", "立ち馬"],
+    ] as const) {
+      if (enabled && requests.length === 0 && !legacyNotes.trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message: `${label}のフロアと台数を入力してください。` });
+      if (new Set(requests.map((row) => row.floorId)).size !== requests.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message: `${label}で同じフロアは重複して選択できません。` });
     }
     for (const [index, subcompany] of value.currentSubcompanies.entries()) {
       if (subcompany.secondaryCompany.trim() !== "" && !subcompany.usePreviousWorkerCount && subcompany.workerCount === null) {
