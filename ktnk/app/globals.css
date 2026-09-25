@@ -28,6 +28,15 @@
   --border: 150 10% 56%;
   --input: 150 10% 50%;
   --ring: 164 66% 25%;
+  --table-grid: 155 7% 82%;
+  --table-grid-strong: 155 8% 72%;
+  --surface-subtle: 150 12% 95%;
+  --info: 202 76% 36%;
+  --info-subtle: 199 89% 95%;
+  --info-foreground: 202 80% 23%;
+  --warning: 38 92% 43%;
+  --warning-subtle: 48 96% 89%;
+  --warning-foreground: 30 82% 25%;
 }
 
 * {
@@ -141,6 +150,12 @@ textarea {
   .compact-panel {
     @apply rounded-md border border-border bg-white shadow-sm;
   }
+  .modal-dialog {
+    @apply w-[calc(100%-2rem)] rounded-xl border border-border bg-white p-5 text-foreground shadow-xl backdrop:bg-slate-950/45;
+  }
+  .icon-button {
+    @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-white text-slate-700 transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40;
+  }
   .previous-toggle {
     @apply inline-flex min-h-12 cursor-pointer items-center gap-2 text-base font-medium text-slate-700;
   }
@@ -201,4 +216,19 @@ textarea {
   height: 100%;
   cursor: pointer;
   opacity: 0;
+}
+
+.equipment-grid th,
+.equipment-grid td {
+  border: 0.5px solid hsl(var(--table-grid));
+}
+.equipment-grid thead th,
+.equipment-grid th[scope="row"] {
+  border-color: hsl(var(--table-grid-strong));
+}
+.equipment-panel {
+  border-color: hsl(var(--table-grid-strong));
+}
+.equipment-section-header {
+  border-color: hsl(var(--table-grid));
 }

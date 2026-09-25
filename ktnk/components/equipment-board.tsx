@@ -8,6 +8,24 @@ import type { EquipmentBoardData, EquipmentVehicle, TachiumaUnit } from "@/lib/e
 import type { EquipmentType } from "@/lib/types";
 
 const boardCache = new Map<string, EquipmentBoardData>();
+const boardRequests = new Map<string, Promise<EquipmentBoardData>>();
+
+export function prefetchEquipmentBoard(date: string) {
+  const cached = boardCache.get(date);
+  if (cached) return Promise.resolve(cached);
+  const pending = boardRequests.get(date);
+  if (pending) return pending;
+  const request = apiFetch(`/api/equipment-board?date=${date}`, { cache: "no-store" })
+    .then(async response => {
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error);
+      boardCache.set(date, body);
+      return body as EquipmentBoardData;
+    })
+    .finally(() => boardRequests.delete(date));
+  boardRequests.set(date, request);
+  return request;
+}
 
 export function EquipmentBoard({ date, version }: { date: string; version: number }) {
   const [data, setData] = useState<EquipmentBoardData | null>(() => boardCache.get(date) ?? null);
@@ -36,9 +54,8 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
     const current = ++sequence.current;
     setLoading(true);
     try {
-      const response = await apiFetch(`/api/equipment-board?date=${date}`, { cache: "no-store" });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error);
+      boardCache.delete(date);
+      const body = await prefetchEquipmentBoard(date);
       if (current === sequence.current) { boardCache.set(date, body); setData(body); }
     } catch (error) {
       if (current === sequence.current) setMessage(error instanceof Error ? error.message : "取得できませんでした。");
@@ -47,7 +64,8 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
 
   useEffect(() => {
     setMessage("");
-    void refresh();
+    if (!boardCache.has(date)) void refresh();
+    else setLoading(false);
     const onFocus = () => { if (!pending.current) void refresh(); };
     window.addEventListener("focus", onFocus);
     window.addEventListener(SESSION_CHANGED, onFocus);
@@ -122,7 +140,7 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
     </span>;
   }
   function tachiumaChip(item: TachiumaUnit) {
-    return <button key={item.id} type="button" className="min-h-9 rounded border border-emerald-500 bg-emerald-50 px-2 py-1 font-bold text-emerald-950" aria-label={`${item.name}${item.notes ? `、${item.notes}` : ""}`} onMouseEnter={() => item.notes && setInfo({ title: item.name, notes: item.notes })} onMouseLeave={() => setInfo(null)} onFocus={() => item.notes && setInfo({ title: item.name, notes: item.notes })} onBlur={() => setInfo(null)} onClick={() => item.notes && setInfo(current => current?.title === item.name ? null : { title: item.name, notes: item.notes! })}>{item.name}</button>;
+    return <button key={item.id} type="button" className="min-h-9 rounded border border-primary/60 bg-muted px-2 py-1 font-bold text-foreground" aria-label={`${item.name}${item.notes ? `、${item.notes}` : ""}`} onMouseEnter={() => item.notes && setInfo({ title: item.name, notes: item.notes })} onMouseLeave={() => setInfo(null)} onFocus={() => item.notes && setInfo({ title: item.name, notes: item.notes })} onBlur={() => setInfo(null)} onClick={() => item.notes && setInfo(current => current?.title === item.name ? null : { title: item.name, notes: item.notes! })}>{item.name}</button>;
   }
   return <div className="grid gap-4" aria-busy={disabled}>
     {data && !data.canEdit && <p className="text-xs text-slate-500">編集する場合は、サイト右上のアイコンからログインしてください。</p>}
@@ -131,11 +149,14 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
     {data && (["aerial_work_vehicle", "tachiuma"] as const).map(type => {
       const requests = data.requests.filter(row => row.equipment_type === type);
       const companies = [...new Set(requests.map(row => row.company))].sort((a, b) => a.localeCompare(b, "ja"));
-      const countAt = (floor: string) => type === "aerial_work_vehicle" ? data.vehicles.filter(v => v.floor_id === floor).length : data.tachiumas.filter(item => item.floor_id === floor).length;
-      const visible = data.floors.filter(floor => countAt(floor.id) > 0 || requests.some(row => row.floor_id === floor.id) || (data.canEdit && extra[type].includes(floor.id)));
+      const requestsByFloor = Map.groupBy(requests, row => row.floor_id);
+      const vehiclesByFloor = Map.groupBy(data.vehicles, row => row.floor_id);
+      const tachiumasByFloor = Map.groupBy(data.tachiumas, row => row.floor_id);
+      const countAt = (floor: string) => type === "aerial_work_vehicle" ? vehiclesByFloor.get(floor)?.length ?? 0 : tachiumasByFloor.get(floor)?.length ?? 0;
+      const visible = data.floors.filter(floor => countAt(floor.id) > 0 || requestsByFloor.has(floor.id) || (data.canEdit && extra[type].includes(floor.id)));
       const hidden = data.floors.filter(floor => !visible.some(row => row.id === floor.id));
-      return <section className="panel min-w-0 overflow-hidden" key={type}>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-500 p-3">
+      return <section className="panel equipment-panel min-w-0 overflow-hidden" key={type}>
+        <div className="equipment-section-header flex flex-wrap items-center justify-between gap-2 border-b p-3">
           <h3 className="font-bold">{type === "aerial_work_vehicle" ? "高所作業車" : "立ち馬"}</h3>
           {data.canEdit && <div className="flex flex-wrap gap-2">
             {type === "aerial_work_vehicle" && <button type="button" className="btn btn-primary h-8 min-h-0 px-2 py-1 text-xs" disabled={disabled || !data.floors.length} onClick={() => { setVehicleEditor(null); setMessage(""); managerDialog.current?.showModal(); }}>号車管理</button>}
@@ -145,30 +166,31 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
         </div>
         {adding === type && data.canEdit && <label className="block px-3 pb-3 text-sm">表示するフロア<select className="input mt-1" value="" onChange={event => { const id = event.target.value; if (id) setExtra(current => ({ ...current, [type]: [...current[type], id] })); setAdding(null); }}><option value="">フロアを選択</option>{hidden.map(floor => <option key={floor.id} value={floor.id}>{floor.name}</option>)}</select></label>}
         <div className="overflow-x-auto">
-          <table className="w-full select-none border-collapse whitespace-nowrap text-center text-sm [&_th]:border [&_th]:border-slate-500 [&_td]:border [&_td]:border-slate-400">
+          <table className="equipment-grid w-full select-none border-collapse whitespace-nowrap text-center text-sm">
             <caption className="sr-only">{type === "aerial_work_vehicle" ? "高所作業車" : "立ち馬"}の現在配置と会社別希望台数</caption>
             <thead className="bg-slate-100"><tr><th scope="col" className="sticky left-0 z-10 w-16 bg-slate-100 px-1 py-2">フロア</th><th scope="col" className="w-20 px-2 py-2 text-xs">現在台数</th><th scope="col" className="p-3">{type === "aerial_work_vehicle" ? "号車" : "立ち馬"}</th>{companies.map(company => <th scope="col" className="p-3" key={company}>{company}</th>)}<th scope="col" className="p-3">希望合計</th></tr></thead>
             <tbody>{visible.map(floor => {
               const count = countAt(floor.id);
-              const total = requests.filter(row => row.floor_id === floor.id).reduce((sum, row) => sum + row.requested_count, 0);
+              const floorRequests = requestsByFloor.get(floor.id) ?? [];
+              const total = floorRequests.reduce((sum, row) => sum + row.requested_count, 0);
               return <tr key={floor.id} className="hover:bg-sky-50" onDragOver={event => { if (data.canEdit && !disabled && type === "aerial_work_vehicle") { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }} onDrop={event => {
                 event.preventDefault(); if (!data.canEdit || disabled || type !== "aerial_work_vehicle") return;
                 const vehicle = data.vehicles.find(row => row.id === event.dataTransfer.getData("text/plain"));
                 if (vehicle && vehicle.floor_id !== floor.id) void save({ action: "move_vehicle", vehicleId: vehicle.id, floorId: floor.id, company: null, date, expected: vehicle.updated_at });
               }}>
-                <th scope="row" className="sticky left-0 z-10 w-16 bg-white px-1 py-2"><span className="inline-flex items-center gap-1">{floor.name}{data.canEdit && count === 0 && total === 0 && <button type="button" disabled={disabled} className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40" aria-label={`${floor.name}を表から削除`} title="表から削除" onClick={() => { if (countAt(floor.id) === 0 && !requests.some(row => row.floor_id === floor.id && row.requested_count > 0)) setExtra(current => ({ ...current, [type]: current[type].filter(id => id !== floor.id) })); }}><X size={14} aria-hidden="true" /></button>}</span></th>
-                <td className={`w-20 px-2 py-1.5 font-bold leading-tight ${total > count ? "bg-amber-50 text-amber-800" : ""}`}>
+                <th scope="row" className="sticky left-0 z-10 w-16 bg-white px-1 py-2"><span className="inline-flex items-center gap-1">{floor.name}{data.canEdit && count === 0 && total === 0 && <button type="button" disabled={disabled} className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40" aria-label={`${floor.name}を表から削除`} title="表から削除" onClick={() => { if (countAt(floor.id) === 0 && !floorRequests.some(row => row.requested_count > 0)) setExtra(current => ({ ...current, [type]: current[type].filter(id => id !== floor.id) })); }}><X size={14} aria-hidden="true" /></button>}</span></th>
+                <td className={`w-20 px-2 py-1.5 font-bold leading-tight ${total > count ? "bg-warning-subtle text-warning-foreground" : ""}`}>
                   {count}<span className="ml-0.5 text-xs font-normal">台</span>
                   {total > count && <span className="block text-[11px] font-medium">{total - count}台不足</span>}
                 </td>
-                {type === "aerial_work_vehicle" && <td className="w-44 min-w-44 p-1 hover:bg-sky-100" onDrop={event => assignDropped(event, floor.id, null)}><div className="flex flex-wrap justify-center gap-1">{data.vehicles.filter(row => row.floor_id === floor.id && (!row.assigned_company || !requests.some(request => request.floor_id === floor.id && request.company === row.assigned_company && request.requested_count > 0))).map(vehicle => vehicleChip(vehicle, true))}</div></td>}
-                {type === "tachiuma" && <td className="w-44 min-w-44 p-1"><div className="flex flex-wrap justify-center gap-1">{data.tachiumas.filter(item => item.floor_id === floor.id).map(tachiumaChip)}</div></td>}
+                {type === "aerial_work_vehicle" && <td className="w-44 min-w-44 p-1 hover:bg-sky-100" onDrop={event => assignDropped(event, floor.id, null)}><div className="flex flex-wrap justify-center gap-1">{(vehiclesByFloor.get(floor.id) ?? []).filter(row => !row.assigned_company || !floorRequests.some(request => request.company === row.assigned_company && request.requested_count > 0)).map(vehicle => vehicleChip(vehicle, true))}</div></td>}
+                {type === "tachiuma" && <td className="w-44 min-w-44 p-1"><div className="flex flex-wrap justify-center gap-1">{(tachiumasByFloor.get(floor.id) ?? []).map(tachiumaChip)}</div></td>}
                 {companies.map(company => {
-                  const requested = requests.filter(row => row.floor_id === floor.id && row.company === company).reduce((sum, row) => sum + row.requested_count, 0);
-                  const assigned = type === "aerial_work_vehicle" && requested > 0 ? data.vehicles.filter(row => row.floor_id === floor.id && row.assigned_company === company) : [];
+                  const requested = floorRequests.filter(row => row.company === company).reduce((sum, row) => sum + row.requested_count, 0);
+                  const assigned = type === "aerial_work_vehicle" && requested > 0 ? (vehiclesByFloor.get(floor.id) ?? []).filter(row => row.assigned_company === company) : [];
                   const shortage = type === "aerial_work_vehicle" && requested > assigned.length;
                   return <td className="min-w-24 p-1.5 hover:bg-sky-50" key={company} onDrop={type === "aerial_work_vehicle" ? event => assignDropped(event, floor.id, company) : undefined}>
-                    {(requested > 0 || assigned.length > 0) && <div className={`rounded px-2 py-1.5 ${shortage ? "border-2 border-amber-400 bg-amber-50" : "border-2 border-transparent"}`}>
+                    {(requested > 0 || assigned.length > 0) && <div className={`rounded px-2 py-1.5 ${shortage ? "border border-warning bg-warning-subtle" : "border border-transparent"}`}>
                       {requested > 0 && <span className="text-xs text-slate-600">{type === "aerial_work_vehicle" ? "希望 " : ""}{requested}台</span>}
                       {assigned.length > 0 && <div className="mt-1 flex flex-wrap justify-center gap-1">{assigned.map(vehicle => vehicleChip(vehicle))}</div>}
                     </div>}
@@ -184,7 +206,7 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
         {data.canEdit && type === "tachiuma" && <p className="p-3 text-xs text-slate-500">名称・スペック・配置フロアは「立ち馬管理」から変更できます。</p>}
       </section>;
     })}
-    <dialog ref={managerDialog} aria-labelledby="vehicle-manager-title" className="w-[calc(100%-2rem)] max-w-lg rounded-xl border border-border p-5 backdrop:bg-black/40" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => { setVehicleEditor(null); setManagerDelete(false); }}>
+    <dialog ref={managerDialog} aria-labelledby="vehicle-manager-title" className="modal-dialog max-w-lg" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => { setVehicleEditor(null); setManagerDelete(false); }}>
       {data && <div className="grid gap-4">
         <div className="flex items-center justify-between gap-2"><h3 id="vehicle-manager-title" className="text-lg font-bold">号車管理</h3>{vehicleEditor === null && <button type="button" className="btn btn-primary min-h-11 px-2 py-1 text-sm" disabled={disabled || !data.floors.length} onClick={() => editVehicle("new")}><Plus size={14} aria-hidden="true" />号車を追加</button>}</div>
         {message && <p role="alert" className="notice-error text-sm">{message}</p>}

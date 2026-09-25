@@ -12,6 +12,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { IconButton } from "@/components/ui/icon-button";
 import type { CalendarSchedule, CalendarEntrant, CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 
 const loadCalendarDetails = () => import("@/components/calendar-details");
@@ -20,6 +21,10 @@ const AdminScheduleEditor = dynamic(() => import("@/components/admin-schedule-ed
 const NewEntrantEditor = dynamic(() => import("@/components/new-entrant-editor").then((module) => module.NewEntrantEditor));
 const EquipmentBoard = dynamic(() => import("@/components/equipment-board").then((module) => module.EquipmentBoard));
 const DETAILS_PREFERENCE_KEY = "calendar-supplement-expanded";
+
+function prefetchEquipment(date: string) {
+  void import("@/components/equipment-board").then(module => module.prefetchEquipmentBoard(date)).catch(() => undefined);
+}
 
 export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: { initialDate: string; initialMaster: CompanyMaster; initialSummary?: CalendarSummaryData | null }) {
   const [month, setMonth] = useState(initialDate.slice(0, 7));
@@ -49,6 +54,16 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
   useEffect(() => {
     setDetailsExpanded(window.localStorage.getItem(DETAILS_PREFERENCE_KEY) !== "false");
   }, []);
+
+  useEffect(() => {
+    const browserWindow = window as typeof window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (browserWindow.requestIdleCallback) {
+      const id = browserWindow.requestIdleCallback(() => prefetchEquipment(selectedDate), { timeout: 1200 });
+      return () => browserWindow.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(() => prefetchEquipment(selectedDate), 250);
+    return () => window.clearTimeout(id);
+  }, [selectedDate]);
 
   const toggleDetails = useCallback(() => {
     setDetailsExpanded((current) => {
@@ -262,16 +277,16 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
         <div className="mb-3 flex flex-wrap items-center gap-x-1 gap-y-2 lg:gap-2">
           <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
             <h2 className="whitespace-nowrap text-lg font-bold">{Number(selectedDate.slice(5, 7))}月{Number(selectedDate.slice(8, 10))}日の予定</h2>
-            <button type="button" className="btn btn-secondary h-9 min-h-0 w-9 p-0" disabled={loading || detailLoading || completionBusy} onClick={() => { setMasterRefreshVersion((value) => value + 1); setVersion((value) => value + 1); }} aria-label={loading ? "予定を更新中" : "予定を更新"} title="予定を更新">
+            <IconButton className="h-9 w-9" disabled={loading || detailLoading || completionBusy} onClick={() => { setMasterRefreshVersion((value) => value + 1); setVersion((value) => value + 1); }} label={loading ? "予定を更新中" : "予定を更新"}>
               <RefreshCw size={18} className={loading ? "animate-spin" : ""} aria-hidden="true" />
-            </button>
+            </IconButton>
             <button type="button" className="btn btn-secondary h-9 min-h-0 min-w-9 gap-1 px-2 disabled:opacity-40 sm:min-w-[6.75rem]" disabled={scheduleTab !== "company"} onClick={toggleDetails} aria-pressed={scheduleTab === "company" ? detailsExpanded : undefined} aria-label={scheduleTab === "company" ? (detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示") : "補足表示は会社予定で利用できます"} title={scheduleTab === "company" ? (detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示") : "会社予定で利用できます"}>
               {detailsExpanded ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
               <span className="hidden text-xs sm:inline">{detailsExpanded ? "補足を隠す" : "補足を表示"}</span>
             </button>
           </div>
         <div className="flex w-fit max-w-full gap-0.5 rounded-lg border border-sky-200 bg-sky-50 p-0.5 lg:p-1" role="tablist" aria-label="予定の表示切り替え">
-          {([{ id: "company", label: "会社予定" }, { id: "equipment", label: "高車・立馬予定" }] as const).map(tab => <button key={tab.id} type="button" role="tab" id={`schedule-tab-${tab.id}`} aria-selected={scheduleTab === tab.id} aria-controls={`schedule-panel-${tab.id}`} className={`min-h-11 rounded-md px-1.5 py-2 text-xs sm:px-3 sm:text-sm font-semibold transition-colors ${scheduleTab === tab.id ? "bg-sky-700 text-white shadow-sm" : "text-sky-800 hover:bg-sky-100"}`} onClick={() => switchScheduleTab(tab.id)}>{tab.label}</button>)}
+          {([{ id: "company", label: "会社予定" }, { id: "equipment", label: "高車・立馬予定" }] as const).map(tab => <button key={tab.id} type="button" role="tab" id={`schedule-tab-${tab.id}`} aria-selected={scheduleTab === tab.id} aria-controls={`schedule-panel-${tab.id}`} className={`min-h-11 rounded-md px-1.5 py-2 text-xs sm:px-3 sm:text-sm font-semibold transition-colors ${scheduleTab === tab.id ? "bg-sky-700 text-white shadow-sm" : "text-sky-800 hover:bg-sky-100"}`} onPointerEnter={() => tab.id === "equipment" && prefetchEquipment(selectedDate)} onFocus={() => tab.id === "equipment" && prefetchEquipment(selectedDate)} onClick={() => switchScheduleTab(tab.id)}>{tab.label}</button>)}
         </div>
           <div className="ml-auto flex gap-1 lg:gap-1.5">
             {[{ label: "作業入力", pathname: "/schedule" }, { label: "新規入場", pathname: "/new-entrants" }].map((item) => (

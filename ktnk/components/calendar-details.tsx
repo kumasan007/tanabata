@@ -2,6 +2,7 @@
 import { memo, useMemo, useState } from "react";
 import { Pencil } from "lucide-react";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
+import { IconButton } from "@/components/ui/icon-button";
 import { CopyValue } from "@/components/copy-value";
 import { completionTime } from "@/lib/completion-time";
 import { parseTachiumaValue } from "@/lib/schedule-fields";
@@ -40,7 +41,7 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
       {report ? <div className="rounded bg-emerald-100 px-2 py-1.5 text-emerald-900">
         <div className="flex items-center justify-between gap-2">
           <p className="font-bold">✓ 作業終了済み</p>
-          {isToday && <div className="flex items-center gap-1"><button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded border border-emerald-700 bg-white disabled:opacity-50" disabled={completionBusy} aria-label="備考を編集" title="備考を編集" onClick={(event) => { event.stopPropagation(); setNotesEditor({ report, notes: report.notes ?? "" }); }}><Pencil size={13} aria-hidden="true" /></button><button type="button" className="inline-flex min-h-8 shrink-0 items-center justify-center rounded border border-emerald-700 bg-white px-2 text-xs font-semibold disabled:opacity-50" disabled={completionBusy} onClick={async (event) => { event.stopPropagation(); if (await confirm("作業終了報告を取り消しますか？", `${primaryCompany}の作業終了報告を取り消します。`, "取り消す")) void saveCompletion(selectedDate, primaryCompany, report); }}>取り消し</button></div>}
+          {isToday && <div className="flex items-center gap-1"><IconButton label="備考を編集" className="h-8 w-8 border-emerald-700" disabled={completionBusy} onClick={(event) => { event.stopPropagation(); setNotesEditor({ report, notes: report.notes ?? "" }); }}><Pencil size={13} aria-hidden="true" /></IconButton><button type="button" className="inline-flex min-h-8 shrink-0 items-center justify-center rounded border border-emerald-700 bg-white px-2 text-xs font-semibold disabled:opacity-50" disabled={completionBusy} onClick={async (event) => { event.stopPropagation(); if (await confirm("作業終了報告を取り消しますか？", `${primaryCompany}の作業終了報告を取り消します。`, "取り消す")) void saveCompletion(selectedDate, primaryCompany, report); }}>取り消し</button></div>}
         </div>
         <p className="text-xs">報告時刻：{completionTime(report.reported_at)}</p>{report.notes && <p className="whitespace-pre-wrap break-words text-xs">備考：{report.notes}</p>}
       </div> : <button type="button" className="btn btn-secondary min-h-9 px-2 py-1 text-sm" disabled={completionBusy} onClick={(event) => { event.stopPropagation(); void saveCompletion(selectedDate, primaryCompany); }}>作業終了</button>}

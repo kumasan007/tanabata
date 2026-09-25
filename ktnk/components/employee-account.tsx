@@ -39,7 +39,7 @@ export function EmployeeAccount() {
       <Image src="/icon.png" alt="" width={26} height={26} className="rounded-full" />
       {authenticated && <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-600" />}
     </button>
-    <dialog ref={dialog} aria-labelledby="employee-account-title" className="w-[calc(100%-2rem)] max-w-sm rounded-xl border border-border p-5 shadow-xl backdrop:bg-black/40" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => setPassword("")}>
+    <dialog ref={dialog} aria-labelledby="employee-account-title" className="modal-dialog max-w-sm" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => setPassword("")}>
       <form className="grid gap-4" onSubmit={event => { event.preventDefault(); void submit(); }}>
         <h2 id="employee-account-title" className="text-lg font-bold">{authenticated ? "社員ログイン中" : "監理者ログイン"}</h2>
         {message && <p role="alert" className="notice-error text-sm">{message}</p>}
