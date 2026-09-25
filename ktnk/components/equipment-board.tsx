@@ -1,30 +1,34 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil, Plus, X } from "lucide-react";
 import { SESSION_CHANGED } from "@/lib/employee-session";
 import { apiFetch } from "@/lib/api-client";
 import type { EquipmentBoardData, EquipmentVehicle } from "@/lib/equipment-board";
 import type { EquipmentType } from "@/lib/types";
 
-type Operation = { action: "register_vehicle" | "move_vehicle" | "set_stock" | "move_stock"; floorId: string; vehicle?: EquipmentVehicle; expected?: string | null };
+type Operation = { action: "set_stock"; floorId: string; expected: string | null };
+const boardCache = new Map<string, EquipmentBoardData>();
 
 export function EquipmentBoard({ date, version }: { date: string; version: number }) {
-  const [data, setData] = useState<EquipmentBoardData | null>(null);
+  const [data, setData] = useState<EquipmentBoardData | null>(() => boardCache.get(date) ?? null);
   const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !boardCache.has(date));
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const sequence = useRef(0);
   const [extra, setExtra] = useState<Record<EquipmentType, string[]>>({ aerial_work_vehicle: [], tachiuma: [] });
   const [adding, setAdding] = useState<EquipmentType | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
-  const [target, setTarget] = useState("");
   const [quantity, setQuantity] = useState("1");
-  const [number, setNumber] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [assignedCompany, setAssignedCompany] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
+  const managerDialog = useRef<HTMLDialogElement>(null);
+  const [vehicleEditor, setVehicleEditor] = useState<EquipmentVehicle | "new" | null>(null);
+  const [vehicleNumber, setVehicleNumber] = useState("");
+  const [vehicleNotes, setVehicleNotes] = useState("");
+  const [vehicleFloor, setVehicleFloor] = useState("");
+  const [vehicleCompany, setVehicleCompany] = useState("");
+  const [managerDelete, setManagerDelete] = useState(false);
 
   const refresh = useCallback(async () => {
     const current = ++sequence.current;
@@ -33,9 +37,9 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
       const response = await apiFetch(`/api/equipment-board?date=${date}`, { cache: "no-store" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
-      if (current === sequence.current) setData(body);
+      if (current === sequence.current) { boardCache.set(date, body); setData(body); }
     } catch (error) {
-      if (current === sequence.current) { setData(null); setMessage(error instanceof Error ? error.message : "取得できませんでした。"); }
+      if (current === sequence.current) setMessage(error instanceof Error ? error.message : "取得できませんでした。");
     } finally { if (current === sequence.current) setLoading(false); }
   }, [date]);
 
@@ -51,36 +55,51 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
   }, [refresh, version]);
 
   function open(next: Operation) {
-    setConfirmDelete(false);
-    setOperation(next); setTarget(next.floorId); setNumber("");
-    setAssignedCompany(next.vehicle?.assigned_company ?? "");
-    setQuantity(next.action === "set_stock" ? String(data?.stocks.find(stock => stock.floor_id === next.floorId)?.quantity ?? 0) : "1");
+    setOperation(next);
+    setQuantity(String(data?.stocks.find(stock => stock.floor_id === next.floorId)?.quantity ?? 0));
     setMessage(""); dialog.current?.showModal();
   }
 
-  async function save(payload: object) {
-    if (pending.current) return;
+  async function save(payload: object, closeOperation = true) {
+    if (pending.current) return false;
     pending.current = true; setBusy(true); setMessage("");
     try {
       const response = await apiFetch("/api/equipment-board", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
-      dialog.current?.close(); setOperation(null);
+      if (closeOperation) { dialog.current?.close(); setOperation(null); }
       await refresh();
+      return true;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "保存できませんでした。");
       // Keep the expected revision on the open form; never silently overwrite a newer edit.
       await refresh();
+      return false;
     } finally { pending.current = false; setBusy(false); }
   }
 
-  const disabled = busy || loading;
+  const disabled = busy || (loading && !data);
+  const requestedCompanies = data ? [...new Set(data.requests.filter(row => row.equipment_type === "aerial_work_vehicle").map(row => row.company))].sort((a, b) => a.localeCompare(b, "ja")) : [];
+  function editVehicle(vehicle: EquipmentVehicle | "new") {
+    setManagerDelete(false); setVehicleEditor(vehicle);
+    setVehicleNumber(vehicle === "new" ? "" : vehicle.vehicle_number);
+    setVehicleNotes(vehicle === "new" ? "" : vehicle.notes ?? "");
+    setVehicleFloor(vehicle === "new" ? data?.floors[0]?.id ?? "" : vehicle.floor_id);
+    setVehicleCompany(vehicle === "new" || !vehicle.assigned_company || !requestedCompanies.includes(vehicle.assigned_company) ? "" : vehicle.assigned_company);
+  }
+  async function reorderVehicle(index: number, direction: -1 | 1) {
+    if (!data) return;
+    const next = [...data.vehicles]; const target = index + direction;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    await save({ action: "reorder_vehicles", vehicleIds: next.map(vehicle => vehicle.id) }, false);
+  }
   function assignDropped(event: React.DragEvent, floorId: string, company: string | null) {
     event.preventDefault(); event.stopPropagation();
     if (!data?.canEdit || disabled) return;
     const vehicle = data.vehicles.find(row => row.id === event.dataTransfer.getData("text/plain"));
     if (vehicle && (vehicle.floor_id !== floorId || vehicle.assigned_company !== company)) {
-      void save({ action: "move_vehicle", vehicleId: vehicle.id, floorId, company, expected: vehicle.updated_at });
+      void save({ action: "move_vehicle", vehicleId: vehicle.id, floorId, company, date, expected: vehicle.updated_at });
     }
   }
   function vehicleChip(vehicle: EquipmentVehicle, compact = false) {
@@ -90,15 +109,16 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
     return <span key={vehicle.id} draggable={Boolean(data?.canEdit && !disabled)}
       onDragStart={event => { event.dataTransfer.setData("text/plain", vehicle.id); event.dataTransfer.effectAllowed = "move"; }}
       className={`inline-flex min-h-9 items-center justify-center rounded border border-sky-200 bg-sky-50 px-2 py-1 font-bold leading-tight text-sky-900 cursor-grab select-none ${compact ? "min-w-9 text-2xl" : "text-base"}`}
-      aria-label={`${vehicle.vehicle_number}号車：${vehicle.assigned_company ?? "未割当"}${data?.canEdit ? "、移動・会社割当" : ""}`}>{compact ? circled : `${vehicle.vehicle_number}号車`}</span>;
+      title={vehicle.notes || undefined}
+      aria-label={`${vehicle.vehicle_number}号車：${vehicle.assigned_company ?? "未割当"}${vehicle.notes ? `、備考 ${vehicle.notes}` : ""}${data?.canEdit ? "、移動・会社割当" : ""}`}>{compact ? circled : `${vehicle.vehicle_number}号車`}</span>;
   }
   return <div className="grid gap-4" aria-busy={disabled}>
     {data && !data.canEdit && <p className="text-xs text-slate-500">編集する場合は、サイト右上のアイコンからログインしてください。</p>}
     {message && <p className="notice-error" role="alert">{message}</p>}
-    {loading && <p role="status">機材情報を読み込み中…</p>}
+    {!data && message === "" && <div className="min-h-24" aria-label="機材情報を読み込み中" />}
     {data && (["aerial_work_vehicle", "tachiuma"] as const).map(type => {
       const requests = data.requests.filter(row => row.equipment_type === type);
-      const companies = [...new Set([...requests.map(row => row.company), ...(type === "aerial_work_vehicle" ? data.vehicles.flatMap(vehicle => vehicle.assigned_company ? [vehicle.assigned_company] : []) : [])])].sort((a, b) => a.localeCompare(b, "ja"));
+      const companies = [...new Set(requests.map(row => row.company))].sort((a, b) => a.localeCompare(b, "ja"));
       const countAt = (floor: string) => type === "aerial_work_vehicle" ? data.vehicles.filter(v => v.floor_id === floor).length : data.stocks.find(s => s.floor_id === floor)?.quantity ?? 0;
       const visible = data.floors.filter(floor => countAt(floor.id) > 0 || requests.some(row => row.floor_id === floor.id) || (data.canEdit && extra[type].includes(floor.id)));
       const hidden = data.floors.filter(floor => !visible.some(row => row.id === floor.id));
@@ -106,10 +126,8 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
         <div className="flex flex-wrap items-center justify-between gap-2 p-3">
           <h3 className="font-bold">{type === "aerial_work_vehicle" ? "高所作業車" : "立ち馬"}</h3>
           {data.canEdit && <div className="flex flex-wrap gap-2">
-            {type === "aerial_work_vehicle" && <select aria-label="号車を選んで操作" className="rounded-md border border-slate-300 px-2 text-sm" value="" disabled={disabled} onChange={event => { const vehicle = data.vehicles.find(row => row.id === event.target.value); if (vehicle) open({ action: "move_vehicle", floorId: vehicle.floor_id, vehicle }); }}><option value="">号車を選んで操作</option>{data.vehicles.map(vehicle => <option key={vehicle.id} value={vehicle.id}>{vehicle.vehicle_number}号車</option>)}</select>}
-
-            <button type="button" className="btn btn-secondary" disabled={disabled || hidden.length === 0} onClick={() => setAdding(adding === type ? null : type)}>フロアを追加</button>
-            {type === "aerial_work_vehicle" && <button type="button" className="btn btn-primary" disabled={disabled || !data.floors.length} onClick={() => open({ action: "register_vehicle", floorId: data.floors[0].id })}>号車を登録</button>}
+            {type === "aerial_work_vehicle" && <button type="button" className="btn btn-primary h-8 min-h-0 px-2 py-1 text-xs" disabled={disabled || !data.floors.length} onClick={() => { setVehicleEditor(null); setMessage(""); managerDialog.current?.showModal(); }}>号車管理</button>}
+            <button type="button" className="btn btn-secondary h-8 min-h-0 px-2 py-1 text-xs" disabled={disabled || hidden.length === 0} onClick={() => setAdding(adding === type ? null : type)}>フロアを追加</button>
           </div>}
         </div>
         {adding === type && data.canEdit && <label className="block px-3 pb-3 text-sm">表示するフロア<select className="input mt-1" value="" onChange={event => { const id = event.target.value; if (id) setExtra(current => ({ ...current, [type]: [...current[type], id] })); setAdding(null); }}><option value="">フロアを選択</option>{hidden.map(floor => <option key={floor.id} value={floor.id}>{floor.name}</option>)}</select></label>}
@@ -124,17 +142,17 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
               return <tr key={floor.id} className="border-t border-slate-200 hover:bg-sky-50" onDragOver={event => { if (data.canEdit && !disabled && type === "aerial_work_vehicle") { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }} onDrop={event => {
                 event.preventDefault(); if (!data.canEdit || disabled || type !== "aerial_work_vehicle") return;
                 const vehicle = data.vehicles.find(row => row.id === event.dataTransfer.getData("text/plain"));
-                if (vehicle && vehicle.floor_id !== floor.id) void save({ action: "move_vehicle", vehicleId: vehicle.id, floorId: floor.id, company: vehicle.assigned_company, expected: vehicle.updated_at });
+                if (vehicle && vehicle.floor_id !== floor.id) void save({ action: "move_vehicle", vehicleId: vehicle.id, floorId: floor.id, company: null, date, expected: vehicle.updated_at });
               }}>
                 <th scope="row" className="sticky left-0 z-10 w-16 bg-white px-1 py-2"><span className="inline-flex items-center gap-1">{floor.name}{data.canEdit && count === 0 && total === 0 && <button type="button" disabled={disabled} className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40" aria-label={`${floor.name}を表から削除`} title="表から削除" onClick={() => { if (countAt(floor.id) === 0 && !requests.some(row => row.floor_id === floor.id && row.requested_count > 0)) setExtra(current => ({ ...current, [type]: current[type].filter(id => id !== floor.id) })); }}><X size={14} aria-hidden="true" /></button>}</span></th>
                 <td className={`w-20 px-2 py-1.5 font-bold leading-tight ${total > count ? "bg-amber-50 text-amber-800" : ""}`}>
                   {type === "tachiuma" && data.canEdit ? <button type="button" className="min-h-8 min-w-10 rounded px-1 text-sky-800 underline decoration-dotted underline-offset-4 hover:bg-sky-100 disabled:opacity-40" disabled={disabled} aria-label={`${floor.name}の立ち馬 ${count}台を変更`} onClick={() => open({ action: "set_stock", floorId: floor.id, expected: stock?.updated_at ?? null })}>{count}<span className="ml-0.5 text-xs font-normal">台</span></button> : <>{count}<span className="ml-0.5 text-xs font-normal">台</span></>}
                   {total > count && <span className="block text-[11px] font-medium">{total - count}台不足</span>}
                 </td>
-                {type === "aerial_work_vehicle" && <td className="w-44 min-w-44 p-1 hover:bg-sky-100" onDrop={event => assignDropped(event, floor.id, null)}><div className="flex flex-wrap justify-center gap-1">{data.vehicles.filter(row => row.floor_id === floor.id && !row.assigned_company).map(vehicle => vehicleChip(vehicle, true))}</div></td>}
+                {type === "aerial_work_vehicle" && <td className="w-44 min-w-44 p-1 hover:bg-sky-100" onDrop={event => assignDropped(event, floor.id, null)}><div className="flex flex-wrap justify-center gap-1">{data.vehicles.filter(row => row.floor_id === floor.id && (!row.assigned_company || !requests.some(request => request.floor_id === floor.id && request.company === row.assigned_company && request.requested_count > 0))).map(vehicle => vehicleChip(vehicle, true))}</div></td>}
                 {companies.map(company => {
                   const requested = requests.filter(row => row.floor_id === floor.id && row.company === company).reduce((sum, row) => sum + row.requested_count, 0);
-                  const assigned = type === "aerial_work_vehicle" ? data.vehicles.filter(row => row.floor_id === floor.id && row.assigned_company === company) : [];
+                  const assigned = type === "aerial_work_vehicle" && requested > 0 ? data.vehicles.filter(row => row.floor_id === floor.id && row.assigned_company === company) : [];
                   const shortage = type === "aerial_work_vehicle" && requested > assigned.length;
                   return <td className="min-w-24 p-1.5 hover:bg-sky-50" key={company} onDrop={type === "aerial_work_vehicle" ? event => assignDropped(event, floor.id, company) : undefined}>
                     {(requested > 0 || assigned.length > 0) && <div className={`rounded px-2 py-1.5 ${shortage ? "border-2 border-amber-400 bg-amber-50" : "border-2 border-transparent"}`}>
@@ -149,34 +167,47 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
           </table>
         </div>
         {!visible.length && <p className="p-4 text-sm text-slate-500">配置・使用希望のあるフロアはありません。</p>}
-        {data.canEdit && type === "aerial_work_vehicle" && <p className="p-3 text-xs text-slate-500">号車を会社欄へドラッグして割当。「号車」欄へ戻すと解除できます。「号車を選んで操作」からも移動・割当できます。</p>}
+        {data.canEdit && type === "aerial_work_vehicle" && <p className="p-3 text-xs text-slate-500">号車を会社欄へドラッグして割当。「号車」欄へ戻すと解除できます。追加・編集・削除・並び替えは「号車管理」から行えます。</p>}
       </section>;
     })}
+    <dialog ref={managerDialog} className="w-[calc(100%-2rem)] max-w-lg rounded-xl p-5 backdrop:bg-black/40" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => { setVehicleEditor(null); setManagerDelete(false); }}>
+      {data && <div className="grid gap-4">
+        <div className="flex items-center justify-between gap-2"><h3 className="text-lg font-bold">号車管理</h3>{vehicleEditor === null && <button type="button" className="btn btn-primary h-8 min-h-0 px-2 py-1 text-xs" disabled={disabled || !data.floors.length} onClick={() => editVehicle("new")}><Plus size={14} aria-hidden="true" />号車を追加</button>}</div>
+        {message && <p role="alert" className="notice-error text-sm">{message}</p>}
+        {vehicleEditor === null ? <>
+          <div className="grid max-h-[60vh] gap-2 overflow-y-auto">
+            {data.vehicles.map((vehicle, index) => <div key={vehicle.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-slate-200 p-2">
+              <strong className="min-w-12 text-center">{vehicle.vehicle_number}号車</strong>
+              <div className="min-w-0 text-xs text-slate-600"><p>{data.floors.find(floor => floor.id === vehicle.floor_id)?.name ?? "不明"}{vehicle.assigned_company && requestedCompanies.includes(vehicle.assigned_company) ? ` ／ ${vehicle.assigned_company}` : ""}</p>{vehicle.notes && <p className="truncate" title={vehicle.notes}>{vehicle.notes}</p>}</div>
+              <div className="flex gap-1"><button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded border border-slate-300 disabled:opacity-30" disabled={disabled || index === 0} aria-label={`${vehicle.vehicle_number}号車を上へ`} onClick={() => void reorderVehicle(index, -1)}><ChevronUp size={16} /></button><button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded border border-slate-300 disabled:opacity-30" disabled={disabled || index === data.vehicles.length - 1} aria-label={`${vehicle.vehicle_number}号車を下へ`} onClick={() => void reorderVehicle(index, 1)}><ChevronDown size={16} /></button><button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded border border-slate-300" disabled={disabled} aria-label={`${vehicle.vehicle_number}号車を編集`} onClick={() => editVehicle(vehicle)}><Pencil size={15} /></button></div>
+            </div>)}
+            {data.vehicles.length === 0 && <p className="py-5 text-center text-sm text-slate-500">登録された号車はありません。</p>}
+          </div>
+          <div className="flex justify-end"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => managerDialog.current?.close()}>閉じる</button></div>
+        </> : <form className="grid gap-3" onSubmit={async event => {
+          event.preventDefault(); if (managerDelete) return;
+          const current = vehicleEditor === "new" ? null : vehicleEditor;
+          if (await save({ action: "save_vehicle", vehicleId: current?.id ?? null, number: vehicleNumber.trim(), notes: vehicleNotes.trim(), floorId: vehicleFloor, company: vehicleCompany || null, expected: current?.updated_at ?? null }, false)) setVehicleEditor(null);
+        }}>
+          <label className="grid gap-1 text-sm font-semibold">号車番号<input className="input" required maxLength={30} value={vehicleNumber} onChange={event => setVehicleNumber(event.target.value)} /></label>
+          <label className="grid gap-1 text-sm font-semibold">フロア<select className="input" required value={vehicleFloor} onChange={event => { setVehicleFloor(event.target.value); setVehicleCompany(""); }}>{data.floors.map(floor => <option key={floor.id} value={floor.id}>{floor.name}</option>)}</select></label>
+          <label className="grid gap-1 text-sm font-semibold">割当会社<select className="input" value={vehicleCompany} onChange={event => setVehicleCompany(event.target.value)}><option value="">未割当</option>{requestedCompanies.map(company => <option key={company} value={company}>{company}</option>)}</select><span className="text-xs font-normal text-slate-500">選択日の高所作業車を希望している会社だけ表示します。</span></label>
+          <label className="grid gap-1 text-sm font-semibold">備考（任意）<textarea className="textarea min-h-20" maxLength={500} value={vehicleNotes} onChange={event => setVehicleNotes(event.target.value)} /></label>
+          {vehicleEditor !== "new" && <div className="rounded-lg border border-red-200 p-3">{managerDelete ? <><p className="text-sm font-semibold text-red-800">{vehicleEditor.vehicle_number}号車を削除しますか？</p><p className="mt-1 text-xs text-slate-600">移動履歴は残ります。</p><div className="mt-3 flex justify-end gap-2"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setManagerDelete(false)}>戻る</button><button type="button" className="btn bg-red-700 text-white hover:bg-red-800" disabled={disabled} onClick={async () => { if (await save({ action: "delete_vehicle", vehicleId: vehicleEditor.id, expected: vehicleEditor.updated_at }, false)) setVehicleEditor(null); }}>削除する</button></div></> : <button type="button" className="text-sm font-semibold text-red-700 hover:underline" disabled={disabled} onClick={() => setManagerDelete(true)}>この号車を削除</button>}</div>}
+          {!managerDelete && <div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setVehicleEditor(null)}>一覧へ戻る</button><button type="submit" className="btn btn-primary" disabled={disabled || !vehicleNumber.trim() || !vehicleFloor}>保存</button></div>}
+        </form>}
+      </div>}
+    </dialog>
     <dialog ref={dialog} className="w-[calc(100%-2rem)] max-w-md rounded-xl p-5 backdrop:bg-black/40" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => setOperation(null)}>
       {operation && <form className="grid gap-4" onSubmit={event => {
         event.preventDefault();
-        if (confirmDelete) return;
-        void save({ action: operation.action, floorId: target,
-          ...(operation.action === "register_vehicle" ? { number: number.trim() } : {}),
-          ...(operation.action === "move_vehicle" ? { vehicleId: operation.vehicle!.id, expected: operation.vehicle!.updated_at, company: assignedCompany || null } : {}),
-          ...(operation.action === "move_stock" ? { fromFloorId: operation.floorId, quantity: Number(quantity), expected: operation.expected } : {}),
-          ...(operation.action === "set_stock" ? { quantity: Number(quantity), expected: operation.expected } : {}),
-        });
+        void save({ action: "set_stock", floorId: operation.floorId, quantity: Number(quantity), expected: operation.expected });
       }}>
-        <h3 className="text-lg font-bold">{operation.action === "register_vehicle" ? "号車を登録" : operation.action === "set_stock" ? "立ち馬の台数設定" : operation.action === "move_vehicle" ? `${operation.vehicle?.vehicle_number}号車を移動` : "立ち馬を移動"}</h3>
+        <h3 className="text-lg font-bold">立ち馬の台数設定</h3>
         {message && <p role="alert" className="notice-error">{message}</p>}
-        {operation.action === "move_vehicle" && <div className="rounded-lg border border-red-200 p-3">
-          {confirmDelete ? <>
-            <p className="text-sm font-semibold text-red-800">{operation.vehicle?.vehicle_number}号車を削除しますか？</p>
-            <p className="mt-1 text-xs text-slate-600">現在の配置と会社への割当を削除します。移動履歴は残ります。</p>
-            <div className="mt-3 flex justify-end gap-2"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setConfirmDelete(false)}>戻る</button><button type="button" className="btn bg-red-700 text-white hover:bg-red-800" disabled={disabled} onClick={() => void save({ action: "delete_vehicle", vehicleId: operation.vehicle!.id, expected: operation.vehicle!.updated_at })}>削除する</button></div>
-          </> : <button type="button" className="text-sm font-semibold text-red-700 hover:underline" disabled={disabled} onClick={() => setConfirmDelete(true)}>この号車を削除</button>}
-        </div>}
-        {operation.action === "register_vehicle" && <label>号車番号<input className="input mt-1" value={number} maxLength={30} required placeholder="例：1" onChange={event => setNumber(event.target.value)} /></label>}
-        {operation.action === "move_vehicle" && <label>割当会社<select className="input mt-1" value={assignedCompany} onChange={event => setAssignedCompany(event.target.value)}><option value="">未割当</option>{[...new Set([...(data?.companies ?? []), ...(data?.requests.map(row => row.company) ?? []), ...(data?.vehicles.flatMap(vehicle => vehicle.assigned_company ? [vehicle.assigned_company] : []) ?? [])])].sort((a, b) => a.localeCompare(b, "ja")).map(company => <option key={company} value={company}>{company}</option>)}</select></label>}
-        {operation.action !== "set_stock" ? <label>{operation.action === "register_vehicle" ? "配置先" : "移動先"}<select className="input mt-1" value={target} required onChange={event => setTarget(event.target.value)}>{data?.floors.map(floor => <option key={floor.id} value={floor.id}>{floor.name}</option>)}</select></label> : <p>{data?.floors.find(floor => floor.id === operation.floorId)?.name}の現在の総台数を設定します。</p>}
-        {(operation.action === "set_stock" || operation.action === "move_stock") && <label>台数<input className="input mt-1" type="number" min={operation.action === "set_stock" ? 0 : 1} max={operation.action === "move_stock" ? data?.stocks.find(stock => stock.floor_id === operation.floorId)?.quantity ?? 0 : 9999} step={1} value={quantity} required onChange={event => setQuantity(event.target.value)} /></label>}
-        <div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => dialog.current?.close()}>キャンセル</button><button type="submit" className="btn btn-primary" disabled={disabled || (operation.action === "move_stock" && target === operation.floorId) || (operation.action === "move_vehicle" && target === operation.floorId && assignedCompany === (operation.vehicle?.assigned_company ?? ""))}>保存</button></div>
+        <p>{data?.floors.find(floor => floor.id === operation.floorId)?.name}の現在の総台数を設定します。</p>
+        <label>台数<input className="input mt-1" type="number" min={0} max={9999} step={1} value={quantity} required onChange={event => setQuantity(event.target.value)} /></label>
+        <div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => dialog.current?.close()}>キャンセル</button><button type="submit" className="btn btn-primary" disabled={disabled}>保存</button></div>
       </form>}
     </dialog>
   </div>;

@@ -265,10 +265,10 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
             <button type="button" className="btn btn-secondary h-9 min-h-0 w-9 p-0" disabled={loading || detailLoading || completionBusy} onClick={() => { setMasterRefreshVersion((value) => value + 1); setVersion((value) => value + 1); }} aria-label={loading ? "予定を更新中" : "予定を更新"} title="予定を更新">
               <RefreshCw size={18} className={loading ? "animate-spin" : ""} aria-hidden="true" />
             </button>
-            {scheduleTab === "company" && <button type="button" className="btn btn-secondary h-9 min-h-0 gap-1 px-2" onClick={toggleDetails} aria-pressed={detailsExpanded} aria-label={detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示"} title={detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示"}>
+            <button type="button" className="btn btn-secondary h-9 min-h-0 min-w-9 gap-1 px-2 disabled:opacity-40 sm:min-w-[6.75rem]" disabled={scheduleTab !== "company"} onClick={toggleDetails} aria-pressed={scheduleTab === "company" ? detailsExpanded : undefined} aria-label={scheduleTab === "company" ? (detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示") : "補足表示は会社予定で利用できます"} title={scheduleTab === "company" ? (detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示") : "会社予定で利用できます"}>
               {detailsExpanded ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
               <span className="hidden text-xs sm:inline">{detailsExpanded ? "補足を隠す" : "補足を表示"}</span>
-            </button>}
+            </button>
           </div>
         <div className="flex w-fit max-w-full gap-0.5 rounded-lg border border-sky-200 bg-sky-50 p-0.5 lg:p-1" role="tablist" aria-label="予定の表示切り替え">
           {([{ id: "company", label: "会社予定" }, { id: "equipment", label: "高車・立馬予定" }] as const).map(tab => <button key={tab.id} type="button" role="tab" id={`schedule-tab-${tab.id}`} aria-selected={scheduleTab === tab.id} aria-controls={`schedule-panel-${tab.id}`} className={`rounded-md px-1.5 py-2 text-[11px] sm:px-3 sm:text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${scheduleTab === tab.id ? "bg-sky-700 text-white shadow-sm" : "text-sky-800 hover:bg-sky-100"}`} onClick={() => switchScheduleTab(tab.id)}>{tab.label}</button>)}
