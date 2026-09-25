@@ -6,7 +6,6 @@ import { LoadingIndicator } from "@/components/loading-indicator";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import { apiFetch } from "@/lib/api-client";
 import type { CompanyMasterRow } from "@/lib/types";
-import { EquipmentFloorsPanel } from "@/components/admin/equipment-floors-panel";
 type CompanyGroup = {
     primaryCompany: string;
     primaryTradeRoles: string[];
@@ -451,7 +450,7 @@ export function CompaniesPanel({ refreshVersion = 0 }: {
               </details>
               </div>))}
           </div>
-        </section><EquipmentFloorsPanel/>{confirmationDialog}</>;
+        </section>{confirmationDialog}</>;
 }
 function parseRoleText(value: string) {
     return [

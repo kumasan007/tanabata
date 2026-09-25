@@ -14,9 +14,10 @@ export async function GET(request: Request) {
     const results = await Promise.all([
       db.from("equipment_floor_master").select("id,name,sort_order").order("sort_order", { ascending: false }),
       db.from("aerial_work_vehicles").select("id,vehicle_number,notes,sort_order,floor_id,assigned_company,updated_at").order("sort_order").order("vehicle_number"),
-      db.from("tachiuma_floor_stocks").select("floor_id,quantity,updated_at"),
+      db.from("tachiuma_floor_stocks").select("floor_id,quantity,notes,updated_at"),
       db.from("schedule_equipment_requests").select("equipment_type,floor_id,requested_count,schedule_groups!inner(primary_company,work_date)").eq("schedule_groups.work_date", date),
       db.from("equipment_movements").select("vehicle_id,to_floor_id,to_company,work_date,moved_at").not("work_date", "is", null).lte("work_date", date).order("work_date", { ascending: false }).order("moved_at", { ascending: false }),
+      db.from("tachiuma_units").select("id,name,notes,sort_order,floor_id,updated_at").order("sort_order").order("name"),
     ]);
     const error = results.find(result => result.error)?.error;
     if (error) throw error;
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
       });
     return NextResponse.json({
       canEdit: assertAdminFromRequest(request), floors: results[0].data,
-      vehicles: resolveVehicleAssignments(results[1].data ?? [], requests, results[4].data ?? [], date), stocks: results[2].data, requests,
+      vehicles: resolveVehicleAssignments(results[1].data ?? [], requests, results[4].data ?? [], date), tachiumas: results[5].data ?? [], stocks: results[2].data, requests,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
@@ -46,7 +47,10 @@ const input = z.discriminatedUnion("action", [
   z.object({ action: z.literal("delete_vehicle"), vehicleId: uuid, expected: z.string().datetime({ offset: true }) }),
   z.object({ action: z.literal("register_vehicle"), floorId: uuid, number: z.string().trim().min(1).max(30) }),
   z.object({ action: z.literal("move_vehicle"), floorId: uuid, vehicleId: uuid, expected: z.string().datetime({ offset: true }), company: z.string().trim().min(1).max(200).nullable(), date: z.string().date() }),
-  z.object({ action: z.literal("set_stock"), floorId: uuid, quantity: z.number().int().min(0).max(9999), expected: z.string().nullable() }),
+  z.object({ action: z.literal("set_stock"), floorId: uuid, quantity: z.number().int().min(0).max(9999), notes: z.string().trim().max(500), expected: z.string().nullable() }),
+  z.object({ action: z.literal("save_tachiuma"), unitId: uuid.nullable(), name: z.string().trim().min(1).max(50), notes: z.string().trim().max(500), floorId: uuid, expected: z.string().datetime({ offset: true }).nullable() }),
+  z.object({ action: z.literal("delete_tachiuma"), unitId: uuid, expected: z.string().datetime({ offset: true }) }),
+  z.object({ action: z.literal("reorder_tachiumas"), unitIds: z.array(uuid).max(1000) }),
   z.object({ action: z.literal("move_stock"), floorId: uuid, fromFloorId: uuid, quantity: z.number().int().min(1).max(9999), expected: z.string().min(1) }),
 ]);
 
@@ -64,6 +68,14 @@ export async function POST(request: Request) {
     p_vehicle: value.vehicleId, p_expected: value.expected,
   }) : value.action === "move_vehicle" ? await db.rpc("assign_equipment_vehicle_for_date", {
     p_vehicle: value.vehicleId, p_floor: value.floorId, p_company: value.company, p_date: value.date, p_expected: value.expected,
+  }) : value.action === "set_stock" ? await db.rpc("save_tachiuma_stock", {
+    p_floor: value.floorId, p_quantity: value.quantity, p_notes: value.notes, p_expected: value.expected,
+  }) : value.action === "save_tachiuma" ? await db.rpc("save_tachiuma_unit", {
+    p_unit: value.unitId, p_name: value.name, p_notes: value.notes, p_floor: value.floorId, p_expected: value.expected,
+  }) : value.action === "delete_tachiuma" ? await db.rpc("delete_tachiuma_unit", {
+    p_unit: value.unitId, p_expected: value.expected,
+  }) : value.action === "reorder_tachiumas" ? await db.rpc("reorder_tachiuma_units", {
+    p_ids: value.unitIds,
   }) : await db.rpc("update_equipment_position", {
     p_action: value.action, p_floor: value.floorId,
     p_vehicle: "vehicleId" in value ? value.vehicleId : null,

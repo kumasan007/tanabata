@@ -3,10 +3,10 @@
   gap: 0.25rem;
 }
 .admin-dashboard .label {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
 }
 .admin-dashboard .input {
-  height: 2.25rem;
+  height: 2.75rem;
   border-radius: 6px;
   padding-inline: 0.625rem;
   font-size: 0.875rem;
@@ -18,15 +18,15 @@
   font-size: 0.875rem;
 }
 .admin-dashboard .btn {
-  min-height: 2.25rem;
+  min-height: 2.5rem;
   border-radius: 6px;
   padding: 0.375rem 0.625rem;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   box-shadow: none;
 }
 .admin-dashboard .btn.w-9 {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.5rem;
+  height: 2.5rem;
   padding: 0;
 }
 .admin-dashboard .panel,

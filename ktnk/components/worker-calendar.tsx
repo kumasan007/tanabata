@@ -271,14 +271,14 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
             </button>
           </div>
         <div className="flex w-fit max-w-full gap-0.5 rounded-lg border border-sky-200 bg-sky-50 p-0.5 lg:p-1" role="tablist" aria-label="予定の表示切り替え">
-          {([{ id: "company", label: "会社予定" }, { id: "equipment", label: "高車・立馬予定" }] as const).map(tab => <button key={tab.id} type="button" role="tab" id={`schedule-tab-${tab.id}`} aria-selected={scheduleTab === tab.id} aria-controls={`schedule-panel-${tab.id}`} className={`rounded-md px-1.5 py-2 text-[11px] sm:px-3 sm:text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${scheduleTab === tab.id ? "bg-sky-700 text-white shadow-sm" : "text-sky-800 hover:bg-sky-100"}`} onClick={() => switchScheduleTab(tab.id)}>{tab.label}</button>)}
+          {([{ id: "company", label: "会社予定" }, { id: "equipment", label: "高車・立馬予定" }] as const).map(tab => <button key={tab.id} type="button" role="tab" id={`schedule-tab-${tab.id}`} aria-selected={scheduleTab === tab.id} aria-controls={`schedule-panel-${tab.id}`} className={`min-h-11 rounded-md px-1.5 py-2 text-xs sm:px-3 sm:text-sm font-semibold transition-colors ${scheduleTab === tab.id ? "bg-sky-700 text-white shadow-sm" : "text-sky-800 hover:bg-sky-100"}`} onClick={() => switchScheduleTab(tab.id)}>{tab.label}</button>)}
         </div>
           <div className="ml-auto flex gap-1 lg:gap-1.5">
             {[{ label: "作業入力", pathname: "/schedule" }, { label: "新規入場", pathname: "/new-entrants" }].map((item) => (
               <Link
                 prefetch={false}
                 key={item.pathname}
-                className="btn btn-primary h-9 min-h-0 whitespace-nowrap px-1.5 py-1 text-[11px] sm:px-2.5 sm:text-sm"
+                className="btn btn-primary min-h-11 whitespace-nowrap px-1.5 py-1 text-xs sm:px-2.5 sm:text-sm"
                 href={{ pathname: item.pathname, query: { date: selectedDate, ...(company ? { primaryCompany: company } : {}) } }}
               >
                 {item.label}

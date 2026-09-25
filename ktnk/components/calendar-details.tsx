@@ -36,11 +36,11 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
   function completionControls(primaryCompany: string) {
     const report = completionMap.get(primaryCompany);
     if (!report && !isToday) return null;
-    return <div className="mt-2 grid gap-1 border-t border-border pt-2">
-      {report ? <div className="rounded bg-emerald-100 p-2 text-emerald-900">
-        <div className="flex items-start justify-between gap-2">
+    return <div className="mt-1.5 grid gap-1 border-t border-border pt-1.5">
+      {report ? <div className="rounded bg-emerald-100 px-2 py-1.5 text-emerald-900">
+        <div className="flex items-center justify-between gap-2">
           <p className="font-bold">✓ 作業終了済み</p>
-          {isToday && <div className="flex items-center gap-1"><button type="button" className="inline-flex h-7 w-7 items-center justify-center rounded border border-emerald-600 bg-white disabled:opacity-50" disabled={completionBusy} aria-label="備考を編集" title="備考を編集" onClick={(event) => { event.stopPropagation(); setNotesEditor({ report, notes: report.notes ?? "" }); }}><Pencil size={14} aria-hidden="true" /></button><button type="button" className="inline-flex h-7 shrink-0 items-center justify-center rounded border border-emerald-600 bg-white px-2 text-xs font-semibold disabled:opacity-50" disabled={completionBusy} onClick={async (event) => { event.stopPropagation(); if (await confirm("作業終了報告を取り消しますか？", `${primaryCompany}の作業終了報告を取り消します。`, "取り消す")) void saveCompletion(selectedDate, primaryCompany, report); }}>取り消し</button></div>}
+          {isToday && <div className="flex items-center gap-1"><button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded border border-emerald-700 bg-white disabled:opacity-50" disabled={completionBusy} aria-label="備考を編集" title="備考を編集" onClick={(event) => { event.stopPropagation(); setNotesEditor({ report, notes: report.notes ?? "" }); }}><Pencil size={13} aria-hidden="true" /></button><button type="button" className="inline-flex min-h-8 shrink-0 items-center justify-center rounded border border-emerald-700 bg-white px-2 text-xs font-semibold disabled:opacity-50" disabled={completionBusy} onClick={async (event) => { event.stopPropagation(); if (await confirm("作業終了報告を取り消しますか？", `${primaryCompany}の作業終了報告を取り消します。`, "取り消す")) void saveCompletion(selectedDate, primaryCompany, report); }}>取り消し</button></div>}
         </div>
         <p className="text-xs">報告時刻：{completionTime(report.reported_at)}</p>{report.notes && <p className="whitespace-pre-wrap break-words text-xs">備考：{report.notes}</p>}
       </div> : <button type="button" className="btn btn-secondary min-h-9 px-2 py-1 text-sm" disabled={completionBusy} onClick={(event) => { event.stopPropagation(); void saveCompletion(selectedDate, primaryCompany); }}>作業終了</button>}
@@ -82,7 +82,7 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
                 {row.uses_aerial_work_vehicle && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-sm font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
                 {row.uses_tachiuma && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold leading-none text-white shadow-sm" title="立ち馬使用あり">立</span>}
                 {row.uses_fire && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-sm font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
-                <button type="button" className="btn btn-secondary h-8 min-h-8 w-8 p-0" disabled={completionBusy} onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
+                <button type="button" className="btn btn-secondary h-11 min-h-11 w-11 p-0" disabled={completionBusy} onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
               </div>
               </div>
               <p className="mt-2 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label="作業エリア" compact stopPropagation /> : "エリア未入力"}</p>

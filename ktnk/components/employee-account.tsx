@@ -35,18 +35,18 @@ export function EmployeeAccount() {
     finally { pending.current = false; setBusy(false); }
   }
   return <>
-    <button type="button" className={`relative ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 sm:h-10 sm:w-10 ${authenticated ? "border-emerald-600 bg-emerald-50" : "border-slate-200 bg-white hover:border-emerald-400"}`} aria-label={authenticated ? "社員ログイン中：アカウントメニュー" : "監理者ログイン"} title={authenticated ? "社員ログイン中" : "監理者ログイン"} onClick={() => { setMessage(""); dialog.current?.showModal(); }}>
+    <button type="button" className={`relative ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 ${authenticated ? "border-emerald-600 bg-emerald-50" : "border-slate-400 bg-white hover:border-emerald-600"}`} aria-label={authenticated ? "社員ログイン中：アカウントメニュー" : "監理者ログイン"} title={authenticated ? "社員ログイン中" : "監理者ログイン"} onClick={() => { setMessage(""); dialog.current?.showModal(); }}>
       <Image src="/icon.png" alt="" width={26} height={26} className="rounded-full" />
       {authenticated && <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-600" />}
     </button>
-    <dialog ref={dialog} className="w-[calc(100%-2rem)] max-w-sm rounded-xl p-5 shadow-xl backdrop:bg-black/40" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => setPassword("")}>
+    <dialog ref={dialog} aria-labelledby="employee-account-title" className="w-[calc(100%-2rem)] max-w-sm rounded-xl border border-border p-5 shadow-xl backdrop:bg-black/40" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => setPassword("")}>
       <form className="grid gap-4" onSubmit={event => { event.preventDefault(); void submit(); }}>
-        <h2 className="text-lg font-bold">{authenticated ? "社員ログイン中" : "監理者ログイン"}</h2>
+        <h2 id="employee-account-title" className="text-lg font-bold">{authenticated ? "社員ログイン中" : "監理者ログイン"}</h2>
         {message && <p role="alert" className="notice-error text-sm">{message}</p>}
         {authenticated ? <Link href="/admin" className="btn btn-secondary" onClick={() => dialog.current?.close()}>監理者ページを開く</Link> : <>
           <label className="grid gap-1 text-sm font-semibold">パスワード<input className="input" type="password" autoComplete="current-password" value={password} required disabled={busy} onChange={event => setPassword(event.target.value)} /></label>
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-500">
-            <input type="checkbox" className="size-4 accent-emerald-700" checked={remember} disabled={busy} onChange={event => setRemember(event.target.checked)} />
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-slate-600">
+            <input type="checkbox" className="size-5 accent-emerald-700" checked={remember} disabled={busy} onChange={event => setRemember(event.target.checked)} />
             ログイン状態を30日間保持します。
           </label>
         </>}
