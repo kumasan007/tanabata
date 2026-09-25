@@ -7,6 +7,40 @@ import ts from "typescript";
 
 const nodeRequire = createRequire(import.meta.url);
 
+test("date move preserves content and rejects collisions and stale dates", async () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  for (const outcome of ["saved", "collision", "stale"]) {
+    const updates = []; const filters = []; let invalidated = false;
+    const query = {
+      update(value) { updates.push(value); return query; },
+      eq(key, value) { filters.push([key, value]); return query; },
+      select() { return query; },
+      async maybeSingle() { return { data: outcome === "saved" ? { id } : null, error: outcome === "collision" ? { code: "23505" } : null }; },
+    };
+    const { PATCH } = loadModule("app/api/schedules/date/route.ts", {
+      "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
+      "@/lib/supabase": { createServerClient: () => ({ from(table) { assert.equal(table, "schedule_groups"); return query; } }) },
+      "@/lib/data-cache": { invalidateScheduleData: () => { invalidated = true; } },
+      "@/lib/utils": loadModule("lib/utils.ts"),
+    });
+    const response = await PATCH({ json: async () => ({ id, originalDate: "2026-09-25", date: "2026-09-26", workContent: "must not overwrite" }) });
+    assert.equal(response.status, outcome === "saved" ? 200 : 409);
+    assert.equal(JSON.stringify(updates), JSON.stringify([{ work_date: "2026-09-26" }]));
+    assert.deepEqual(filters, [["id", id], ["work_date", "2026-09-25"]]);
+    assert.equal(invalidated, outcome === "saved");
+    assert.equal((await PATCH({ json: async () => ({ id, originalDate: "2026-09-25", date: "2026-09-27" }) })).status, 400);
+    assert.equal(updates.length, 1);
+  }
+});
+
+test("enabled equipment requires a floor and count even with legacy notes", () => {
+  for (const [flag, field, notes] of [["usesAerialWorkVehicle", "aerialWorkVehicleRequests", "aerialWorkVehicleNotes"], ["usesTachiuma", "tachiumaRequests", "tachiumaNotes"]]) {
+    for (const rows of [[], [{ floorId: "", count: 1 }], [{ floorId: "11111111-1111-4111-8111-111111111111", count: null }], [{ floorId: "11111111-1111-4111-8111-111111111111", count: 1000 }]]) {
+      assert.equal(scheduleSubmitSchema.safeParse(submission({ [flag]: true, [field]: rows, [notes]: "legacy" })).success, false);
+    }
+  }
+});
+
 test("会社追加APIは既存一次会社への空追加・重複・不正型を拒否する", async () => {
   const inserted = [];
   const client = { from() {
@@ -558,6 +592,8 @@ test("予定保存は複数日と全明細を一回のRPCへ渡す", async () =>
     dates: ["2026-09-16", "2026-09-15"], startDate: "2026-09-15", endDate: "2026-09-16",
     currentSubcompanies: [{secondaryCompany:"二次会社",workerCount:2}],
     usesAerialWorkVehicle:true,aerialWorkVehicleNotes:"10階",usesFire:true,fireArea:"10階",usesTachiuma:true,tachiumaNotes:"2F、3Fで3台使用。",
+    aerialWorkVehicleRequests: [{ floorId: "11111111-1111-4111-8111-111111111111", count: 1 }],
+    tachiumaRequests: [{ floorId: "11111111-1111-4111-8111-111111111111", count: 3 }],
     overwriteExisting:true,
   }));
   const result = await service.saveScheduleSubmission(input);

@@ -21,7 +21,7 @@ export const subcompanySchema = z.object({
 const equipmentRequestSchema = z.object({
   floorId: z.string().uuid("フロアを選択してください。"),
   floorName: z.string().optional(),
-  count: countSchema.refine((value) => value !== null && value > 0, "台数は1以上で入力してください。"),
+  count: countSchema.refine((value) => value !== null && value > 0 && value <= 999, "台数は1〜999で入力してください。"),
 });
 
 export const scheduleSubmitSchema = z
@@ -74,11 +74,11 @@ export const scheduleSubmitSchema = z
     if (!value.usePreviousPrimaryCount && value.primaryCount === 0 && secondaryTotal < 1 && !hasPreviousSecondaryCount) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["currentSubcompanies"], message: "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。" });
     }
-    for (const [enabled, requests, legacyNotes, path, label] of [
-      [value.usesAerialWorkVehicle, value.aerialWorkVehicleRequests, value.aerialWorkVehicleNotes, "aerialWorkVehicleRequests", "高所作業車"],
-      [value.usesTachiuma, value.tachiumaRequests, value.tachiumaNotes, "tachiumaRequests", "立ち馬"],
+    for (const [enabled, requests, path, label] of [
+      [value.usesAerialWorkVehicle, value.aerialWorkVehicleRequests, "aerialWorkVehicleRequests", "高所作業車"],
+      [value.usesTachiuma, value.tachiumaRequests, "tachiumaRequests", "立ち馬"],
     ] as const) {
-      if (enabled && requests.length === 0 && !legacyNotes.trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message: `${label}のフロアと台数を入力してください。` });
+      if (enabled && requests.length === 0) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message: `${label}のフロアと台数を入力してください。` });
       if (new Set(requests.map((row) => row.floorId)).size !== requests.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message: `${label}で同じフロアは重複して選択できません。` });
     }
     for (const [index, subcompany] of value.currentSubcompanies.entries()) {

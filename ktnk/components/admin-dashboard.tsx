@@ -6,12 +6,13 @@ import { AdminTabs, type AdminTab } from "@/components/admin/admin-tabs";
 import { AdminLogin } from "@/components/admin/admin-login";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { apiFetch } from "@/lib/api-client";
+import { notifySessionChanged, useEmployeeSession } from "@/lib/employee-session";
 const loading = () => <LoadingIndicator label="管理画面を読み込み中…"/>;
 const CompaniesPanel = dynamic(() => import("@/components/admin/companies-panel").then(m => m.CompaniesPanel), { loading });
 const RecoveryPanel = dynamic(() => import("@/components/admin/recovery-panel").then(m => m.RecoveryPanel), { loading });
 export function AdminDashboard({ initialAuthenticated }: { initialAuthenticated: boolean }) {
     const [password, setPassword] = useState("");
-    const [authenticated, setAuthenticated] = useState(initialAuthenticated);
+    const authenticated = useEmployeeSession(initialAuthenticated);
     const [loginLoading, setLoginLoading] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<AdminTab>("companies");
@@ -32,7 +33,7 @@ export function AdminDashboard({ initialAuthenticated }: { initialAuthenticated:
             if (!response.ok)
                 throw new Error(body.error ?? "ログインに失敗しました。");
             setPassword("");
-            setAuthenticated(true);
+            notifySessionChanged(true);
         }
         catch (error) {
             setMessage(error instanceof Error
@@ -49,8 +50,7 @@ export function AdminDashboard({ initialAuthenticated }: { initialAuthenticated:
         try {
             const response = await apiFetch("/api/admin/logout", { method: "POST" });
             if (!response.ok) throw new Error("ログアウトできませんでした。もう一度お試しください。");
-            setAuthenticated(false);
-            window.location.href = "/";
+            notifySessionChanged(false);
         } catch (error) {
             setMessage(error instanceof Error ? error.message : "接続できませんでした。もう一度お試しください。");
         } finally { setLogoutLoading(false); }

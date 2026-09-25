@@ -22,6 +22,7 @@ type SubmitState =
   | { status: "success"; dates: string[] }
   | { status: "error"; message: string };
 const ExistingEntryCheck = dynamic(() => import("@/components/existing-entry-check").then((module) => module.ExistingEntryCheck), { loading: () => <LoadingIndicator /> });
+const ScheduleDateChange = dynamic(() => import("@/components/schedule-date-change").then((module) => module.ScheduleDateChange));
 const CompanyPeopleFields = dynamic(() => import("@/components/company-people-fields").then((module) => module.CompanyPeopleFields), { loading: () => <LoadingIndicator /> });
 const ScheduleEquipmentFields = dynamic(() => import("@/components/schedule-equipment-fields").then((module) => module.ScheduleEquipmentFields), { loading: () => <LoadingIndicator /> });
 const MultiDateCalendar = dynamic(() => import("@/components/multi-date-calendar").then((module) => module.MultiDateCalendar));
@@ -172,6 +173,8 @@ export function ScheduleForm({
   const [customDate, setCustomDate] = useState(false);
   const [continuingInput, setContinuingInput] = useState(false);
   const [overwriteExisting, setOverwriteExisting] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<ScheduleWithSubcompanies | null>(null);
+  const [movingDate, setMovingDate] = useState(false);
   const [step, setStep] = useState<
     "existing" | "date" | "copy" | "edit" | "confirm"
   >(initialDate && initialCompany ? "existing" : "date");
@@ -257,7 +260,7 @@ export function ScheduleForm({
     step === "confirm",
   );
   const showEditor = !choosingCompany && step === "edit";
-  const busy = submitState.status === "submitting";
+  const busy = submitState.status === "submitting" || movingDate;
   const activeRows = form.currentSubcompanies;
   const activeCount = form.primaryCount;
   const totalCount =
@@ -520,6 +523,7 @@ export function ScheduleForm({
     setStep("existing");
   }
   function resetForm() {
+    setEditingSchedule(null);
     setForm(emptyForm(""));
     setSecondaryWorkChoice(null);
     setChoice(null);
@@ -533,6 +537,7 @@ export function ScheduleForm({
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function editExisting(row: ScheduleWithSubcompanies) {
+    setEditingSchedule(row);
     setForm(scheduleToFormData(row));
     setOverwriteExisting(true);
     setChoice("new");
@@ -542,7 +547,7 @@ export function ScheduleForm({
   }
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!ready || submitting.current) return;
+    if (!ready || submitting.current || movingDate) return;
     if (!area.trim() || !content.trim()) {
       setStep("edit");
       setEditorPart("content");
@@ -649,6 +654,7 @@ export function ScheduleForm({
     <div className="simple-schedule min-h-screen pb-32 sm:pb-8">
       <main className="mx-auto max-w-2xl px-3 py-5 sm:px-4">
         <h1 className="page-title">作業入力</h1>
+        {editingSchedule && overwriteExisting && editingSchedule.work_date === form.startDate && editingSchedule.primary_company === form.primaryCompany && (step === "edit" || step === "confirm") && <div className="mb-4"><ScheduleDateChange id={editingSchedule.id} originalDate={editingSchedule.work_date} onSaved={resetForm} disabled={busy} onBusyChange={setMovingDate} /></div>}
         <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           {(form.primaryCompany || form.startDate) && (
             <div className="flex min-w-0 items-baseline gap-3 break-words text-sm text-slate-600">

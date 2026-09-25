@@ -18,12 +18,22 @@ const loadCalendarDetails = () => import("@/components/calendar-details");
 const CalendarDetails = dynamic(() => import("@/components/calendar-details").then((module) => module.CalendarDetails), { loading: () => <LoadingIndicator /> });
 const AdminScheduleEditor = dynamic(() => import("@/components/admin-schedule-editor").then((module) => module.AdminScheduleEditor));
 const NewEntrantEditor = dynamic(() => import("@/components/new-entrant-editor").then((module) => module.NewEntrantEditor));
+const EquipmentBoard = dynamic(() => import("@/components/equipment-board").then((module) => module.EquipmentBoard));
 const DETAILS_PREFERENCE_KEY = "calendar-supplement-expanded";
 
 export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: { initialDate: string; initialMaster: CompanyMaster; initialSummary?: CalendarSummaryData | null }) {
   const [month, setMonth] = useState(initialDate.slice(0, 7));
   const [selectedDate, setSelectedDate] = useState(isWorkingDate(initialDate) ? initialDate : datesInMonth(initialDate.slice(0, 7)).find((date) => date > initialDate) ?? datesInMonth(initialDate.slice(0, 7))[0]);
   const [company, setCompany] = useState("");
+  const [scheduleTab, setScheduleTab] = useState<"company" | "equipment">("company");
+  const [panelMinHeight, setPanelMinHeight] = useState(0);
+  const [equipmentOpened, setEquipmentOpened] = useState(false);
+  function switchScheduleTab(tab: "company" | "equipment") {
+    setPanelMinHeight(height => Math.max(height, selectedDaySectionRef.current?.getBoundingClientRect().height ?? 0));
+    if (tab === "equipment") setEquipmentOpened(true);
+    setScheduleTab(tab);
+  }
+
   const [detailsExpanded, setDetailsExpanded] = useState(true);
   const [master, setMaster] = useState<CompanyMaster>(initialMaster);
   const [schedules, setSchedules] = useState<CalendarSchedule[]>(initialSummary?.schedules ?? []);
@@ -248,24 +258,27 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
         </div>
       </section>}
 
-      <section ref={selectedDaySectionRef} className="mt-4 scroll-mt-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+      <section ref={selectedDaySectionRef} className="mt-4 scroll-mt-4" style={{ minHeight: panelMinHeight || undefined }}>
+        <div className="mb-3 flex flex-wrap items-center gap-x-1 gap-y-2 lg:gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
             <h2 className="whitespace-nowrap text-lg font-bold">{Number(selectedDate.slice(5, 7))}月{Number(selectedDate.slice(8, 10))}日の予定</h2>
             <button type="button" className="btn btn-secondary h-9 min-h-0 w-9 p-0" disabled={loading || detailLoading || completionBusy} onClick={() => { setMasterRefreshVersion((value) => value + 1); setVersion((value) => value + 1); }} aria-label={loading ? "予定を更新中" : "予定を更新"} title="予定を更新">
               <RefreshCw size={18} className={loading ? "animate-spin" : ""} aria-hidden="true" />
             </button>
-            <button type="button" className="btn btn-secondary h-9 min-h-0 gap-1 px-2" onClick={toggleDetails} aria-pressed={detailsExpanded} aria-label={detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示"} title={detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示"}>
+            {scheduleTab === "company" && <button type="button" className="btn btn-secondary h-9 min-h-0 gap-1 px-2" onClick={toggleDetails} aria-pressed={detailsExpanded} aria-label={detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示"} title={detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示"}>
               {detailsExpanded ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
               <span className="hidden text-xs sm:inline">{detailsExpanded ? "補足を隠す" : "補足を表示"}</span>
-            </button>
+            </button>}
           </div>
-          <div className="flex flex-wrap gap-1.5">
+        <div className="flex w-fit max-w-full gap-0.5 rounded-lg border border-sky-200 bg-sky-50 p-0.5 lg:p-1" role="tablist" aria-label="予定の表示切り替え">
+          {([{ id: "company", label: "会社予定" }, { id: "equipment", label: "高車・立馬予定" }] as const).map(tab => <button key={tab.id} type="button" role="tab" id={`schedule-tab-${tab.id}`} aria-selected={scheduleTab === tab.id} aria-controls={`schedule-panel-${tab.id}`} className={`rounded-md px-1.5 py-2 text-[11px] sm:px-3 sm:text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${scheduleTab === tab.id ? "bg-sky-700 text-white shadow-sm" : "text-sky-800 hover:bg-sky-100"}`} onClick={() => switchScheduleTab(tab.id)}>{tab.label}</button>)}
+        </div>
+          <div className="ml-auto flex gap-1 lg:gap-1.5">
             {[{ label: "作業入力", pathname: "/schedule" }, { label: "新規入場", pathname: "/new-entrants" }].map((item) => (
               <Link
                 prefetch={false}
                 key={item.pathname}
-                className="btn btn-primary h-9 min-h-0 px-2.5 py-1 text-sm"
+                className="btn btn-primary h-9 min-h-0 whitespace-nowrap px-1.5 py-1 text-[11px] sm:px-2.5 sm:text-sm"
                 href={{ pathname: item.pathname, query: { date: selectedDate, ...(company ? { primaryCompany: company } : {}) } }}
               >
                 {item.label}
@@ -273,11 +286,14 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
             ))}
           </div>
         </div>
+        {equipmentOpened && <div hidden={scheduleTab !== "equipment"} role="tabpanel" id="schedule-panel-equipment" aria-labelledby="schedule-tab-equipment"><EquipmentBoard key={selectedDate} date={selectedDate} version={version} /></div>}
+        <div hidden={scheduleTab !== "company"} role="tabpanel" id="schedule-panel-company" aria-labelledby="schedule-tab-company">
         {detailMessage && <p role="alert" className="mb-3 notice-error">{detailMessage}</p>}
         {detailLoading ? <LoadingIndicator label="予定を読み込み中…" className="min-h-32" /> : detail.schedules.length === 0 && detail.entrants.length === 0 && detail.completions.length === 0 ? !detailMessage && <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className={`grid gap-2 transition-opacity sm:grid-cols-2 lg:grid-cols-3 ${loading ? "pointer-events-none opacity-60" : ""}`} aria-busy={loading}>
           <CalendarDetails detail={detail} master={master} selectedDate={selectedDate} isToday={selectedDate === initialDate} completionBusy={completionBusy} detailsExpanded={detailsExpanded}
             onEdit={setEditing} onEditEntrant={setEditingEntrant} onCompletion={saveCompletion} />
         </div>}
+        </div>
       </section>
     </main>
     {editing && <AdminScheduleEditor schedule={editing} master={master} workerMode onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setVersion((v) => v + 1); }} />}

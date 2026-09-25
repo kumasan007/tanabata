@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { EmployeeAccount } from "@/components/employee-account";
 
 const navigation = [
   { href: "/schedule", label: "作業入力" },
@@ -46,6 +47,7 @@ export function SiteHeader() {
             })}
           </nav>
         ) : null}
+        <EmployeeAccount />
       </div>
     </header>
   );

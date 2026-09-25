@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 const COOKIE_NAME = "ktnk_admin";
-export const ADMIN_SESSION_SECONDS = 48 * 60 * 60;
+export const ADMIN_SESSION_SECONDS = 30 * 24 * 60 * 60;
 const SESSION_MS = ADMIN_SESSION_SECONDS * 1000;
 
 export type AdminSession = {

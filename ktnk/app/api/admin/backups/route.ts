@@ -14,6 +14,9 @@ const backupPayloadSchema = z.object({
   schedule_subcompanies: z.array(z.record(z.unknown())),
   equipment_floor_master: z.array(z.record(z.unknown())).optional(),
   schedule_equipment_requests: z.array(z.record(z.unknown())).optional(),
+  aerial_work_vehicles: z.array(z.record(z.unknown())).optional(),
+  tachiuma_floor_stocks: z.array(z.record(z.unknown())).optional(),
+  equipment_movements: z.array(z.record(z.unknown())).optional(),
   new_entrant_records: z.array(z.record(z.unknown())),
 });
 
@@ -111,13 +114,16 @@ export async function POST(request: Request) {
         schedule_subcompanies: payload.schedule_subcompanies.length,
         equipment_floor_master: payload.equipment_floor_master?.length ?? 0,
         schedule_equipment_requests: payload.schedule_equipment_requests?.length ?? 0,
+        aerial_work_vehicles: payload.aerial_work_vehicles?.length ?? 0,
+        tachiuma_floor_stocks: payload.tachiuma_floor_stocks?.length ?? 0,
+        equipment_movements: payload.equipment_movements?.length ?? 0,
         new_entrant_records: payload.new_entrant_records.length,
       };
       const { data: safetyBackupId, error: safetyBackupError } = await db.rpc("create_data_backup", { p_source: "manual" });
       if (safetyBackupError) throw safetyBackupError;
       const { data: importedBackup, error: importError } = await db
         .from("data_backups")
-        .insert({ source: "manual", schema_version: 4, row_counts: rowCounts, payload })
+        .insert({ source: "manual", schema_version: 5, row_counts: rowCounts, payload })
         .select("id")
         .single();
       if (importError) throw importError;

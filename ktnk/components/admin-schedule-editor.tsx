@@ -4,6 +4,7 @@ import "@/components/admin/admin-controls.css";
 import {ScheduleEquipmentFields} from "@/components/schedule-equipment-fields";
 import {scheduleToFormData} from "@/lib/schedule-fields";
 import { X } from "lucide-react";
+import { ScheduleDateChange } from "@/components/schedule-date-change";
 import { useEffect, useId, useRef, useState } from "react";
 import type { CompanyMaster, ScheduleSubmitInput, ScheduleWithSubcompanies } from "@/lib/types";
 import { CompanyPeopleFields } from "@/components/company-people-fields";
@@ -76,6 +77,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
         </button>
       </div>
       <p className="mb-4 text-sm text-slate-600">{schedule.work_date} / {schedule.primary_company}</p>
+      <div className="mb-4"><ScheduleDateChange id={schedule.id} originalDate={schedule.work_date} onSaved={onSaved} disabled={busy} onBusyChange={setBusy} /></div>
       <fieldset disabled={busy} className="grid gap-3">
         <CompanyPeopleFields
           primaryCompany={form.primaryCompany}
