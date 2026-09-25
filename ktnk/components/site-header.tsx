@@ -19,7 +19,8 @@ export function SiteHeader() {
       <div className="mx-auto flex min-h-12 max-w-6xl items-center gap-1 px-2 sm:min-h-16 sm:justify-between sm:gap-4 sm:px-4">
         <div className="flex shrink-0 items-center">
           <Link href="/" className="rounded-md px-1 text-base font-bold leading-none text-slate-950 hover:text-primary sm:px-0 sm:text-xl">
-            北仲ツール
+            <span className="sm:hidden">北仲</span>
+            <span className="hidden sm:inline">北仲ツール</span>
           </Link>
         </div>
         {pathname !== "/" ? (

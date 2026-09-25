@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { password?: string };
+    const body = (await request.json()) as { password?: string; remember?: boolean };
 
     if (!verifyAdminPassword(body.password ?? "")) {
       return NextResponse.json({ error: "パスワードが違います。" }, { status: 401 });
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: ADMIN_SESSION_SECONDS,
+      ...(body.remember !== false ? { maxAge: ADMIN_SESSION_SECONDS } : {}),
     });
     return response;
   } catch (error) {
