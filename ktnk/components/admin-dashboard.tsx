@@ -12,7 +12,7 @@ const CompaniesPanel = dynamic(() => import("@/components/admin/companies-panel"
 const EquipmentFloorsPanel = dynamic(() => import("@/components/admin/equipment-floors-panel").then(m => m.EquipmentFloorsPanel), { loading });
 const EquipmentVehiclesPanel = dynamic(() => import("@/components/admin/equipment-vehicles-panel").then(m => m.EquipmentVehiclesPanel), { loading });
 const TachiumaUnitsPanel = dynamic(() => import("@/components/admin/tachiuma-units-panel").then(m => m.TachiumaUnitsPanel), { loading });
-const RecoveryPanel = dynamic(() => import("@/components/admin/recovery-panel").then(m => m.RecoveryPanel), { loading });
+const BackupPanel = dynamic(() => import("@/components/admin/backup-panel").then(m => m.BackupPanel), { loading });
 export function AdminDashboard({ initialAuthenticated }: { initialAuthenticated: boolean }) {
     const [password, setPassword] = useState("");
     const authenticated = useEmployeeSession(initialAuthenticated);
@@ -59,5 +59,5 @@ export function AdminDashboard({ initialAuthenticated }: { initialAuthenticated:
     }
     if (!authenticated)
         return <AdminLogin password={password} loading={loginLoading} message={message} onPasswordChange={setPassword} onSubmit={login}/>;
-    return <main className="admin-dashboard min-h-screen bg-[#f6f7f5]"><div className="mx-auto grid max-w-6xl gap-3 px-4 py-3 sm:px-6 sm:py-4"><div className="flex justify-end"><button className="btn btn-secondary px-3" type="button" disabled={logoutLoading} onClick={() => void logout()}><LogOut size={17} aria-hidden="true"/>ログアウト</button></div>{message && <p role="alert" className="notice-error text-sm">{message}</p>}<AdminTabs active={activeTab} onChange={setActiveTab}/><div hidden={activeTab !== "companies"}><CompaniesPanel refreshVersion={companyVersion}/></div><div hidden={activeTab !== "floors"}>{activeTab === "floors" && <EquipmentFloorsPanel/>}</div><div hidden={activeTab !== "vehicles"}>{activeTab === "vehicles" && <EquipmentVehiclesPanel/>}</div><div hidden={activeTab !== "tachiumas"}>{activeTab === "tachiumas" && <TachiumaUnitsPanel/>}</div>{(activeTab === "backups" || activeTab === "auditLogs") && <RecoveryPanel kind={activeTab} active onRestored={() => setCompanyVersion(v => v + 1)}/>}</div></main>;
+    return <main className="admin-dashboard min-h-screen bg-[#f6f7f5]"><div className="mx-auto grid max-w-6xl gap-3 px-4 py-3 sm:px-6 sm:py-4"><div className="flex justify-end"><button className="btn btn-secondary px-3" type="button" disabled={logoutLoading} onClick={() => void logout()}><LogOut size={17} aria-hidden="true"/>ログアウト</button></div>{message && <p role="alert" className="notice-error text-sm">{message}</p>}<AdminTabs active={activeTab} onChange={setActiveTab}/>{activeTab === "companies" && <CompaniesPanel refreshVersion={companyVersion}/>} {activeTab === "floors" && <EquipmentFloorsPanel/>}{activeTab === "vehicles" && <EquipmentVehiclesPanel/>}{activeTab === "tachiumas" && <TachiumaUnitsPanel/>}{activeTab === "backups" && <BackupPanel onRestored={() => setCompanyVersion(v => v + 1)}/>}</div></main>;
 }

@@ -1,15 +1,14 @@
 "use client";
 
-import { Building2, DatabaseBackup, Forklift, History, Layers3, Scaling } from "lucide-react";
+import { Building2, DatabaseBackup, Forklift, Layers3, Scaling } from "lucide-react";
 
-export type AdminTab = "companies" | "floors" | "vehicles" | "tachiumas" | "backups" | "auditLogs";
+export type AdminTab = "companies" | "floors" | "vehicles" | "tachiumas" | "backups";
 const tabs = [
   { key: "companies", label: "協力会社一覧", icon: Building2 },
   { key: "floors", label: "設備フロア管理", icon: Layers3 },
   { key: "vehicles", label: "高所作業車管理", icon: Forklift },
   { key: "tachiumas", label: "立ち馬管理", icon: Scaling },
   { key: "backups", label: "バックアップ", icon: DatabaseBackup },
-  { key: "auditLogs", label: "操作履歴", icon: History },
 ] as const;
 
 export function AdminTabs({ active, onChange }: { active: AdminTab; onChange: (tab: AdminTab) => void }) {

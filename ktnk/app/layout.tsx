@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { SiteHeader } from "@/components/site-header";
+import { ConnectionStatus } from "@/components/connection-status";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default function RootLayout({
   return (
     <html lang="ja" data-scroll-behavior="smooth">
       <body>
+        <ConnectionStatus />
         <SiteHeader />
         {children}
       </body>

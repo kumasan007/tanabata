@@ -3,10 +3,15 @@ import { getAdminCookieFromRequest, verifyAdminSessionToken } from "@/lib/admin-
 
 export function createServerClient() {
   const url = process.env.SUPABASE_URL;
-  const apiKey = process.env.SUPABASE_ANON_KEY;
+  // All database access stays on the server. Public pages remain login-free,
+  // but callers can no longer bypass API validation with the browser anon key.
+  const apiKey =
+    process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !apiKey) {
-    throw new Error("SUPABASE_URL / SUPABASE_ANON_KEY を設定してください。");
+    throw new Error(
+      "SUPABASE_URL と SUPABASE_SECRET_KEY（またはSUPABASE_SERVICE_ROLE_KEY）を設定してください。",
+    );
   }
 
   return createClient(url, apiKey, {
@@ -18,22 +23,7 @@ export function createServerClient() {
 }
 
 export function createAdminServerClient() {
-  const url = process.env.SUPABASE_URL;
-  const secretKey =
-    process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !secretKey) {
-    throw new Error(
-      "SUPABASE_URL と SUPABASE_SECRET_KEY（または SUPABASE_SERVICE_ROLE_KEY）を設定してください。",
-    );
-  }
-
-  return createClient(url, secretKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
+  return createServerClient();
 }
 
 export function assertAdminFromRequest(request: Request) {

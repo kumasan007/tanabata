@@ -27,14 +27,13 @@ npm run dev
 
 ```text
 SUPABASE_URL=
-SUPABASE_ANON_KEY=
 SUPABASE_SECRET_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ADMIN_PASSWORD=
 ADMIN_SESSION_SECRET=
 ```
 
-Supabase接続はサーバー側のNext.js API routesに集約し、`SUPABASE_URL` と `SUPABASE_ANON_KEY` を使用します。`supabase/migrations/20260904_allow_anon_app_access.sql` を実行して、必要なRLSポリシーを適用してください。
+Supabase接続はサーバー側のNext.js API routesに集約し、`SUPABASE_URL` と非公開の `SUPABASE_SECRET_KEY` を使用します。画面はログイン不要ですが、ブラウザからDBを直接操作する権限は付与しません。
 
 管理画面のバックアップ機能だけは、非公開の `SUPABASE_SECRET_KEY`（`sb_secret_...`）または従来の `SUPABASE_SERVICE_ROLE_KEY` を使用します。この値はブラウザへ公開せず、ローカルの `.env.local` とVercelの環境変数だけに設定してください。
 
@@ -56,7 +55,7 @@ anonキー運用では公開キーを知る利用者がSupabase REST APIを直�
 
 バックアップ機能を追加する場合は、Supabase DashboardのCronを有効にしてから `supabase/migrations/20260907_add_daily_backups.sql` と、それ以降のバックアップ用マイグレーションをSQL Editorで順番に1回実行します。毎日14:59 UTC（日本時間23:59）に業務データを `data_backups` へ保存し、10日を過ぎたバックアップだけを自動削除します。管理画面やAPIからの手動削除はできません。
 
-24時間の操作履歴と個別復元を有効にするには、`supabase/migrations/202609110001_add_audit_logs_and_update_backups.sql` と、作業終了履歴を追加する `supabase/migrations/202609160002_add_work_completion_audit.sql` をSupabase SQL Editorで順番に1回実行します。登録・編集・削除と復元操作はDBトリガーで `audit_logs` に記録され、24時間を過ぎたログはSupabase Cronが1日1回まとめて削除します。
+日次バックアップだけを保持し、変更ごとの操作履歴は保存しません。最新の `202609260001_security_and_simplification.sql` で操作履歴を削除し、ログイン回数制限とAPI経由のDBアクセスへ切り替えます。
 
 登録時にDB列・制約のズレで失敗する場合は、既存データを削除してよければ `supabase/reset-schema.sql` をSupabase SQL Editorで実行します。`schedule_groups` と `schedule_subcompanies` を作り直します。
 
@@ -83,7 +82,6 @@ VercelではRoot Directoryを `ktnk` にします。
 
 ```text
 SUPABASE_URL
-SUPABASE_ANON_KEY
 SUPABASE_SECRET_KEY
 SUPABASE_SERVICE_ROLE_KEY
 ADMIN_PASSWORD

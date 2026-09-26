@@ -802,3 +802,26 @@ end $$;
 revoke all on function public.assign_equipment_vehicle_for_date(uuid,uuid,text,date,timestamptz) from public,anon,authenticated;
 grant execute on function public.assign_equipment_vehicle_for_date(uuid,uuid,text,date,timestamptz) to service_role;
 notify pgrst,'reload schema';
+
+-- Current access model: login-free pages call server APIs; browsers never write
+-- directly with the anon role. Per-change audit history is intentionally off.
+revoke all on public.company_master, public.schedule_groups, public.schedule_subcompanies,
+  public.new_entrant_records, public.work_completion_reports,
+  public.schedule_equipment_requests, public.equipment_floor_master from anon, authenticated;
+create table if not exists public.admin_login_attempts(
+  id bigint generated always as identity primary key,
+  client_key text not null,
+  attempted_at timestamptz not null default now()
+);
+create index if not exists admin_login_attempts_lookup_idx on public.admin_login_attempts(client_key,attempted_at desc);
+alter table public.admin_login_attempts enable row level security;
+revoke all on public.admin_login_attempts from public,anon,authenticated;
+grant select,insert,delete on public.admin_login_attempts to service_role;
+do $$ declare t text; begin foreach t in array array['company_master','schedule_groups','schedule_subcompanies','schedule_aerial_work_vehicles','new_entrant_records','work_completion_reports'] loop if to_regclass('public.'||t) is not null then execute format('drop trigger if exists audit_changes on public.%I',t);end if;end loop;end $$;
+select cron.unschedule(jobid) from cron.job where jobname='ktnk-audit-log-cleanup';
+drop function if exists public.restore_audit_change(bigint,boolean);
+drop function if exists public.restore_audit_change(bigint);
+drop function if exists public.delete_expired_audit_logs();
+drop function if exists public.capture_audit_log();
+drop table if exists public.audit_logs;
+notify pgrst,'reload schema';

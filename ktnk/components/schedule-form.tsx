@@ -15,68 +15,15 @@ import type {
 } from "@/lib/types";
 import { isWorkingDate, workingDateOptions, shortDateWithWeekday, parseLocalDate } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
+import { clearScheduleDraft, loadScheduleDraft, saveScheduleDraft } from "@/lib/schedule-draft";
+import { displayScheduleDate as displayDate, displaySelectedScheduleDates as displaySelectedDates, emptyScheduleForm as emptyForm, previousScheduleQuestion as sourceQuestion } from "@/lib/schedule-form-model";
+import { ScheduleSubmitStatus, type ScheduleSubmitState as SubmitState } from "@/components/schedule-submit-status";
 
-type SubmitState =
-  | { status: "idle" }
-  | { status: "submitting" }
-  | { status: "success"; dates: string[] }
-  | { status: "error"; message: string };
 const ExistingEntryCheck = dynamic(() => import("@/components/existing-entry-check").then((module) => module.ExistingEntryCheck), { loading: () => <LoadingIndicator /> });
 const ScheduleDateChange = dynamic(() => import("@/components/schedule-date-change").then((module) => module.ScheduleDateChange));
 const CompanyPeopleFields = dynamic(() => import("@/components/company-people-fields").then((module) => module.CompanyPeopleFields), { loading: () => <LoadingIndicator /> });
 const ScheduleEquipmentFields = dynamic(() => import("@/components/schedule-equipment-fields").then((module) => module.ScheduleEquipmentFields), { loading: () => <LoadingIndicator /> });
 const MultiDateCalendar = dynamic(() => import("@/components/multi-date-calendar").then((module) => module.MultiDateCalendar));
-const emptyForm = (date: string): ScheduleSubmitInput => ({
-  dates: date ? [date] : [],
-  startDate: date,
-  endDate: date,
-  excludeWeekends: false,
-  primaryCompany: "",
-  primaryCount: 0,
-  usePreviousPrimaryCount: false,
-  currentSubcompanies: [],
-  workArea: "",
-  workContent: "",
-  usesAerialWorkVehicle: false,
-  aerialWorkVehicleNotes: "",
-  aerialWorkVehicleRequests: [],
-  usesFire: false,
-  fireArea: "",
-  usesTachiuma: false,
-  tachiumaNotes: "",
-  tachiumaRequests: [],
-  notes: "",
-});
-
-function displayDate(value: string) {
-  const date = parseLocalDate(value);
-  return date
-    ? new Intl.DateTimeFormat("ja-JP", {
-        month: "long",
-        day: "numeric",
-        weekday: "short",
-      }).format(date)
-    : "日付を選択";
-}
-
-function displayDateRange(startDate: string, endDate: string) {
-  if (!endDate || startDate === endDate) return displayDate(startDate);
-  return `${displayDate(startDate)}〜${displayDate(endDate)}`;
-}
-
-function displaySelectedDates(dates: string[] | undefined, startDate: string, endDate: string) {
-  if (!dates?.length) return displayDateRange(startDate, endDate);
-  return dates.map(displayDate).join("、");
-}
-
-function sourceQuestion(workDate: string, today: string) {
-  const current = parseLocalDate(today);
-  const tomorrow = current ? new Date(current.getFullYear(), current.getMonth(), current.getDate() + 1) : null;
-  const tomorrowText = tomorrow ? `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}` : "";
-  if (workDate === today) return "今日の作業と同じですか？";
-  if (workDate === tomorrowText) return "明日の作業と同じですか？";
-  return `${displayDate(workDate)}の作業と同じですか？`;
-}
 
 export function ScheduleForm({
   today,
@@ -89,10 +36,12 @@ export function ScheduleForm({
   initialCompany?: string;
   initialCompanyMaster: CompanyMaster;
 }) {
-  const [form, setForm] = useState<ScheduleSubmitInput>(() => ({
-    ...emptyForm(initialDate),
-    primaryCompany: initialCompany,
-  }));
+  const [form, setForm] = useState<ScheduleSubmitInput>(() =>
+    ({
+      ...emptyForm(initialDate),
+      primaryCompany: initialCompany,
+    }),
+  );
   const [companyMaster, setCompanyMaster] = useState<CompanyMaster | null>(
     initialCompanyMaster,
   );
@@ -137,6 +86,15 @@ export function ScheduleForm({
   const [summaryVersion, setSummaryVersion] = useState(0);
   const submitting = useRef(false);
   const resultRef = useRef<HTMLDivElement>(null);
+  const draftLoaded = useRef(false);
+  useEffect(() => {
+    const draft = loadScheduleDraft();
+    if (draft) setForm(draft);
+    draftLoaded.current = true;
+  }, []);
+  useEffect(() => {
+    if (draftLoaded.current && submitState.status !== "success") saveScheduleDraft(form);
+  }, [form, submitState.status]);
   useEffect(() => {
     const clearRestoredInput = (event: PageTransitionEvent) => {
       const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
@@ -453,6 +411,7 @@ export function ScheduleForm({
     setStep("existing");
   }
   function resetForm() {
+    clearScheduleDraft();
     setEditingSchedule(null);
     setForm(emptyForm(""));
     setSecondaryWorkChoice(null);
@@ -567,6 +526,7 @@ export function ScheduleForm({
         status: "success",
         dates: body.dates ?? [form.startDate],
       });
+      clearScheduleDraft();
       setSummaryVersion((v) => v + 1);
       setSourceRetry((v) => v + 1);
     } catch (error) {
@@ -1054,74 +1014,7 @@ export function ScheduleForm({
           </fieldset>
           {!ready && submitState.status === "error" && <p role="alert" className="notice-error">{submitState.message}</p>}
 
-          {ready &&
-            (submitState.status === "success" ? (
-              <div
-                ref={resultRef}
-                tabIndex={-1}
-                role="status"
-                className="notice-success p-5"
-              >
-                <h2 className="text-lg font-bold text-primary">
-                  作業予定を送信しました
-                </h2>
-                <p className="mt-2 text-base">
-                  {submitState.dates.map(displayDate).join("、")}
-                </p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => {
-                      setSubmitState({ status: "idle" });
-                      setContinuingInput(true);
-                      setCustomDate(false);
-                      setStep("date");
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                  >
-                    引き続き入力
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={resetForm}
-                  >
-                    新しく入力
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="submit-bar">
-                {submitState.status === "error" && (
-                  <div
-                    ref={resultRef}
-                    tabIndex={-1}
-                    role="alert"
-                    className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-red-700"
-                  >
-                    {submitState.message}
-                  </div>
-                )}
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold">
-                      {displaySelectedDates(form.dates, form.startDate, form.endDate)}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-600">
-                      合計 {totalCount} 人
-                    </p>
-                  </div>
-                  <button
-                    type="submit"
-                    className="btn btn-primary min-h-14 px-5"
-                    disabled={busy || !companyMaster || Boolean(companyError)}
-                  >
-                    {busy ? "送信中…" : "予定を送信"}
-                  </button>
-                </div>
-              </div>
-            ))}
+          {ready && <ScheduleSubmitStatus state={submitState} dates={form.dates} startDate={form.startDate} endDate={form.endDate} totalCount={totalCount} busy={busy} disabled={!companyMaster || Boolean(companyError)} resultRef={resultRef} onContinue={() => { setSubmitState({ status: "idle" }); setContinuingInput(true); setCustomDate(false); setStep("date"); window.scrollTo({ top: 0, behavior: "smooth" }); }} onReset={resetForm}/>} 
           {ready && (
             <>
               <p className="px-1 text-sm leading-6 text-slate-500">
