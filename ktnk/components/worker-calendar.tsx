@@ -19,7 +19,10 @@ const loadCalendarDetails = () => import("@/components/calendar-details");
 const CalendarDetails = dynamic(() => import("@/components/calendar-details").then((module) => module.CalendarDetails), { loading: () => <LoadingIndicator /> });
 const AdminScheduleEditor = dynamic(() => import("@/components/admin-schedule-editor").then((module) => module.AdminScheduleEditor));
 const NewEntrantEditor = dynamic(() => import("@/components/new-entrant-editor").then((module) => module.NewEntrantEditor));
-const EquipmentBoard = dynamic(() => import("@/components/equipment-board").then((module) => module.EquipmentBoard));
+const EquipmentBoard = dynamic(
+  () => import("@/components/equipment-board").then((module) => module.EquipmentBoard),
+  { loading: () => <LoadingIndicator label="予定を読み込み中…" className="min-h-32" /> },
+);
 const DETAILS_PREFERENCE_KEY = "calendar-supplement-expanded";
 
 function prefetchEquipment(date: string) {
@@ -32,10 +35,8 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
   const [company, setCompany] = useState("");
   const [scheduleTab, setScheduleTab] = useState<"company" | "equipment">("company");
   const [panelMinHeight, setPanelMinHeight] = useState(0);
-  const [equipmentOpened, setEquipmentOpened] = useState(false);
   function switchScheduleTab(tab: "company" | "equipment") {
     setPanelMinHeight(height => Math.max(height, selectedDaySectionRef.current?.getBoundingClientRect().height ?? 0));
-    if (tab === "equipment") setEquipmentOpened(true);
     setScheduleTab(tab);
   }
 
@@ -54,16 +55,6 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
   useEffect(() => {
     setDetailsExpanded(window.localStorage.getItem(DETAILS_PREFERENCE_KEY) !== "false");
   }, []);
-
-  useEffect(() => {
-    const browserWindow = window as typeof window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
-    if (browserWindow.requestIdleCallback) {
-      const id = browserWindow.requestIdleCallback(() => prefetchEquipment(selectedDate), { timeout: 1200 });
-      return () => browserWindow.cancelIdleCallback?.(id);
-    }
-    const id = window.setTimeout(() => prefetchEquipment(selectedDate), 250);
-    return () => window.clearTimeout(id);
-  }, [selectedDate]);
 
   const toggleDetails = useCallback(() => {
     setDetailsExpanded((current) => {
@@ -301,7 +292,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
             ))}
           </div>
         </div>
-        {equipmentOpened && <div hidden={scheduleTab !== "equipment"} role="tabpanel" id="schedule-panel-equipment" aria-labelledby="schedule-tab-equipment"><EquipmentBoard key={selectedDate} date={selectedDate} version={version} /></div>}
+        {scheduleTab === "equipment" && <div role="tabpanel" id="schedule-panel-equipment" aria-labelledby="schedule-tab-equipment"><EquipmentBoard key={selectedDate} date={selectedDate} version={version} /></div>}
         <div hidden={scheduleTab !== "company"} role="tabpanel" id="schedule-panel-company" aria-labelledby="schedule-tab-company">
         {detailMessage && <p role="alert" className="mb-3 notice-error">{detailMessage}</p>}
         {detailLoading ? <LoadingIndicator label="予定を読み込み中…" className="min-h-32" /> : detail.schedules.length === 0 && detail.entrants.length === 0 && detail.completions.length === 0 ? !detailMessage && <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className={`grid gap-2 transition-opacity sm:grid-cols-2 lg:grid-cols-3 ${loading ? "pointer-events-none opacity-60" : ""}`} aria-busy={loading}>

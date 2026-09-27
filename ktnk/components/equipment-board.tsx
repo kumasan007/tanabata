@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api-client";
 import type { EquipmentBoardData, EquipmentVehicle, TachiumaUnit } from "@/lib/equipment-board";
 import type { EquipmentType } from "@/lib/types";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
+import { LoadingIndicator } from "@/components/loading-indicator";
 
 const boardCache = new Map<string, EquipmentBoardData>();
 const boardCachedAt = new Map<string, number>();
@@ -152,7 +153,7 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
   return <div className="grid gap-4" aria-busy={disabled}>
     {data && !data.canEdit && <p className="text-xs text-slate-500">編集する場合は、サイト右上のアイコンからログインしてください。</p>}
     {message && <p className="notice-error" role="alert">{message}</p>}
-    {!data && message === "" && <div className="min-h-24" aria-label="機材情報を読み込み中" />}
+    {!data && message === "" && <LoadingIndicator label="予定を読み込み中…" className="min-h-32" />}
     {data && (["aerial_work_vehicle", "tachiuma"] as const).map(type => {
       const requests = data.requests.filter(row => row.equipment_type === type);
       const companies = [...new Set(requests.map(row => row.company))].sort((a, b) => a.localeCompare(b, "ja"));
