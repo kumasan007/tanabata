@@ -1,6 +1,6 @@
 "use client";
 
-import { monthRange, shiftMonth, datesInMonth } from "@/lib/calendar-dates";
+import { calendarApiParams, monthRange, shiftMonth, datesInMonth } from "@/lib/calendar-dates";
 import type { CalendarSummaryData } from "@/lib/calendar-summary";
 import { CalendarClientCache } from "@/lib/calendar-client-cache";
 import type { WorkCompletion } from "@/lib/work-completions";
@@ -104,7 +104,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
       setMessage(cached.warning ?? ""); setLoadedKey(requestKey);
       return;
     }
-    const params = new URLSearchParams({ from: range.from, to: range.to, view: "summary" });
+    const params = calendarApiParams({ from: range.from, to: range.to, view: "summary" });
     if (company) params.set("primaryCompany", company);
     setMessage("");
     Promise.all([
@@ -153,7 +153,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
       setDetailLoadedKey(detailKey);
       return () => controller.abort();
     }
-    const params = new URLSearchParams({ from: selectedDate, to: selectedDate });
+    const params = calendarApiParams({ from: selectedDate, to: selectedDate });
     if (company) params.set("primaryCompany", company);
     setDetailMessage("");
     apiFetch(`/api/calendar?${params}`, { cache: "no-store", signal: controller.signal })

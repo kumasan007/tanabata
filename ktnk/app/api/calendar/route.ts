@@ -11,7 +11,11 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const range = calendarQueryRange(url.searchParams.get("from"), url.searchParams.get("to"));
+    const range = calendarQueryRange(
+      url.searchParams.get("from"),
+      url.searchParams.get("to"),
+      url.searchParams.get("date"),
+    );
     const primaryCompany = url.searchParams.get("primaryCompany");
     if (!range) {
       return NextResponse.json({ error: "表示する日付の範囲を確認してください。" }, { status: 400 });

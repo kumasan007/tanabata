@@ -108,7 +108,7 @@ test("pagination preserves rows beyond the response limit and rejects incomplete
 
 test("calendar reads default to one month and reject reversed, invalid or oversized ranges", () => {
   const utils = load("lib/utils.ts");
-  const { calendarQueryRange } = load("lib/calendar-dates.ts", {}, {
+  const { calendarQueryRange, calendarApiParams } = load("lib/calendar-dates.ts", { URLSearchParams }, {
     "@/lib/utils": { ...utils, todayInTokyoString: () => "2026-09-16" },
   });
   assert.equal(JSON.stringify(calendarQueryRange(null, null)), JSON.stringify({ from: "2026-09-01", to: "2026-09-30" }));
@@ -116,6 +116,10 @@ test("calendar reads default to one month and reject reversed, invalid or oversi
   assert.equal(calendarQueryRange("2026-02-30", null), null);
   assert.equal(calendarQueryRange("2025-01-01", "2026-09-16"), null);
   assert.equal(calendarQueryRange("2026-09-16", null).to, "2026-09-30");
+  assert.equal(JSON.stringify(calendarQueryRange(null, null, "2026-09-29")), JSON.stringify({ from: "2026-09-29", to: "2026-09-29" }));
+  assert.equal(calendarQueryRange("2026-09-01", null, "2026-09-29"), null);
+  assert.equal(String(calendarApiParams({ from: "2026-09-29", to: "2026-09-29", kind: "schedule" })), "kind=schedule&date=2026-09-29");
+  assert.equal(String(calendarApiParams({ from: "2026-09-01", to: "2026-09-30", view: "summary" })), "view=summary&from=2026-09-01&to=2026-09-30");
 });
 
 test("entrant summary uses the DB aggregate and never hides database failures", async () => {

@@ -220,15 +220,16 @@ textarea {
 
 .equipment-grid th,
 .equipment-grid td {
-  border: 0.5px solid hsl(var(--table-grid));
+  /* Match the calendar grid: half-pixel/light borders disappear on bright displays. */
+  border: 1px solid hsl(var(--border));
 }
 .equipment-grid thead th,
 .equipment-grid th[scope="row"] {
-  border-color: hsl(var(--table-grid-strong));
+  border-color: hsl(var(--border));
 }
 .equipment-panel {
-  border-color: hsl(var(--table-grid-strong));
+  border-color: hsl(var(--border));
 }
 .equipment-section-header {
-  border-color: hsl(var(--table-grid));
+  border-color: hsl(var(--border));
 }

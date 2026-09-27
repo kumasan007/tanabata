@@ -17,10 +17,28 @@ export function datesInMonth(month: string) {
   return result.filter(isWorkingDate);
 }
 
-export function calendarQueryRange(from: string | null, to: string | null) {
+export function calendarQueryRange(from: string | null, to: string | null, date: string | null = null) {
+  if (date) {
+    if (from || to || !parseLocalDate(date)) return null;
+    return { from: date, to: date };
+  }
   if ((from && !parseLocalDate(from)) || (to && !parseLocalDate(to))) return null;
   const defaults = monthRange((from || to || todayInTokyoString()).slice(0, 7));
   const range = { from: from || defaults.from, to: to || defaults.to };
   if (range.from > range.to || Date.parse(range.to) - Date.parse(range.from) > 365 * 86_400_000) return null;
   return range;
+}
+
+export function calendarApiParams({ from, to, ...values }: {
+  from: string;
+  to: string;
+  [key: string]: string;
+}) {
+  const params = new URLSearchParams(values);
+  if (from === to) params.set("date", from);
+  else {
+    params.set("from", from);
+    params.set("to", to);
+  }
+  return params;
 }
