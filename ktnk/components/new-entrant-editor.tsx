@@ -5,6 +5,7 @@ import { Plus, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CompanyMaster, NewEntrantRecord } from "@/lib/types";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
+import { apiFetch } from "@/lib/api-client";
 
 const PRIMARY = "__primary__";
 const NEW_COMPANY = "__new_company__";
@@ -35,7 +36,7 @@ export function NewEntrantEditor({ record, master, onClose, onSaved }: { record:
     if (!remove && !nationalityStatus) { setError("日本籍か外国籍かを選択してください。"); return; }
     setBusy(true); setError("");
     try {
-      const response = await fetch(`/api/new-entrants${remove ? `?id=${encodeURIComponent(record.id)}` : ""}`, {
+      const response = await apiFetch(`/api/new-entrants${remove ? `?id=${encodeURIComponent(record.id)}` : ""}`, {
         method: remove ? "DELETE" : adding ? "POST" : "PATCH", headers: { "content-type": "application/json" },
         ...(!remove ? { body: JSON.stringify(adding
           ? { entryDate: record.entry_date, primaryCompany: record.primary_company, people: [{ secondaryCompany, personName, nationalityStatus, notes }] }

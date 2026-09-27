@@ -2,18 +2,29 @@ type ApiOptions = RequestInit & { dedupe?: boolean; timeoutMs?: number };
 
 type SharedRequest = { promise: Promise<Response>; controller: AbortController; users: number; settled: boolean };
 const inFlight = new Map<string, SharedRequest>();
+let memoryDeviceId = "";
+
+function getDeviceId() {
+  if (memoryDeviceId) return memoryDeviceId;
+  try {
+    memoryDeviceId = window.localStorage.getItem("ktnk-device-id") ?? "";
+    if (!memoryDeviceId) {
+      memoryDeviceId = crypto.randomUUID();
+      window.localStorage.setItem("ktnk-device-id", memoryDeviceId);
+    }
+  } catch {
+    // Storage may be unavailable in private or restricted browser modes.
+    memoryDeviceId = crypto.randomUUID();
+  }
+  return memoryDeviceId;
+}
 
 export function apiFetch(input: string, options: ApiOptions = {}) {
   const { dedupe = true, signal, timeoutMs, ...init } = options;
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
   if (method !== "GET" && typeof window !== "undefined") {
-    let device = window.localStorage.getItem("ktnk-device-id");
-    if (!device) {
-      device = crypto.randomUUID();
-      window.localStorage.setItem("ktnk-device-id", device);
-    }
-    headers.set("x-ktnk-device", device);
+    headers.set("x-ktnk-device", getDeviceId());
   }
   const requestInit = { ...init, headers };
   if (!dedupe || method !== "GET") return fetchWithTimeout(input, requestInit, signal, timeoutMs ?? 20_000);

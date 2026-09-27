@@ -3,10 +3,11 @@ import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { CopyButton } from "@/components/copy-button";
 import type { EquipmentFloorRow, EquipmentRequestInput, PreviousSchedule, ScheduleSubmitInput } from "@/lib/types";
+import { apiFetch } from "@/lib/api-client";
 type Equipment = Pick<ScheduleSubmitInput, "usesAerialWorkVehicle" | "aerialWorkVehicleNotes" | "aerialWorkVehicleRequests" | "usesFire" | "fireArea" | "usesTachiuma" | "tachiumaNotes" | "tachiumaRequests" | "workArea">;
 export function ScheduleEquipmentFields({ form, previous, onChange }: { form: Equipment; previous?: PreviousSchedule | null; onChange: (fields: Partial<ScheduleSubmitInput>) => void }) {
   const [floors, setFloors] = useState<EquipmentFloorRow[]>([]); const [floorError, setFloorError] = useState("");
-  useEffect(() => { void fetch("/api/equipment-floors").then(async response => { const body = await response.json(); if (!response.ok) throw new Error(); setFloors(body.floors ?? []); }).catch(() => setFloorError("フロア一覧を取得できませんでした。")); }, []);
+  useEffect(() => { void apiFetch("/api/equipment-floors").then(async response => { const body = await response.json(); if (!response.ok) throw new Error(); setFloors(body.floors ?? []); }).catch(() => setFloorError("フロア一覧を取得できませんでした。")); }, []);
   return <div className="space-y-2">
     <EquipmentRows label="高所作業車" enabled={form.usesAerialWorkVehicle} rows={form.aerialWorkVehicleRequests} floors={floors} previous={previous?.aerialWorkVehicleRequests} color="sky" onEnabled={(enabled) => onChange({ usesAerialWorkVehicle: enabled, aerialWorkVehicleNotes: "", aerialWorkVehicleRequests: enabled ? (form.aerialWorkVehicleRequests.length ? form.aerialWorkVehicleRequests : [{ floorId: "", count: null }]) : [] })} onChange={(rows) => onChange({ aerialWorkVehicleRequests: rows })}/>
     <EquipmentRows label="立ち馬" enabled={form.usesTachiuma} rows={form.tachiumaRequests} floors={floors} previous={previous?.tachiumaRequests} color="emerald" onEnabled={(enabled) => onChange({ usesTachiuma: enabled, tachiumaNotes: "", tachiumaRequests: enabled ? (form.tachiumaRequests.length ? form.tachiumaRequests : [{ floorId: "", count: null }]) : [] })} onChange={(rows) => onChange({ tachiumaRequests: rows })}/>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { isWorkingDate } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-client";
 
 export function ScheduleDateChange({ id, originalDate, onSaved, disabled = false, onBusyChange }: {
   id: string; originalDate: string; onSaved: () => void; disabled?: boolean; onBusyChange?: (busy: boolean) => void;
@@ -16,7 +17,7 @@ export function ScheduleDateChange({ id, originalDate, onSaved, disabled = false
     if (!isWorkingDate(date)) { setError("月曜〜土曜の日付を選択してください。"); return; }
     setBusy(true); onBusyChange?.(true); setError("");
     try {
-      const response = await fetch("/api/schedules/date", {
+      const response = await apiFetch("/api/schedules/date", {
         method: "PATCH", headers: { "content-type": "application/json" },
         body: JSON.stringify({ id, originalDate, date }),
       });

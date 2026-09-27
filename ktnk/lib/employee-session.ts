@@ -17,7 +17,7 @@ export function useEmployeeSession(initial = false) {
     const refresh = async () => {
       const current = ++revision;
       try {
-        const response = await apiFetch("/api/admin/session", { cache: "no-store", dedupe: false });
+        const response = await apiFetch("/api/admin/session", { cache: "no-store" });
         if (!response.ok) return;
         const body = await response.json();
         if (active && current === revision) setAuthenticated(body.authenticated === true);

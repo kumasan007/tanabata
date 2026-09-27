@@ -250,7 +250,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
         <label className="flex w-full min-w-0 items-center gap-2 sm:ml-auto sm:w-64"><span className="shrink-0 text-sm font-semibold text-slate-700">一次会社</span><select className="input h-10 min-h-0 px-3 text-base" disabled={completionBusy} value={company} onChange={(e) => setCompany(e.target.value)}><option value="">すべて</option>{master?.primaryCompanies.map((item) => <option key={item}>{item}</option>)}</select></label>
       </div>
       {message && <p role="alert" className="mt-4 notice-error">{message}</p>}
-      {!hasLoaded && loading ? <div className="panel mt-4 min-h-80"><LoadingIndicator label="カレンダーを読み込み中…" className="min-h-80" /></div> : <section className="panel relative mt-4 overflow-x-auto" aria-busy={loading}>
+      {!hasLoaded && loading ? <div className="mt-4 min-h-80"><LoadingIndicator label="カレンダーを読み込み中…" className="min-h-80" /></div> : <section className="panel relative mt-4 overflow-x-auto" aria-busy={loading}>
         {loading && <LoadingOverlay label="カレンダーを更新中…" />}
         <div className={`grid grid-cols-6 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500 ${company ? "min-w-[56rem]" : ""}`}>
           {weekdays.map((weekday, index) => <div key={weekday} className={`py-2 ${index === 5 ? "bg-sky-50/70 text-sky-700" : ""}`}>{weekday}</div>)}

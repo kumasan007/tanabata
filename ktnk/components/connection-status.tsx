@@ -17,7 +17,7 @@ export function ConnectionStatus() {
   if (online) return null;
   return (
     <div className="sticky top-0 z-50 bg-amber-100 px-3 py-2 text-center text-sm font-semibold text-amber-950" role="status">
-      オフラインです。入力内容はこの端末に一時保存され、通信が戻ってから送信できます。
+      オフラインです。通信が戻ってから送信してください。
     </div>
   );
 }

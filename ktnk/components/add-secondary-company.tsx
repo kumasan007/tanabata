@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 export function AddSecondaryCompany({ primaryCompany, onAdded }: {
   primaryCompany: string;
@@ -16,7 +17,7 @@ export function AddSecondaryCompany({ primaryCompany, onAdded }: {
     if (pending.current || !name.trim()) return;
     pending.current = true; setBusy(true); setError("");
     try {
-      const response = await fetch("/api/companies/secondary", {
+      const response = await apiFetch("/api/companies/secondary", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ primaryCompany, secondaryCompany: name }),
       });

@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { SiteHeader } from "@/components/site-header";
 import { ConnectionStatus } from "@/components/connection-status";
+import { NavigationFeedback } from "@/components/navigation-feedback";
+import { Suspense } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -23,6 +25,7 @@ export default function RootLayout({
     <html lang="ja" data-scroll-behavior="smooth">
       <body>
         <ConnectionStatus />
+        <Suspense fallback={null}><NavigationFeedback /></Suspense>
         <SiteHeader />
         {children}
       </body>

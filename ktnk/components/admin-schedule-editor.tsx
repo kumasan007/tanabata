@@ -9,6 +9,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { CompanyMaster, ScheduleSubmitInput, ScheduleWithSubcompanies } from "@/lib/types";
 import { CompanyPeopleFields } from "@/components/company-people-fields";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
+import { apiFetch } from "@/lib/api-client";
 
 export function AdminScheduleEditor({ schedule, master, onClose, onSaved, workerMode = false }: {
   schedule: ScheduleWithSubcompanies;
@@ -38,7 +39,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
       const endpoint = workerMode
         ? `/api/schedules${remove ? `?id=${encodeURIComponent(schedule.id)}` : ""}`
         : `/api/admin/schedules${remove ? `?id=${encodeURIComponent(schedule.id)}` : ""}`;
-      const response = await fetch(endpoint, {
+      const response = await apiFetch(endpoint, {
         method: remove ? "DELETE" : workerMode ? "POST" : "PATCH",
         headers: { "content-type": "application/json" },
         ...(!remove ? { body: JSON.stringify({ ...form, id: schedule.id, overwriteExisting: true }) } : {}),

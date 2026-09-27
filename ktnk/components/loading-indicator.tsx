@@ -12,7 +12,7 @@ export function LoadingIndicator({ label = "読み込み中…", className = "" 
 export function LoadingOverlay({ label = "読み込み中…" }: { label?: string }) {
   return (
     <div className="loading-reveal absolute inset-0 z-10 grid place-items-center bg-white/70 backdrop-blur-[1px]">
-      <LoadingIndicator label={label} className="rounded-md bg-white/90 px-4 py-3 shadow-sm" />
+      <LoadingIndicator label={label} className="px-4 py-3" />
     </div>
   );
 }

@@ -15,7 +15,6 @@ import type {
 } from "@/lib/types";
 import { isWorkingDate, workingDateOptions, shortDateWithWeekday, parseLocalDate } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
-import { clearScheduleDraft, loadScheduleDraft, saveScheduleDraft } from "@/lib/schedule-draft";
 import { displayScheduleDate as displayDate, displaySelectedScheduleDates as displaySelectedDates, emptyScheduleForm as emptyForm, previousScheduleQuestion as sourceQuestion } from "@/lib/schedule-form-model";
 import { ScheduleSubmitStatus, type ScheduleSubmitState as SubmitState } from "@/components/schedule-submit-status";
 
@@ -86,19 +85,6 @@ export function ScheduleForm({
   const [summaryVersion, setSummaryVersion] = useState(0);
   const submitting = useRef(false);
   const resultRef = useRef<HTMLDivElement>(null);
-  const draftLoaded = useRef(false);
-  const [draftRestored, setDraftRestored] = useState(false);
-  useEffect(() => {
-    const draft = loadScheduleDraft();
-    if (draft) {
-      setForm(draft.form);
-      setDraftRestored(true);
-    }
-    draftLoaded.current = true;
-  }, []);
-  useEffect(() => {
-    if (draftLoaded.current && submitState.status !== "success") saveScheduleDraft(form);
-  }, [form, submitState.status]);
   useEffect(() => {
     const clearRestoredInput = (event: PageTransitionEvent) => {
       const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
@@ -415,7 +401,6 @@ export function ScheduleForm({
     setStep("existing");
   }
   function resetForm() {
-    clearScheduleDraft();
     setEditingSchedule(null);
     setForm(emptyForm(""));
     setSecondaryWorkChoice(null);
@@ -530,7 +515,6 @@ export function ScheduleForm({
         status: "success",
         dates: body.dates ?? [form.startDate],
       });
-      clearScheduleDraft();
       setSummaryVersion((v) => v + 1);
       setSourceRetry((v) => v + 1);
     } catch (error) {
@@ -548,7 +532,6 @@ export function ScheduleForm({
     <div className="simple-schedule min-h-screen pb-32 sm:pb-8">
       <main className="mx-auto max-w-2xl px-3 py-5 sm:px-4">
         <h1 className="page-title">作業入力</h1>
-        {draftRestored && <div className="notice-success mb-4 flex flex-wrap items-center justify-between gap-3" role="status"><p>通信切断に備えて保存していた未送信の入力を復元しました。</p><button type="button" className="btn btn-secondary" onClick={() => { clearScheduleDraft(); setDraftRestored(false); setForm({ ...emptyForm(initialDate), primaryCompany: initialCompany }); setChoosingCompany(!initialCompany); setChoice(null); setStep(initialDate && initialCompany ? "existing" : "date"); }}>破棄して最初から</button></div>}
         {editingSchedule && overwriteExisting && editingSchedule.work_date === form.startDate && editingSchedule.primary_company === form.primaryCompany && (step === "edit" || step === "confirm") && <div className="mb-4"><ScheduleDateChange id={editingSchedule.id} originalDate={editingSchedule.work_date} onSaved={resetForm} disabled={busy} onBusyChange={setMovingDate} /></div>}
         <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           {(form.primaryCompany || form.startDate) && (
