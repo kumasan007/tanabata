@@ -6,13 +6,16 @@ import { SESSION_CHANGED } from "@/lib/employee-session";
 import { apiFetch } from "@/lib/api-client";
 import type { EquipmentBoardData, EquipmentVehicle, TachiumaUnit } from "@/lib/equipment-board";
 import type { EquipmentType } from "@/lib/types";
+import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const boardCache = new Map<string, EquipmentBoardData>();
+const boardCachedAt = new Map<string, number>();
 const boardRequests = new Map<string, Promise<EquipmentBoardData>>();
+const BOARD_CACHE_MS = 30_000;
 
 export function prefetchEquipmentBoard(date: string) {
   const cached = boardCache.get(date);
-  if (cached) return Promise.resolve(cached);
+  if (cached && Date.now() - (boardCachedAt.get(date) ?? 0) < BOARD_CACHE_MS) return Promise.resolve(cached);
   const pending = boardRequests.get(date);
   if (pending) return pending;
   const request = apiFetch(`/api/equipment-board?date=${date}`, { cache: "no-store" })
@@ -20,6 +23,7 @@ export function prefetchEquipmentBoard(date: string) {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
       boardCache.set(date, body);
+      boardCachedAt.set(date, Date.now());
       return body as EquipmentBoardData;
     })
     .finally(() => boardRequests.delete(date));
@@ -28,6 +32,7 @@ export function prefetchEquipmentBoard(date: string) {
 }
 
 export function EquipmentBoard({ date, version }: { date: string; version: number }) {
+  const { confirm, dialog: confirmationDialog } = useConfirmDialog();
   const [data, setData] = useState<EquipmentBoardData | null>(() => boardCache.get(date) ?? null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(() => !boardCache.has(date));
@@ -54,7 +59,7 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
     const current = ++sequence.current;
     setLoading(true);
     try {
-      boardCache.delete(date);
+      boardCache.delete(date); boardCachedAt.delete(date);
       const body = await prefetchEquipmentBoard(date);
       if (current === sequence.current) { boardCache.set(date, body); setData(body); }
     } catch (error) {
@@ -66,7 +71,9 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
     setMessage("");
     if (!boardCache.has(date)) void refresh();
     else setLoading(false);
-    const onFocus = () => { if (!pending.current) void refresh(); };
+    const onFocus = () => {
+      if (!pending.current && Date.now() - (boardCachedAt.get(date) ?? 0) >= BOARD_CACHE_MS) void refresh();
+    };
     window.addEventListener("focus", onFocus);
     window.addEventListener(SESSION_CHANGED, onFocus);
     const onStorage = (event: StorageEvent) => { if (event.key === SESSION_CHANGED) onFocus(); };
@@ -234,7 +241,8 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
         </form>}
       </div>}
     </dialog>
-    <dialog ref={tachiumaDialog} aria-labelledby="tachiuma-manager-title" className="w-[calc(100%-2rem)] max-w-lg rounded-xl border border-border p-5 backdrop:bg-black/40" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => setTachiumaEditor(null)}>{data && <div className="grid gap-4"><div className="flex items-center justify-between gap-2"><h3 id="tachiuma-manager-title" className="text-lg font-bold">立ち馬管理</h3>{tachiumaEditor===null&&<button type="button" className="btn btn-primary" disabled={disabled||!data.floors.length} onClick={()=>editTachiuma("new")}><Plus size={14}/>追加</button>}</div>{message&&<p role="alert" className="notice-error text-sm">{message}</p>}{tachiumaEditor===null?<><div className="grid max-h-[60vh] gap-2 overflow-y-auto">{data.tachiumas.map((item,index)=><div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-slate-400 p-2"><div><strong>{item.name}</strong><p className="text-xs text-slate-600">{data.floors.find(f=>f.id===item.floor_id)?.name??"不明"}{item.notes?` ／ ${item.notes}`:""}</p></div><div className="flex gap-1"><button type="button" className="h-11 w-11 rounded border border-slate-400" disabled={disabled||index===0} aria-label={`${item.name}を上へ`} onClick={()=>void reorderTachiuma(index,-1)}><ChevronUp className="mx-auto" size={16}/></button><button type="button" className="h-11 w-11 rounded border border-slate-400" disabled={disabled||index===data.tachiumas.length-1} aria-label={`${item.name}を下へ`} onClick={()=>void reorderTachiuma(index,1)}><ChevronDown className="mx-auto" size={16}/></button><button type="button" className="h-11 w-11 rounded border border-slate-400" aria-label={`${item.name}を編集`} onClick={()=>editTachiuma(item)}><Pencil className="mx-auto" size={15}/></button></div></div>)}</div><div className="flex justify-end"><button type="button" className="btn btn-secondary" onClick={()=>tachiumaDialog.current?.close()}>閉じる</button></div></>:<form className="grid gap-3" onSubmit={async event=>{event.preventDefault();const current=tachiumaEditor==="new"?null:tachiumaEditor;if(await save({action:"save_tachiuma",unitId:current?.id??null,name:tachiumaName,notes:tachiumaNotes,floorId:tachiumaFloor,expected:current?.updated_at??null},false))setTachiumaEditor(null);}}><label className="field"><span className="label">名称</span><input className="input" required maxLength={50} placeholder="例：LL、SM" value={tachiumaName} onChange={e=>setTachiumaName(e.target.value)}/></label><label className="field"><span className="label">フロア</span><select className="input" required value={tachiumaFloor} onChange={e=>setTachiumaFloor(e.target.value)}>{data.floors.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label><label className="field"><span className="label">スペック・備考（任意）</span><textarea className="textarea min-h-20" maxLength={500} placeholder="例：作業床高さ 1400mm" value={tachiumaNotes} onChange={e=>setTachiumaNotes(e.target.value)}/></label>{tachiumaEditor!=="new"&&<button type="button" className="justify-self-start text-sm font-semibold text-red-700 underline" disabled={disabled} onClick={async()=>{if(window.confirm(`${tachiumaEditor.name}を削除しますか？`)&&await save({action:"delete_tachiuma",unitId:tachiumaEditor.id,expected:tachiumaEditor.updated_at},false))setTachiumaEditor(null);}}>この立ち馬を削除</button>}<div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={()=>setTachiumaEditor(null)}>一覧へ戻る</button><button type="submit" className="btn btn-primary" disabled={disabled||!tachiumaName.trim()||!tachiumaFloor}>保存</button></div></form>}</div>}</dialog>
+    <dialog ref={tachiumaDialog} aria-labelledby="tachiuma-manager-title" className="w-[calc(100%-2rem)] max-w-lg rounded-xl border border-border p-5 backdrop:bg-black/40" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => setTachiumaEditor(null)}>{data && <div className="grid gap-4"><div className="flex items-center justify-between gap-2"><h3 id="tachiuma-manager-title" className="text-lg font-bold">立ち馬管理</h3>{tachiumaEditor===null&&<button type="button" className="btn btn-primary" disabled={disabled||!data.floors.length} onClick={()=>editTachiuma("new")}><Plus size={14}/>追加</button>}</div>{message&&<p role="alert" className="notice-error text-sm">{message}</p>}{tachiumaEditor===null?<><div className="grid max-h-[60vh] gap-2 overflow-y-auto">{data.tachiumas.map((item,index)=><div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-slate-400 p-2"><div><strong>{item.name}</strong><p className="text-xs text-slate-600">{data.floors.find(f=>f.id===item.floor_id)?.name??"不明"}{item.notes?` ／ ${item.notes}`:""}</p></div><div className="flex gap-1"><button type="button" className="h-11 w-11 rounded border border-slate-400" disabled={disabled||index===0} aria-label={`${item.name}を上へ`} onClick={()=>void reorderTachiuma(index,-1)}><ChevronUp className="mx-auto" size={16}/></button><button type="button" className="h-11 w-11 rounded border border-slate-400" disabled={disabled||index===data.tachiumas.length-1} aria-label={`${item.name}を下へ`} onClick={()=>void reorderTachiuma(index,1)}><ChevronDown className="mx-auto" size={16}/></button><button type="button" className="h-11 w-11 rounded border border-slate-400" aria-label={`${item.name}を編集`} onClick={()=>editTachiuma(item)}><Pencil className="mx-auto" size={15}/></button></div></div>)}</div><div className="flex justify-end"><button type="button" className="btn btn-secondary" onClick={()=>tachiumaDialog.current?.close()}>閉じる</button></div></>:<form className="grid gap-3" onSubmit={async event=>{event.preventDefault();const current=tachiumaEditor==="new"?null:tachiumaEditor;if(await save({action:"save_tachiuma",unitId:current?.id??null,name:tachiumaName,notes:tachiumaNotes,floorId:tachiumaFloor,expected:current?.updated_at??null},false))setTachiumaEditor(null);}}><label className="field"><span className="label">名称</span><input className="input" required maxLength={50} placeholder="例：LL、SM" value={tachiumaName} onChange={e=>setTachiumaName(e.target.value)}/></label><label className="field"><span className="label">フロア</span><select className="input" required value={tachiumaFloor} onChange={e=>setTachiumaFloor(e.target.value)}>{data.floors.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label><label className="field"><span className="label">スペック・備考（任意）</span><textarea className="textarea min-h-20" maxLength={500} placeholder="例：作業床高さ 1400mm" value={tachiumaNotes} onChange={e=>setTachiumaNotes(e.target.value)}/></label>{tachiumaEditor!=="new"&&<button type="button" className="justify-self-start text-sm font-semibold text-red-700 underline" disabled={disabled} onClick={async()=>{if(await confirm("立ち馬を削除しますか？",`${tachiumaEditor.name}を削除します。`,"削除する")&&await save({action:"delete_tachiuma",unitId:tachiumaEditor.id,expected:tachiumaEditor.updated_at},false))setTachiumaEditor(null);}}>この立ち馬を削除</button>}<div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={()=>setTachiumaEditor(null)}>一覧へ戻る</button><button type="submit" className="btn btn-primary" disabled={disabled||!tachiumaName.trim()||!tachiumaFloor}>保存</button></div></form>}</div>}</dialog>
     {info && <div className="fixed inset-x-4 bottom-4 z-[60] mx-auto max-w-sm rounded-lg border-2 border-sky-700 bg-white p-4 shadow-xl" role="status"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-sky-950">{info.title}</p><p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{info.notes}</p></div><button type="button" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-500" aria-label="備考を閉じる" onClick={() => setInfo(null)}><X size={18}/></button></div></div>}
+    {confirmationDialog}
   </div>;
 }

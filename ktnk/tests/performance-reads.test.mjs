@@ -10,7 +10,7 @@ function load(path, globals = {}, dependencies = {}) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   });
   runInNewContext(outputText, {
-    exports, Headers, AbortController, DOMException, Error, queueMicrotask, ...globals,
+    exports, Headers, AbortController, DOMException, Error, queueMicrotask, setTimeout, clearTimeout, ...globals,
     require: name => dependencies[name],
   });
   return exports;

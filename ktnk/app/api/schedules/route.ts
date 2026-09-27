@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { deleteSchedule, saveScheduleSubmission, ScheduleAlreadyExistsError } from "@/lib/schedule-service";
 import { scheduleSubmitSchema } from "@/lib/validation";
+import { mutationLimitResponse, publicMutationAllowed } from "@/lib/public-mutation-limit";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  if (!await publicMutationAllowed(request, "schedule-write")) return mutationLimitResponse();
   try {
     const body = await request.json();
     const parsed = scheduleSubmitSchema.safeParse(body);
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  if (!await publicMutationAllowed(request, "schedule-write")) return mutationLimitResponse();
   const id = z.string().uuid().safeParse(new URL(request.url).searchParams.get("id"));
   if (!id.success) return NextResponse.json({ error: "予定の指定が正しくありません。" }, { status: 400 });
   try {

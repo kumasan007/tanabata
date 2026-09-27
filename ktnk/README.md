@@ -57,6 +57,8 @@ anonキー運用では公開キーを知る利用者がSupabase REST APIを直�
 
 日次バックアップだけを保持し、変更ごとの操作履歴は保存しません。最新の `202609260001_security_and_simplification.sql` で操作履歴を削除し、ログイン回数制限とAPI経由のDBアクセスへ切り替えます。
 
+公開の予定操作に共有Wi-Fi対応の緩やかな回数制限を適用するには、`202609270001_public_mutation_limits.sql` も続けて実行してください。未ログイン時だけ端末ごと300回/10分、回線全体3,000回/10分で制限し、管理者ログイン中は制限しません。同じWi-Fiからの通常作業や大量整理を妨げないための高い上限です。
+
 登録時にDB列・制約のズレで失敗する場合は、既存データを削除してよければ `supabase/reset-schema.sql` をSupabase SQL Editorで実行します。`schedule_groups` と `schedule_subcompanies` を作り直します。
 
 管理画面は `ADMIN_PASSWORD` の共有パスワードでログインします。

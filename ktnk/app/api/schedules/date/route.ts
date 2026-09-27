@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createServerClient } from "@/lib/supabase";
 import { invalidateScheduleData } from "@/lib/data-cache";
 import { isWorkingDate } from "@/lib/utils";
+import { mutationLimitResponse, publicMutationAllowed } from "@/lib/public-mutation-limit";
 
 const schema = z.object({
   id: z.string().uuid(),
@@ -11,6 +12,7 @@ const schema = z.object({
 });
 
 export async function PATCH(request: Request) {
+  if (!await publicMutationAllowed(request, "schedule-write")) return mutationLimitResponse();
   try {
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });

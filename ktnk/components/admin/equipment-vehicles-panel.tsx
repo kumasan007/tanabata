@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import type { EquipmentBoardData, EquipmentVehicle } from "@/lib/equipment-board";
+import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 
 function localDate() {
   const now = new Date();
@@ -11,6 +12,7 @@ function localDate() {
 }
 
 export function EquipmentVehiclesPanel() {
+  const { confirm, dialog } = useConfirmDialog();
   const [data, setData] = useState<EquipmentBoardData | null>(null);
   const [editing, setEditing] = useState<EquipmentVehicle | "new" | null>(null);
   const [number, setNumber] = useState("");
@@ -64,7 +66,8 @@ export function EquipmentVehiclesPanel() {
       <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setEditing(null)}>取消</button><button type="submit" className="btn btn-primary" disabled={busy || !number.trim() || !floorId}>保存</button></div>
     </form>}
     {!data && !message && <p className="py-6 text-center text-slate-600">読み込み中…</p>}
-    <div className="grid gap-2">{data?.vehicles.map((vehicle, index) => <div key={vehicle.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-slate-500 bg-white p-3"><div className="min-w-0"><p className="font-bold">{vehicle.vehicle_number}号車</p><p className="text-sm text-slate-600">{data.floors.find(floor => floor.id === vehicle.floor_id)?.name ?? "不明"}{vehicle.notes ? ` ／ ${vehicle.notes}` : ""}</p></div><div className="flex flex-wrap justify-end gap-1"><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy || index === 0} aria-label={`${vehicle.vehicle_number}号車を上へ`} onClick={() => void reorder(index, -1)}><ChevronUp size={17}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy || index === data.vehicles.length - 1} aria-label={`${vehicle.vehicle_number}号車を下へ`} onClick={() => void reorder(index, 1)}><ChevronDown size={17}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy} aria-label={`${vehicle.vehicle_number}号車を編集`} onClick={() => open(vehicle)}><Pencil size={16}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0 text-red-700" disabled={busy} aria-label={`${vehicle.vehicle_number}号車を削除`} onClick={() => { if (window.confirm(`${vehicle.vehicle_number}号車を削除しますか？`)) void mutate({ action: "delete_vehicle", vehicleId: vehicle.id, expected: vehicle.updated_at }); }}><Trash2 size={16}/></button></div></div>)}</div>
+    <div className="grid gap-2">{data?.vehicles.map((vehicle, index) => <div key={vehicle.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-slate-500 bg-white p-3"><div className="min-w-0"><p className="font-bold">{vehicle.vehicle_number}号車</p><p className="text-sm text-slate-600">{data.floors.find(floor => floor.id === vehicle.floor_id)?.name ?? "不明"}{vehicle.notes ? ` ／ ${vehicle.notes}` : ""}</p></div><div className="flex flex-wrap justify-end gap-1"><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy || index === 0} aria-label={`${vehicle.vehicle_number}号車を上へ`} onClick={() => void reorder(index, -1)}><ChevronUp size={17}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy || index === data.vehicles.length - 1} aria-label={`${vehicle.vehicle_number}号車を下へ`} onClick={() => void reorder(index, 1)}><ChevronDown size={17}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy} aria-label={`${vehicle.vehicle_number}号車を編集`} onClick={() => open(vehicle)}><Pencil size={16}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0 text-red-700" disabled={busy} aria-label={`${vehicle.vehicle_number}号車を削除`} onClick={async () => { if (await confirm("号車を削除しますか？", `${vehicle.vehicle_number}号車を削除します。`, "削除する")) void mutate({ action: "delete_vehicle", vehicleId: vehicle.id, expected: vehicle.updated_at }); }}><Trash2 size={16}/></button></div></div>)}</div>
     {data?.vehicles.length === 0 && <p className="py-6 text-center text-slate-600">登録された号車はありません。</p>}
+    {dialog}
   </section>;
 }

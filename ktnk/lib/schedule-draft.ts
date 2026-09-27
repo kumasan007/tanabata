@@ -3,7 +3,7 @@ import type { ScheduleSubmitInput } from "@/lib/types";
 const KEY = "ktnk:schedule-draft:v1";
 const MAX_AGE = 2 * 60 * 60_000;
 
-export function loadScheduleDraft(): ScheduleSubmitInput | null {
+export function loadScheduleDraft(): { form: ScheduleSubmitInput; savedAt: number } | null {
   if (typeof window === "undefined") return null;
   try {
     const saved = JSON.parse(sessionStorage.getItem(KEY) ?? "null") as {
@@ -14,7 +14,7 @@ export function loadScheduleDraft(): ScheduleSubmitInput | null {
       sessionStorage.removeItem(KEY);
       return null;
     }
-    return saved.form;
+    return { form: saved.form, savedAt: saved.savedAt };
   } catch {
     sessionStorage.removeItem(KEY);
     return null;

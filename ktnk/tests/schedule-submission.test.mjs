@@ -22,6 +22,7 @@ test("date move preserves content and rejects collisions and stale dates", async
       "@/lib/supabase": { createServerClient: () => ({ from(table) { assert.equal(table, "schedule_groups"); return query; } }) },
       "@/lib/data-cache": { invalidateScheduleData: () => { invalidated = true; } },
       "@/lib/utils": loadModule("lib/utils.ts"),
+      "@/lib/public-mutation-limit": { publicMutationAllowed: async () => true, mutationLimitResponse: () => ({ status: 429 }) },
     });
     const response = await PATCH({ json: async () => ({ id, originalDate: "2026-09-25", date: "2026-09-26", workContent: "must not overwrite" }) });
     assert.equal(response.status, outcome === "saved" ? 200 : 409);
