@@ -27,16 +27,16 @@ export function apiFetch(input: string, options: ApiOptions = {}) {
     headers.set("x-ktnk-device", getDeviceId());
   }
   const requestInit = { ...init, headers };
-  if (!dedupe || method !== "GET") return fetchWithTimeout(input, requestInit, signal, timeoutMs ?? 20_000);
+  if (!dedupe || method !== "GET") return fetchWithTimeout(input, requestInit, signal, timeoutMs ?? (method === "GET" ? 60_000 : 20_000), method === "GET");
   if (signal?.aborted) return Promise.reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
   const sortedHeaders = [...headers.entries()].sort(([a], [b]) => a.localeCompare(b));
-  const key = JSON.stringify([input, { ...init, method: "GET", headers: sortedHeaders }]);
+  const key = JSON.stringify([input, { ...init, method: "GET", headers: sortedHeaders }, timeoutMs ?? 60_000]);
   let shared = inFlight.get(key);
   if (!shared) {
     const controller = new AbortController();
     const entry: SharedRequest = {
       controller, users: 0, settled: false,
-      promise: fetch(input, { ...requestInit, signal: controller.signal }).finally(() => {
+      promise: fetchWithTimeout(input, requestInit, controller.signal, timeoutMs ?? 60_000, true).finally(() => {
         entry.settled = true;
         if (inFlight.get(key) === entry) inFlight.delete(key);
       }),
@@ -72,15 +72,23 @@ export function apiFetch(input: string, options: ApiOptions = {}) {
   });
 }
 
-function fetchWithTimeout(input: string, init: RequestInit, signal: AbortSignal | null | undefined, timeoutMs: number) {
+async function fetchWithTimeout(input: string, init: RequestInit, signal: AbortSignal | null | undefined, timeoutMs: number, readBody = false) {
   const controller = new AbortController();
   const abort = () => controller.abort(signal?.reason);
   signal?.addEventListener("abort", abort, { once: true });
-  const timer = globalThis.setTimeout(() => controller.abort(new DOMException("通信がタイムアウトしました。入力内容を確認して、もう一度送信してください。", "TimeoutError")), timeoutMs);
-  return fetch(input, { ...init, signal: controller.signal }).finally(() => {
+  if (signal?.aborted) abort();
+  const timer = globalThis.setTimeout(() => controller.abort(new DOMException(readBody ? "通信に時間がかかっています。接続を確認して再読み込みしてください。" : "通信がタイムアウトしました。入力内容を確認して、もう一度送信してください。", "TimeoutError")), timeoutMs);
+  try {
+    const response = await fetch(input, { ...init, signal: controller.signal });
+    // Keep the deadline active until the JSON body has arrived, not only the headers.
+    if (readBody) await response.clone().arrayBuffer();
+    return response;
+  } catch (error) {
+    throw controller.signal.aborted ? controller.signal.reason : error;
+  } finally {
     globalThis.clearTimeout(timer);
     signal?.removeEventListener("abort", abort);
-  });
+  }
 }
 
 export async function apiJson<T>(input: string, options?: ApiOptions): Promise<T> {

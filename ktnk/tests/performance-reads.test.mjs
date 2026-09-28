@@ -88,6 +88,39 @@ test("a shared network failure rejects both callers and permits retry", async ()
   await retry;
 });
 
+test("stalled shared GET times out for both callers and a retry starts a new request", async () => {
+  const { apiFetch, requests } = transport();
+  const a = apiFetch("/api/equipment-board", { timeoutMs: 20 });
+  const b = apiFetch("/api/equipment-board", { timeoutMs: 20 });
+  assert.equal(requests.length, 1);
+  await Promise.all([assert.rejects(a, { name: "TimeoutError" }), assert.rejects(b, { name: "TimeoutError" })]);
+  assert.equal(requests[0].init.signal.aborted, true);
+  const retry = apiFetch("/api/equipment-board", { timeoutMs: 1000 });
+  assert.equal(requests.length, 2);
+  requests[1].resolve(new Response('{"vehicles":[]}'));
+  assert.deepEqual(await (await retry).json(), { vehicles: [] });
+});
+
+test("GET deadline includes a stalled response body after headers arrive", async () => {
+  const api = load("lib/api-client.ts", { fetch: async (_url, init) => {
+    const stream = new ReadableStream({ start(controller) {
+      controller.enqueue(new TextEncoder().encode('{"vehicles":'));
+      init.signal.addEventListener("abort", () => controller.error(init.signal.reason), { once: true });
+    } });
+    return new Response(stream);
+  } });
+  await assert.rejects(api.apiFetch("/api/equipment-board", { timeoutMs: 20 }), { name: "TimeoutError" });
+});
+
+test("a slow GET that finishes within the deadline succeeds", async () => {
+  const { apiFetch, requests } = transport();
+  const pending = apiFetch("/api/calendar", { timeoutMs: 1000 });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  requests[0].resolve(new Response('{"schedules":[]}'));
+  assert.deepEqual(await (await pending).json(), { schedules: [] });
+  assert.equal(requests[0].init.signal.aborted, false);
+});
+
 test("pagination preserves rows beyond the response limit and rejects incomplete results", async () => {
   const { readAllRows } = load("lib/read-all-rows.ts");
   const rows = Array.from({ length: 1201 }, (_, id) => ({ id }));

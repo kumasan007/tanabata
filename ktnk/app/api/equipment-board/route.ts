@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertAdminFromRequest, createAdminServerClient } from "@/lib/supabase";
+import { orderByFloor } from "@/lib/equipment-order";
 import { resolveVehicleAssignments } from "@/lib/equipment-assignment";
 
 export async function GET(request: Request) {
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
       });
     return NextResponse.json({
       canEdit: assertAdminFromRequest(request), floors: results[0].data,
-      vehicles: resolveVehicleAssignments(results[1].data ?? [], requests, results[3].data ?? [], date), tachiumas: results[4].data ?? [], requests,
+      vehicles: orderByFloor(resolveVehicleAssignments(results[1].data ?? [], requests, results[3].data ?? [], date), results[0].data ?? []), tachiumas: orderByFloor(results[4].data ?? [], results[0].data ?? []), requests,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";

@@ -6,7 +6,7 @@ export type AdminTab = "companies" | "floors" | "vehicles" | "tachiumas" | "back
 const tabs = [
   { key: "companies", label: "協力会社一覧", icon: Building2 },
   { key: "floors", label: "設備フロア管理", icon: Layers3 },
-  { key: "vehicles", label: "高所作業車管理", icon: Forklift },
+  { key: "vehicles", label: "高車管理", icon: Forklift },
   { key: "tachiumas", label: "立ち馬管理", icon: Scaling },
   { key: "backups", label: "バックアップ", icon: DatabaseBackup },
 ] as const;

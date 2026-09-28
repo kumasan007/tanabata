@@ -249,7 +249,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
         </div>
         <label className="flex w-full min-w-0 items-center gap-2 sm:ml-auto sm:w-64"><span className="shrink-0 text-sm font-semibold text-slate-700">一次会社</span><select className="input h-10 min-h-0 px-3 text-base" disabled={completionBusy} value={company} onChange={(e) => setCompany(e.target.value)}><option value="">すべて</option>{master?.primaryCompanies.map((item) => <option key={item}>{item}</option>)}</select></label>
       </div>
-      {message && <p role="alert" className="mt-4 notice-error">{message}</p>}
+      {message && <div className="mt-4 notice-error"><p role="alert">{message}</p><button type="button" className="btn btn-secondary mt-2" disabled={loading || completionBusy} onClick={() => { setMasterRefreshVersion(value => value + 1); setVersion(value => value + 1); }}>再読み込み</button></div>}
       {!hasLoaded && loading ? <div className="mt-4 min-h-80"><LoadingIndicator label="カレンダーを読み込み中…" className="min-h-80" /></div> : <section className="panel relative mt-4 overflow-x-auto" aria-busy={loading}>
         {loading && <LoadingOverlay label="カレンダーを更新中…" />}
         <div className={`grid grid-cols-6 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500 ${company ? "min-w-[56rem]" : ""}`}>
@@ -294,7 +294,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
         </div>
         {scheduleTab === "equipment" && <div role="tabpanel" id="schedule-panel-equipment" aria-labelledby="schedule-tab-equipment"><EquipmentBoard key={selectedDate} date={selectedDate} version={version} /></div>}
         <div hidden={scheduleTab !== "company"} role="tabpanel" id="schedule-panel-company" aria-labelledby="schedule-tab-company">
-        {detailMessage && <p role="alert" className="mb-3 notice-error">{detailMessage}</p>}
+        {detailMessage && <div className="mb-3 notice-error"><p role="alert">{detailMessage}</p><button type="button" className="btn btn-secondary mt-2" disabled={loading || detailLoading || completionBusy} onClick={() => setVersion(value => value + 1)}>再読み込み</button></div>}
         {detailLoading ? <LoadingIndicator label="予定を読み込み中…" className="min-h-32" /> : detail.schedules.length === 0 && detail.entrants.length === 0 && detail.completions.length === 0 ? !detailMessage && <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className={`grid gap-2 transition-opacity sm:grid-cols-2 lg:grid-cols-3 ${loading ? "pointer-events-none opacity-60" : ""}`} aria-busy={loading}>
           <CalendarDetails detail={detail} master={master} selectedDate={selectedDate} isToday={selectedDate === initialDate} completionBusy={completionBusy} detailsExpanded={detailsExpanded}
             onEdit={setEditing} onEditEntrant={setEditingEntrant} onCompletion={saveCompletion} />

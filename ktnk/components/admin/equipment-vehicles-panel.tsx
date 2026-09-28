@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from "lucide-react";
-import { SortableList } from "@/components/ui/sortable-list";
+import { Plus } from "lucide-react";
+import { EquipmentManagementRow } from "@/components/equipment-management-row";
+import { EquipmentOrderList } from "@/components/equipment-order-list";
 import { apiFetch } from "@/lib/api-client";
 import type { EquipmentBoardData, EquipmentVehicle } from "@/lib/equipment-board";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -44,31 +45,33 @@ export function EquipmentVehiclesPanel() {
       const response = await apiFetch("/api/equipment-board", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
-      setEditing(null); await refresh();
-    } catch (error) { setData(data); setMessage(error instanceof Error ? error.message : "更新できませんでした。"); }
+      setEditing(null); await refresh(); return true;
+    } catch (error) { setMessage(error instanceof Error ? error.message : "更新できませんでした。"); return false; }
     finally { setBusy(false); }
   }
 
-  async function reorder(index: number, direction: -1 | 1) {
-    if (!data) return;
-    const vehicles = [...data.vehicles]; const target = index + direction;
-    if (target < 0 || target >= vehicles.length) return;
-    [vehicles[index], vehicles[target]] = [vehicles[target], vehicles[index]];
-    setData({ ...data, vehicles });
-    await mutate({ action: "reorder_vehicles", vehicleIds: vehicles.map(vehicle => vehicle.id) });
-  }
 
-  return <section className="panel grid gap-4 p-4">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold">高所作業車管理</h2><p className="text-sm text-slate-600">号車、現在のフロア、備考、表示順を管理します。</p></div><button type="button" className="btn btn-primary" disabled={busy || !data?.floors.length} onClick={() => open("new")}><Plus size={16}/>号車を追加</button></div>
-    {message && <p className="notice-error text-sm" role="alert">{message}</p>}
-    {editing && <form className="grid gap-3 rounded-md border-2 border-slate-500 bg-slate-50 p-4 sm:grid-cols-2" onSubmit={event => { event.preventDefault(); const current = editing === "new" ? null : editing; void mutate({ action: "save_vehicle", vehicleId: current?.id ?? null, number, notes, floorId, company: current?.assigned_company ?? null, expected: current?.updated_at ?? null }); }}>
+  async function retry() {
+    setBusy(true); setMessage("");
+    try { await refresh(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "取得できませんでした。"); }
+    finally { setBusy(false); }
+  }
+  return <section className="panel grid gap-2 p-3 sm:p-4">
+    <h2 className="text-lg font-bold">高車管理</h2>
+    {message && <div className="notice-error text-sm"><p role="alert">{message}</p><button type="button" className="btn btn-secondary mt-2" disabled={busy} onClick={() => void retry()}>再読み込み</button></div>}
+    {editing && <form className="grid gap-3 rounded-md border border-slate-300 bg-slate-50 p-3 sm:grid-cols-2" onSubmit={event => { event.preventDefault(); const current = editing === "new" ? null : editing; void mutate({ action: "save_vehicle", vehicleId: current?.id ?? null, number, notes, floorId, company: current?.assigned_company ?? null, expected: current?.updated_at ?? null }); }}>
       <label className="field"><span className="label">号車番号</span><input className="input" required maxLength={30} value={number} onChange={event => setNumber(event.target.value)}/></label>
       <label className="field"><span className="label">現在のフロア</span><select className="input" required value={floorId} onChange={event => setFloorId(event.target.value)}>{data?.floors.map(floor => <option key={floor.id} value={floor.id}>{floor.name}</option>)}</select></label>
       <label className="field sm:col-span-2"><span className="label">備考（任意）</span><textarea className="textarea min-h-20" maxLength={500} value={notes} onChange={event => setNotes(event.target.value)}/></label>
-      <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setEditing(null)}>取消</button><button type="submit" className="btn btn-primary" disabled={busy || !number.trim() || !floorId}>保存</button></div>
+      {editing !== "new" && <button type="button" className="justify-self-start text-xs text-red-700 underline sm:col-span-2" disabled={busy} onClick={async () => { if (await confirm("号車を削除しますか？", `${editing.vehicle_number}号車を削除します。`, "削除する")) void mutate({ action: "delete_vehicle", vehicleId: editing.id, expected: editing.updated_at }); }}>この号車を削除</button>}
+      <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setEditing(null)}>取消</button><button type="submit" className="btn btn-primary min-h-9 px-3 py-1 text-sm" disabled={busy || !number.trim() || !floorId}>保存</button></div>
     </form>}
     {!data && !message && <p className="py-6 text-center text-slate-600">読み込み中…</p>}
-    <SortableList ids={data?.vehicles.map(row => row.id) ?? []} busy={busy} onReorder={ids => { if (!data) return; setData({ ...data, vehicles: ids.map(id => data.vehicles.find(row => row.id === id)!) }); void mutate({ action: "reorder_vehicles", vehicleIds: ids }); }}>{data?.vehicles.map((vehicle, index) => <div key={vehicle.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-slate-500 bg-white p-3"><div className="min-w-0"><p className="font-bold">{vehicle.vehicle_number}号車</p><p className="text-sm text-slate-600">{data.floors.find(floor => floor.id === vehicle.floor_id)?.name ?? "不明"}{vehicle.notes ? ` ／ ${vehicle.notes}` : ""}</p></div><div className="flex flex-wrap justify-end gap-1"><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy || index === 0} aria-label={`${vehicle.vehicle_number}号車を上へ`} onClick={() => void reorder(index, -1)}><ChevronUp size={17}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy || index === data.vehicles.length - 1} aria-label={`${vehicle.vehicle_number}号車を下へ`} onClick={() => void reorder(index, 1)}><ChevronDown size={17}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy} aria-label={`${vehicle.vehicle_number}号車を編集`} onClick={() => open(vehicle)}><Pencil size={16}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0 text-red-700" disabled={busy} aria-label={`${vehicle.vehicle_number}号車を削除`} onClick={async () => { if (await confirm("号車を削除しますか？", `${vehicle.vehicle_number}号車を削除します。`, "削除する")) void mutate({ action: "delete_vehicle", vehicleId: vehicle.id, expected: vehicle.updated_at }); }}><Trash2 size={16}/></button></div></div>)}</SortableList>
+    <EquipmentOrderList rows={data?.vehicles ?? []} floors={data?.floors ?? []} busy={busy} disabled={editing !== null}
+      action={<button type="button" className="btn btn-primary min-h-9 px-2.5 py-1 text-xs" disabled={busy || editing !== null || !data?.floors.length} onClick={() => open("new")}><Plus size={14}/>追加</button>}
+      onMove={(vehicle, floorId) => mutate({ action: "move_vehicle", vehicleId: vehicle.id, floorId, company: null, date: localDate(), expected: vehicle.updated_at })}
+      onReorder={ids => mutate({ action: "reorder_vehicles", vehicleIds: ids })}>{data?.vehicles.map(vehicle => <EquipmentManagementRow key={vehicle.id} name={`${vehicle.vehicle_number}号車`} notes={vehicle.notes} disabled={busy || editing !== null} onEdit={() => open(vehicle)}/>)}</EquipmentOrderList>
     {data?.vehicles.length === 0 && <p className="py-6 text-center text-slate-600">登録された号車はありません。</p>}
     {dialog}
   </section>;
