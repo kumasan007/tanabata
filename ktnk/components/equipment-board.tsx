@@ -205,7 +205,7 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
                   return <td className="min-w-24 p-1.5 hover:bg-sky-50" key={company} onDrop={type === "aerial_work_vehicle" ? event => assignDropped(event, floor.id, company) : undefined}>
                     {(requested > 0 || assigned.length > 0) && <div className={`rounded px-2 py-1.5 ${shortage ? "border border-warning bg-warning-subtle" : "border border-transparent"}`}>
                       {requested > 0 && <span className="text-xs text-slate-600">{type === "aerial_work_vehicle" ? "希望 " : ""}{requested}台</span>}
-                      {assigned.length > 0 && <div className="mt-1 flex flex-wrap justify-center gap-1">{assigned.map(vehicle => vehicleChip(vehicle))}</div>}
+                      {assigned.length > 0 && <div className="mt-1 flex flex-wrap justify-center gap-1">{assigned.map(vehicle => vehicleChip(vehicle, true))}</div>}
                     </div>}
                   </td>;
                 })}
