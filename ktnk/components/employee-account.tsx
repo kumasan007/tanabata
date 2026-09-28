@@ -31,6 +31,7 @@ export function EmployeeAccount() {
       if (!response.ok) throw new Error(body.error || "操作できませんでした。");
       notifySessionChanged(!authenticated);
       setPassword(""); dialog.current?.close();
+      window.location.reload();
     } catch (error) { setMessage(error instanceof Error ? error.message : "接続できませんでした。"); }
     finally { pending.current = false; setBusy(false); }
   }

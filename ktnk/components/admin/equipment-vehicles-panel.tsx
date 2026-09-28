@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { SortableList } from "@/components/ui/sortable-list";
 import { apiFetch } from "@/lib/api-client";
 import type { EquipmentBoardData, EquipmentVehicle } from "@/lib/equipment-board";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -44,7 +45,7 @@ export function EquipmentVehiclesPanel() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
       setEditing(null); await refresh();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "更新できませんでした。"); }
+    } catch (error) { setData(data); setMessage(error instanceof Error ? error.message : "更新できませんでした。"); }
     finally { setBusy(false); }
   }
 
@@ -53,6 +54,7 @@ export function EquipmentVehiclesPanel() {
     const vehicles = [...data.vehicles]; const target = index + direction;
     if (target < 0 || target >= vehicles.length) return;
     [vehicles[index], vehicles[target]] = [vehicles[target], vehicles[index]];
+    setData({ ...data, vehicles });
     await mutate({ action: "reorder_vehicles", vehicleIds: vehicles.map(vehicle => vehicle.id) });
   }
 
@@ -66,7 +68,7 @@ export function EquipmentVehiclesPanel() {
       <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setEditing(null)}>取消</button><button type="submit" className="btn btn-primary" disabled={busy || !number.trim() || !floorId}>保存</button></div>
     </form>}
     {!data && !message && <p className="py-6 text-center text-slate-600">読み込み中…</p>}
-    <div className="grid gap-2">{data?.vehicles.map((vehicle, index) => <div key={vehicle.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-slate-500 bg-white p-3"><div className="min-w-0"><p className="font-bold">{vehicle.vehicle_number}号車</p><p className="text-sm text-slate-600">{data.floors.find(floor => floor.id === vehicle.floor_id)?.name ?? "不明"}{vehicle.notes ? ` ／ ${vehicle.notes}` : ""}</p></div><div className="flex flex-wrap justify-end gap-1"><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy || index === 0} aria-label={`${vehicle.vehicle_number}号車を上へ`} onClick={() => void reorder(index, -1)}><ChevronUp size={17}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy || index === data.vehicles.length - 1} aria-label={`${vehicle.vehicle_number}号車を下へ`} onClick={() => void reorder(index, 1)}><ChevronDown size={17}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy} aria-label={`${vehicle.vehicle_number}号車を編集`} onClick={() => open(vehicle)}><Pencil size={16}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0 text-red-700" disabled={busy} aria-label={`${vehicle.vehicle_number}号車を削除`} onClick={async () => { if (await confirm("号車を削除しますか？", `${vehicle.vehicle_number}号車を削除します。`, "削除する")) void mutate({ action: "delete_vehicle", vehicleId: vehicle.id, expected: vehicle.updated_at }); }}><Trash2 size={16}/></button></div></div>)}</div>
+    <SortableList ids={data?.vehicles.map(row => row.id) ?? []} busy={busy} onReorder={ids => { if (!data) return; setData({ ...data, vehicles: ids.map(id => data.vehicles.find(row => row.id === id)!) }); void mutate({ action: "reorder_vehicles", vehicleIds: ids }); }}>{data?.vehicles.map((vehicle, index) => <div key={vehicle.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-slate-500 bg-white p-3"><div className="min-w-0"><p className="font-bold">{vehicle.vehicle_number}号車</p><p className="text-sm text-slate-600">{data.floors.find(floor => floor.id === vehicle.floor_id)?.name ?? "不明"}{vehicle.notes ? ` ／ ${vehicle.notes}` : ""}</p></div><div className="flex flex-wrap justify-end gap-1"><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy || index === 0} aria-label={`${vehicle.vehicle_number}号車を上へ`} onClick={() => void reorder(index, -1)}><ChevronUp size={17}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy || index === data.vehicles.length - 1} aria-label={`${vehicle.vehicle_number}号車を下へ`} onClick={() => void reorder(index, 1)}><ChevronDown size={17}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0" disabled={busy} aria-label={`${vehicle.vehicle_number}号車を編集`} onClick={() => open(vehicle)}><Pencil size={16}/></button><button type="button" className="btn btn-secondary h-11 w-11 p-0 text-red-700" disabled={busy} aria-label={`${vehicle.vehicle_number}号車を削除`} onClick={async () => { if (await confirm("号車を削除しますか？", `${vehicle.vehicle_number}号車を削除します。`, "削除する")) void mutate({ action: "delete_vehicle", vehicleId: vehicle.id, expected: vehicle.updated_at }); }}><Trash2 size={16}/></button></div></div>)}</SortableList>
     {data?.vehicles.length === 0 && <p className="py-6 text-center text-slate-600">登録された号車はありません。</p>}
     {dialog}
   </section>;

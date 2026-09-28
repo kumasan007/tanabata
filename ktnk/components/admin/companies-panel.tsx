@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { GripVertical, LoaderCircle, Pencil, Plus, Trash2 } from "lucide-react";
+import { LoaderCircle, Pencil, Plus, Trash2 } from "lucide-react";
+import { SortableList } from "@/components/ui/sortable-list";
 import { CopyValue } from "@/components/copy-value";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -29,11 +30,6 @@ export function CompaniesPanel({ refreshVersion = 0 }: {
     const [companyFetching, setCompanyFetching] = useState(true);
     const [companyLoading, setCompanyLoading] = useState(false);
     const [companyOrderDirty, setCompanyOrderDirty] = useState(false);
-    const [draggedCompany, setDraggedCompany] = useState<{
-        primary: string;
-        rowId?: string;
-    } | null>(null);
-    const [dropTarget, setDropTarget] = useState<string | null>(null);
     const companyGroups = useMemo<CompanyGroup[]>(() => {
         const groups = new Map<string, CompanyMasterRow[]>();
         for (const row of companyRows) {
@@ -60,41 +56,6 @@ export function CompaniesPanel({ refreshVersion = 0 }: {
             throw new Error(body.error ?? "会社マスタの取得に失敗しました。");
         }
         setCompanyRows(body.rows ?? []);
-    }
-    function clearCompanyDrag() {
-        setDraggedCompany(null);
-        setDropTarget(null);
-    }
-    function dropCompany(primary: string, rowId?: string) {
-        const source = draggedCompany;
-        clearCompanyDrag();
-        if (!source || companyLoading || editingCompanyId)
-            return;
-        if (source.rowId) {
-            if (source.primary !== primary || !rowId || source.rowId === rowId)
-                return;
-            const group = companyGroups.find((item) => item.primaryCompany === primary);
-            if (!group)
-                return;
-            const rows = [...group.rows];
-            const from = rows.findIndex((row) => row.id === source.rowId);
-            const to = rows.findIndex((row) => row.id === rowId);
-            if (from < 0 || to < 0)
-                return;
-            rows.splice(to, 0, rows.splice(from, 1)[0]);
-            stageCompanyOrder(companyGroups.flatMap((item) => item === group ? rows : item.rows));
-        }
-        else {
-            if (rowId || source.primary === primary)
-                return;
-            const groups = [...companyGroups];
-            const from = groups.findIndex((item) => item.primaryCompany === source.primary);
-            const to = groups.findIndex((item) => item.primaryCompany === primary);
-            if (from < 0 || to < 0)
-                return;
-            groups.splice(to, 0, groups.splice(from, 1)[0]);
-            stageCompanyOrder(groups.flatMap((item) => item.rows));
-        }
     }
     async function addCompanyMaster() {
         const primaryCompany = newPrimaryCompany.trim();
@@ -303,7 +264,7 @@ export function CompaniesPanel({ refreshVersion = 0 }: {
             </button>
           </div>
 
-          <div className="hidden items-center justify-between gap-3 sm:flex">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-slate-600">
               つまみをドラッグして並び替え、最後に一度だけ保存してください。二次会社は同じ一次会社内で移動できます。
             </p>
@@ -318,25 +279,8 @@ export function CompaniesPanel({ refreshVersion = 0 }: {
             {!companyFetching && companyGroups.length === 0 && (<p className="py-6 text-center text-slate-500">
                 協力会社がまだ登録されていません
               </p>)}
-            {companyGroups.map((group) => (<div key={group.primaryCompany} className={`grid grid-cols-1 items-start gap-1 rounded-md sm:grid-cols-[auto_minmax(0,1fr)] ${dropTarget === group.primaryCompany ? "ring-2 ring-emerald-500 bg-emerald-50" : ""}`} onDragOver={(event) => {
-                if (!draggedCompany || draggedCompany.rowId || companyLoading || editingCompanyId)
-                    return;
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-                setDropTarget(group.primaryCompany);
-            }} onDrop={(event) => {
-                if (!draggedCompany || draggedCompany.rowId)
-                    return;
-                event.preventDefault();
-                void dropCompany(group.primaryCompany);
-            }}>
-                <div className="hidden h-10 items-center gap-1 sm:flex">
-                  <span className="inline-flex h-9 w-5 items-center justify-center cursor-grab text-slate-400 active:cursor-grabbing" draggable={!companyLoading && !editingCompanyId} title="ドラッグして一次会社を並び替え" onDragStart={(event) => {
-                event.dataTransfer.setData("text/plain", group.primaryCompany);
-                event.dataTransfer.effectAllowed = "move";
-                setDraggedCompany({ primary: group.primaryCompany });
-            }} onDragEnd={clearCompanyDrag}><GripVertical size={18} aria-hidden="true"/></span>
-                </div>
+            <SortableList ids={companyGroups.map(group => group.primaryCompany)} busy={companyLoading} disabled={Boolean(editingCompanyId || editingPrimaryRoles)} onReorder={ids => stageCompanyOrder(ids.flatMap(id => companyGroups.find(group => group.primaryCompany === id)!.rows))}>
+            {companyGroups.map((group) => (<div key={group.primaryCompany} className="min-w-0">
               <details className="min-w-0 flex-1 rounded-md border border-border bg-white">
                 <summary className="flex min-h-10 cursor-pointer items-center rounded-md px-2.5 py-1.5 font-semibold text-slate-900 marker:text-emerald-700">
                   <span className="min-w-0 flex-1 flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -396,20 +340,8 @@ export function CompaniesPanel({ refreshVersion = 0 }: {
                           キャンセル
                         </button>
                     </div>)}
-                  {group.rows.map((row) => (<div key={row.id} className={`grid items-center gap-2 rounded-md bg-slate-50 px-2 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto] ${dropTarget === row.id ? "ring-2 ring-emerald-500" : ""}`} onDragOver={(event) => {
-                    if (!draggedCompany?.rowId || draggedCompany.primary !== group.primaryCompany || companyLoading || editingCompanyId)
-                        return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    event.dataTransfer.dropEffect = "move";
-                    setDropTarget(row.id);
-                }} onDrop={(event) => {
-                    if (!draggedCompany?.rowId)
-                        return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    void dropCompany(group.primaryCompany, row.id);
-                }}>
+                  <SortableList ids={group.rows.map(row => row.id)} disabled={Boolean(editingCompanyId || editingPrimaryRoles)} onReorder={ids => stageCompanyOrder(companyGroups.flatMap(item => item === group ? ids.map(id => group.rows.find(row => row.id === id)!) : item.rows))}>
+                  {group.rows.map((row) => (<div key={row.id} className="grid items-center gap-2 rounded-md bg-slate-50 px-2 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto]">
                       {editingCompanyId === row.id ? (<div className="grid gap-2">
                           <label className="field">
                             <span className="label">二次会社</span>
@@ -421,14 +353,6 @@ export function CompaniesPanel({ refreshVersion = 0 }: {
                           </p>
                         </div>)}
                       <div className="flex flex-wrap items-center gap-2">
-                        {group.rows.length > 1 ? (<div className="hidden items-center gap-2 sm:flex">
-                            <span className="inline-flex h-9 w-5 items-center justify-center cursor-grab text-slate-400 active:cursor-grabbing" draggable={!companyLoading && !editingCompanyId} title="ドラッグして二次会社を並び替え" onDragStart={(event) => {
-                        event.stopPropagation();
-                        event.dataTransfer.setData("text/plain", row.id);
-                        event.dataTransfer.effectAllowed = "move";
-                        setDraggedCompany({ primary: group.primaryCompany, rowId: row.id });
-                    }} onDragEnd={clearCompanyDrag}><GripVertical size={18} aria-hidden="true"/></span>
-                          </div>) : null}
                         {editingCompanyId === row.id ? (<>
                             <button type="button" className="btn btn-primary" disabled={companyLoading} onClick={() => void saveCompanyMaster()}>
                               保存
@@ -446,9 +370,11 @@ export function CompaniesPanel({ refreshVersion = 0 }: {
                           </>)}
                       </div>
                     </div>))}
+                  </SortableList>
                 </div>
               </details>
               </div>))}
+            </SortableList>
           </div>
         </section>{confirmationDialog}</>;
 }

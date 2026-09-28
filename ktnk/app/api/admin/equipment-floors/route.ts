@@ -19,7 +19,30 @@ export async function POST(request: Request) {
 }
 export async function PATCH(request: Request) {
   if (!assertAdminFromRequest(request)) return NextResponse.json({ error: "ログインが必要です。" }, { status: 401 });
-  const body = await request.json(); const id = idSchema.safeParse(body.id); const name = nameSchema.safeParse(body.name);
+  const body = await request.json();
+  if (body.orderedIds !== undefined) {
+    const parsed = z.array(idSchema).min(1).safeParse(body.orderedIds);
+    if (!parsed.success || new Set(parsed.data).size !== parsed.data.length) {
+      return NextResponse.json({ error: "並び順の指定が正しくありません。" }, { status: 400 });
+    }
+    const db = createAdminServerClient();
+    const { data: floors, error: readError } = await db.from("equipment_floor_master").select("id,name,sort_order");
+    if (readError) return NextResponse.json({ error: readError.message }, { status: 500 });
+    const byId = new Map((floors ?? []).map(floor => [floor.id, floor]));
+    if (parsed.data.length !== byId.size || parsed.data.some(id => !byId.has(id))) {
+      return NextResponse.json({ error: "フロア一覧が更新されています。再読み込みしてください。" }, { status: 409 });
+    }
+    const changed = parsed.data.flatMap((id, sort_order) => {
+      const floor = byId.get(id)!;
+      return floor.sort_order === sort_order ? [] : [{ ...floor, sort_order }];
+    });
+    if (changed.length) {
+      const { error } = await db.from("equipment_floor_master").upsert(changed, { onConflict: "id" });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
+  }
+  const id = idSchema.safeParse(body.id); const name = nameSchema.safeParse(body.name);
   if (!id.success || !name.success) return NextResponse.json({ error: "入力内容が正しくありません。" }, { status: 400 });
   const { error } = await createAdminServerClient().from("equipment_floor_master").update({ name: name.data }).eq("id", id.data);
   if (error) return NextResponse.json({ error: error.code === "23505" ? "登録済みのフロアです。" : error.message }, { status: 409 });
