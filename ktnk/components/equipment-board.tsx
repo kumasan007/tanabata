@@ -8,6 +8,7 @@ import type { EquipmentBoardData, EquipmentVehicle, TachiumaUnit } from "@/lib/e
 import type { EquipmentType } from "@/lib/types";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import { SortableList } from "@/components/ui/sortable-list";
+import { TooltipButton } from "@/components/ui/tooltip-button";
 import { LoadingIndicator, LoadingOverlay } from "@/components/loading-indicator";
 
 const boardCache = new Map<string, EquipmentBoardData>();
@@ -152,7 +153,7 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
     </span>;
   }
   function tachiumaChip(item: TachiumaUnit) {
-    return <button key={item.id} type="button" className="min-h-9 rounded border border-primary/60 bg-muted px-2 py-1 font-bold text-foreground" aria-label={`${item.name}${item.notes ? `、${item.notes}` : ""}`} onMouseEnter={() => item.notes && setInfo({ title: item.name, notes: item.notes })} onMouseLeave={() => setInfo(null)} onFocus={() => item.notes && setInfo({ title: item.name, notes: item.notes })} onBlur={() => setInfo(null)} onClick={() => item.notes && setInfo(current => current?.title === item.name ? null : { title: item.name, notes: item.notes! })}>{item.name}</button>;
+    return <TooltipButton key={item.id} label={item.name} description={item.notes} className="min-h-9 rounded border border-primary/60 bg-muted px-2 py-1 font-bold text-foreground" />;
   }
   return <div className="grid gap-4" aria-busy={disabled}>
     {data && !data.canEdit && <p className="text-xs text-slate-500">編集する場合は、サイト右上のアイコンからログインしてください。</p>}
