@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   try {
     const db = createAdminServerClient();
     const results = await Promise.all([
-      db.from("equipment_floor_master").select("id,name,sort_order").order("sort_order", { ascending: false }),
+      db.from("equipment_floor_master").select("id,name,sort_order").order("sort_order").order("name"),
       db.from("aerial_work_vehicles").select("id,vehicle_number,notes,sort_order,floor_id,assigned_company,updated_at").order("sort_order").order("vehicle_number"),
       db.from("schedule_equipment_requests").select("equipment_type,floor_id,requested_count,schedule_groups!inner(primary_company,work_date)").eq("schedule_groups.work_date", date),
       db.from("equipment_movements").select("vehicle_id,to_floor_id,to_company,work_date,moved_at").not("work_date", "is", null).lte("work_date", date).order("work_date", { ascending: false }).order("moved_at", { ascending: false }),

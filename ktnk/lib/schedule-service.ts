@@ -373,7 +373,12 @@ function normalizeScheduleRow(
   return {
     ...group,
     subcompanies: (schedule_subcompanies ?? []).sort((a, b) => a.sort_order - b.sort_order),
-    equipmentRequests: (schedule_equipment_requests ?? []).sort((a, b) => a.sort_order - b.sort_order),
+    equipmentRequests: (schedule_equipment_requests ?? []).sort((a, b) => {
+      const aFloor = Array.isArray(a.equipment_floor_master) ? a.equipment_floor_master[0] : a.equipment_floor_master;
+      const bFloor = Array.isArray(b.equipment_floor_master) ? b.equipment_floor_master[0] : b.equipment_floor_master;
+      return (aFloor?.sort_order ?? Number.MAX_SAFE_INTEGER) - (bFloor?.sort_order ?? Number.MAX_SAFE_INTEGER)
+        || a.sort_order - b.sort_order;
+    }),
   };
 }
 
