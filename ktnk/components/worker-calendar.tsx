@@ -13,25 +13,26 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { IconButton } from "@/components/ui/icon-button";
+import { EquipmentBoard, prefetchEquipmentBoard } from "@/components/equipment-board";
+import type { EquipmentBoardData } from "@/lib/equipment-board";
 import type { CalendarSchedule, CalendarEntrant, CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 
 const loadCalendarDetails = () => import("@/components/calendar-details");
 const CalendarDetails = dynamic(() => import("@/components/calendar-details").then((module) => module.CalendarDetails), { loading: () => <LoadingIndicator /> });
 const AdminScheduleEditor = dynamic(() => import("@/components/admin-schedule-editor").then((module) => module.AdminScheduleEditor));
 const NewEntrantEditor = dynamic(() => import("@/components/new-entrant-editor").then((module) => module.NewEntrantEditor));
-const EquipmentBoard = dynamic(
-  () => import("@/components/equipment-board").then((module) => module.EquipmentBoard),
-  { loading: () => <LoadingIndicator label="予定を読み込み中…" className="min-h-32" /> },
-);
 const DETAILS_PREFERENCE_KEY = "calendar-supplement-expanded";
 
 function prefetchEquipment(date: string) {
-  void import("@/components/equipment-board").then(module => module.prefetchEquipmentBoard(date)).catch(() => undefined);
+  void prefetchEquipmentBoard(date).catch(() => undefined);
 }
 
-export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: { initialDate: string; initialMaster: CompanyMaster; initialSummary?: CalendarSummaryData | null }) {
+type DayDetail = { date: string; schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[] };
+
+export function WorkerCalendar({ initialDate, initialMaster, initialSummary, initialDetail, initialEquipment }: { initialDate: string; initialMaster: CompanyMaster; initialSummary?: CalendarSummaryData | null; initialDetail?: DayDetail | null; initialEquipment?: EquipmentBoardData | null }) {
   const [month, setMonth] = useState(initialDate.slice(0, 7));
-  const [selectedDate, setSelectedDate] = useState(isWorkingDate(initialDate) ? initialDate : datesInMonth(initialDate.slice(0, 7)).find((date) => date > initialDate) ?? datesInMonth(initialDate.slice(0, 7))[0]);
+  const initialSelectedDate = isWorkingDate(initialDate) ? initialDate : datesInMonth(initialDate.slice(0, 7)).find((date) => date > initialDate) ?? datesInMonth(initialDate.slice(0, 7))[0];
+  const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
   const [company, setCompany] = useState("");
   const [scheduleTab, setScheduleTab] = useState<"company" | "equipment">("company");
   const [panelMinHeight, setPanelMinHeight] = useState(0);
@@ -45,8 +46,8 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
   const [schedules, setSchedules] = useState<CalendarSchedule[]>(initialSummary?.schedules ?? []);
   const [entrants, setEntrants] = useState<CalendarEntrant[]>(initialSummary?.entrants ?? []);
   const [completions, setCompletions] = useState<WorkCompletion[]>(initialSummary?.completions ?? []);
-  const [detail, setDetail] = useState<{ date: string; schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[] }>({ date: "", schedules: [], entrants: [], completions: [] });
-  const [detailLoadedKey, setDetailLoadedKey] = useState("");
+  const [detail, setDetail] = useState<DayDetail>(initialDetail ?? { date: "", schedules: [], entrants: [], completions: [] });
+  const [detailLoadedKey, setDetailLoadedKey] = useState(initialDetail ? JSON.stringify([initialDetail.date, "", 0]) : "");
   const [detailMessage, setDetailMessage] = useState("");
   const summaryCache = useRef(new CalendarClientCache<{ schedules: CalendarSchedule[]; entrants: CalendarEntrant[]; completions: WorkCompletion[]; warning?: string }>());
   const detailCache = useRef(new CalendarClientCache<{ schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[]; warning?: string }>());
@@ -292,7 +293,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary }: {
             ))}
           </div>
         </div>
-        {scheduleTab === "equipment" && <div role="tabpanel" id="schedule-panel-equipment" aria-labelledby="schedule-tab-equipment"><EquipmentBoard key={selectedDate} date={selectedDate} version={version} /></div>}
+        <div hidden={scheduleTab !== "equipment"} role="tabpanel" id="schedule-panel-equipment" aria-labelledby="schedule-tab-equipment"><EquipmentBoard key={selectedDate} date={selectedDate} version={version} initialData={selectedDate === initialSelectedDate ? initialEquipment : null} /></div>
         <div hidden={scheduleTab !== "company"} role="tabpanel" id="schedule-panel-company" aria-labelledby="schedule-tab-company">
         {detailMessage && <div className="mb-3 notice-error"><p role="alert">{detailMessage}</p><button type="button" className="btn btn-secondary mt-2" disabled={loading || detailLoading || completionBusy} onClick={() => setVersion(value => value + 1)}>再読み込み</button></div>}
         {detailLoading ? <LoadingIndicator label="予定を読み込み中…" className="min-h-32" /> : detail.schedules.length === 0 && detail.entrants.length === 0 && detail.completions.length === 0 ? !detailMessage && <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className={`grid gap-2 transition-opacity sm:grid-cols-2 lg:grid-cols-3 ${loading ? "pointer-events-none opacity-60" : ""}`} aria-busy={loading}>
