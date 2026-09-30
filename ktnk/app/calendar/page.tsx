@@ -7,18 +7,14 @@ import { monthRange } from "@/lib/calendar-dates";
 import { getSchedules } from "@/lib/schedule-service";
 import { getNewEntrants } from "@/lib/new-entrants";
 import { getWorkCompletions } from "@/lib/work-completions";
-import { getEquipmentBoardData } from "@/lib/equipment-board";
-import { adminCookieName, verifyAdminSessionToken } from "@/lib/admin-auth";
 import { connection } from "next/server";
-import { cookies } from "next/headers";
 
 export default async function CalendarPage() {
   await connection();
   const initialDate = todayInTokyoString();
   const range = monthRange(initialDate.slice(0, 7));
   const selectedDate = isWorkingDate(initialDate) ? initialDate : datesInMonth(initialDate.slice(0, 7)).find(date => date > initialDate) ?? datesInMonth(initialDate.slice(0, 7))[0];
-  const canEdit = verifyAdminSessionToken((await cookies()).get(adminCookieName())?.value);
-  const [initialMaster, initialSummary, initialDetail, initialEquipment] = await Promise.all([
+  const [initialMaster, initialSummary, initialDetail] = await Promise.all([
     getCompanyMaster(),
     getCalendarSummary(range.from, range.to).catch(() => null),
     Promise.all([
@@ -26,7 +22,6 @@ export default async function CalendarPage() {
       getNewEntrants(selectedDate, selectedDate),
       getWorkCompletions(selectedDate, selectedDate),
     ]).then(([schedules, entrants, completions]) => ({ date: selectedDate, schedules, entrants, completions })).catch(() => null),
-    getEquipmentBoardData(selectedDate, canEdit).catch(() => null),
   ]);
-  return <WorkerCalendar initialDate={initialDate} initialMaster={initialMaster} initialSummary={initialSummary} initialDetail={initialDetail} initialEquipment={initialEquipment} />;
+  return <WorkerCalendar initialDate={initialDate} initialMaster={initialMaster} initialSummary={initialSummary} initialDetail={initialDetail} />;
 }

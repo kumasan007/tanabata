@@ -9,6 +9,7 @@ import { LoadingIndicator } from "@/components/loading-indicator";
 import type { NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 import { shortDateWithWeekday } from "@/lib/utils";
 import { calendarApiParams } from "@/lib/calendar-dates";
+import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type Records = { schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[] };
 
@@ -25,6 +26,20 @@ export function ExistingEntryCheck({ date, dates, company, kind, onNew, onOtherD
   const [result, setResult] = useState<Records | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { confirm, dialog: confirmationDialog } = useConfirmDialog();
+
+  async function removeSchedule(row: ScheduleWithSubcompanies) {
+    if (!await confirm("この予定を削除しますか？", `${shortDateWithWeekday(row.work_date)}「${row.primary_company}」\n人数内訳や設備情報も削除されます。`, "削除する")) return;
+    setDeletingId(row.id); setError("");
+    try {
+      const response = await apiFetch(`/api/schedules?id=${encodeURIComponent(row.id)}`, { method: "DELETE" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "予定を削除できませんでした。");
+      onOtherDate();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "予定を削除できませんでした。"); }
+    finally { setDeletingId(null); }
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -50,13 +65,15 @@ export function ExistingEntryCheck({ date, dates, company, kind, onNew, onOtherD
   if (!result || !exists) return <LoadingIndicator label="入力済みの内容を確認しています…" />;
   const existingDates = schedules.map((row) => row.work_date);
 
-  return <section className="panel space-y-4 p-5">
+  return <><section className="panel space-y-4 p-5">
     <p className="text-lg font-bold">{existingDates.map(shortDateWithWeekday).join("、")}には、すでに作業が入力されています。</p>
     {schedules.map((row) => <article key={row.id} className="space-y-2 rounded-md bg-slate-50 p-4">
-      <p className="font-semibold text-primary">{shortDateWithWeekday(row.work_date)}</p>
       <SchedulePreview primaryCompany={row.primary_company} schedule={scheduleToCopyData(row)!} notes={row.notes} hideZeroSecondaryCompanies />
-      <ScheduleDateChange id={row.id} originalDate={row.work_date} onSaved={onOtherDate} />
-      {requested.length === 1 && <button type="button" className="btn btn-primary w-full" onClick={() => onSchedule?.(row)}>内容を変更する</button>}
+      {requested.length === 1 && <div className="grid grid-cols-2 gap-2 [&>div]:col-span-2">
+        <ScheduleDateChange id={row.id} originalDate={row.work_date} onSaved={onOtherDate} disabled={deletingId === row.id} />
+        <button type="button" className="btn btn-primary w-full" disabled={deletingId === row.id} onClick={() => onSchedule?.(row)}>内容を変更</button>
+      </div>}
+      {requested.length === 1 && <button type="button" className="btn btn-secondary w-full text-red-700" disabled={deletingId === row.id} onClick={() => void removeSchedule(row)}>{deletingId === row.id ? "削除中…" : "予定を削除"}</button>}
     </article>)}
     {entrants.map((row) => <article key={row.id} className="space-y-2 rounded-md bg-slate-50 p-4">
       <p className="font-semibold">{row.secondary_company || "一次会社所属"}・{row.person_count}人</p>
@@ -67,6 +84,6 @@ export function ExistingEntryCheck({ date, dates, company, kind, onNew, onOtherD
       <button type="button" className="btn btn-secondary w-full" onClick={() => onSkip?.(existingDates)}>入力済みの日を除いて登録</button>
     </div>}
     {exists && kind === "entrant" && <button type="button" className="btn btn-secondary w-full" onClick={onNew}>同じ日に別の所属会社を入力</button>}
-    {requested.length === 1 && <button type="button" className="btn btn-secondary w-full" onClick={onOtherDate}>別の日付を入力</button>}
-  </section>;
+    {requested.length === 1 && <button type="button" className="btn btn-secondary w-full" onClick={onOtherDate}>別の日付に新しく入力</button>}
+  </section>{confirmationDialog}</>;
 }

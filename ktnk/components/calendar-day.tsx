@@ -37,21 +37,21 @@ export const CalendarDay = memo(function CalendarDay({ date, selected, company, 
                 const area = row.work_area;
                 const content = row.work_content;
                 const tachiumaNotes = parseTachiumaValue(row.tachiuma_notes).area;
-                return <div key={row.id} className="mt-1 min-w-0 rounded bg-emerald-100 p-1 text-[10px] leading-4 text-emerald-950 sm:text-xs">
+                return <div key={row.id} className="mt-1 min-w-0 border-t border-slate-200 pt-1 text-xs leading-4 text-slate-800 sm:text-sm sm:leading-5">
                   <div className="mb-1 flex items-center justify-end gap-0.5">
                     {row.uses_aerial_work_vehicle && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-600 font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
                     {row.uses_tachiuma && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 font-bold leading-none text-white shadow-sm" title="立ち馬使用あり">立</span>}
                     {row.uses_fire && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-600 font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
                     <button type="button" className="rounded p-0.5 hover:bg-white/70" disabled={loading || completionBusy} onClick={(event) => { event.stopPropagation(); onEdit(row); }} aria-label={`${date}の予定を編集`} title="予定を編集"><Pencil size={12} aria-hidden="true" /></button>
                   </div>
-                  <p className="font-bold">{totalWorkers(row)}人</p>
+                  <p className="font-bold text-emerald-900">{totalWorkers(row)}人</p>
                   <p className="truncate" title={area ?? ""}>{area || "エリア未入力"}</p>
                   <p className="line-clamp-2 break-words" title={content ?? ""}>{content || "作業内容未入力"}</p>
                   {row.uses_tachiuma && tachiumaNotes && <p className="truncate font-semibold text-emerald-800" title={tachiumaNotes}>立ち馬：{tachiumaNotes}</p>}
                   {row.uses_fire && row.fire_area && <p className="truncate font-semibold text-rose-800" title={row.fire_area}>火気：{row.fire_area}</p>}
                 </div>;
               })}
-              {company && dayEntrants.length > 0 && <div className="mt-1 min-w-0 rounded bg-amber-100 p-1 text-[10px] leading-4 text-amber-900 sm:text-xs"><p className="truncate font-semibold">新規入場</p><p>{entrantStats.companies}社・{entrantStats.people}人</p></div>}
+              {company && dayEntrants.length > 0 && <div className="mt-1 min-w-0 rounded border border-orange-300 bg-orange-200 p-1 text-[10px] leading-4 text-orange-950 sm:text-xs"><p className="truncate font-bold">新規入場</p><p>{entrantStats.companies}社・{entrantStats.people}人</p></div>}
             </div>;
 
 });

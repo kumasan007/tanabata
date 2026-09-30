@@ -27,16 +27,16 @@ export function apiFetch(input: string, options: ApiOptions = {}) {
     headers.set("x-ktnk-device", getDeviceId());
   }
   const requestInit = { ...init, headers };
-  if (!dedupe || method !== "GET") return fetchWithTimeout(input, requestInit, signal, timeoutMs ?? (method === "GET" ? 60_000 : 20_000), method === "GET");
+  if (!dedupe || method !== "GET") return fetchWithTimeout(input, requestInit, signal, timeoutMs ?? (method === "GET" ? 5_000 : 20_000), method === "GET");
   if (signal?.aborted) return Promise.reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
   const sortedHeaders = [...headers.entries()].sort(([a], [b]) => a.localeCompare(b));
-  const key = JSON.stringify([input, { ...init, method: "GET", headers: sortedHeaders }, timeoutMs ?? 60_000]);
+  const key = JSON.stringify([input, { ...init, method: "GET", headers: sortedHeaders }, timeoutMs ?? 5_000]);
   let shared = inFlight.get(key);
   if (!shared) {
     const controller = new AbortController();
     const entry: SharedRequest = {
       controller, users: 0, settled: false,
-      promise: fetchWithTimeout(input, requestInit, controller.signal, timeoutMs ?? 60_000, true).finally(() => {
+      promise: fetchWithTimeout(input, requestInit, controller.signal, timeoutMs ?? 5_000, true).finally(() => {
         entry.settled = true;
         if (inFlight.get(key) === entry) inFlight.delete(key);
       }),

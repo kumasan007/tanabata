@@ -28,7 +28,7 @@ export function ScheduleDateChange({ id, originalDate, onSaved, disabled = false
     finally { setBusy(false); onBusyChange?.(false); }
   }
 
-  if (!open) return <button type="button" className="btn btn-secondary" disabled={disabled} onClick={() => setOpen(true)}>日付だけ変更</button>;
+  if (!open) return <button type="button" className="btn btn-secondary w-full" disabled={disabled} onClick={() => setOpen(true)}>日付を変更</button>;
   return <div className="min-w-0 space-y-2 rounded-md border border-slate-300 p-3">
     <p className="text-sm">登録済みの内容をそのままに、{originalDate} の予定を移動します。</p>
     <label className="field min-w-0"><span className="label">変更先の日付</span><input type="date" className="input min-w-0 max-w-full" value={date} disabled={busy || disabled} onChange={(event) => setDate(event.target.value)} /></label>

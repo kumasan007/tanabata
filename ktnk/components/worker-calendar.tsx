@@ -6,7 +6,7 @@ import { CalendarClientCache } from "@/lib/calendar-client-cache";
 import type { WorkCompletion } from "@/lib/work-completions";
 import { LoadingIndicator, LoadingOverlay } from "@/components/loading-indicator";
 import { CalendarDay } from "@/components/calendar-day";
-import { isWorkingDate } from "@/lib/utils";
+import { addDays, isWorkingDate, parseLocalDate, toDateString } from "@/lib/utils";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -14,7 +14,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { IconButton } from "@/components/ui/icon-button";
 import { EquipmentBoard, prefetchEquipmentBoard } from "@/components/equipment-board";
-import type { EquipmentBoardData } from "@/lib/equipment-board";
 import type { CalendarSchedule, CalendarEntrant, CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 
 const loadCalendarDetails = () => import("@/components/calendar-details");
@@ -29,7 +28,7 @@ function prefetchEquipment(date: string) {
 
 type DayDetail = { date: string; schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[] };
 
-export function WorkerCalendar({ initialDate, initialMaster, initialSummary, initialDetail, initialEquipment }: { initialDate: string; initialMaster: CompanyMaster; initialSummary?: CalendarSummaryData | null; initialDetail?: DayDetail | null; initialEquipment?: EquipmentBoardData | null }) {
+export function WorkerCalendar({ initialDate, initialMaster, initialSummary, initialDetail }: { initialDate: string; initialMaster: CompanyMaster; initialSummary?: CalendarSummaryData | null; initialDetail?: DayDetail | null }) {
   const [month, setMonth] = useState(initialDate.slice(0, 7));
   const initialSelectedDate = isWorkingDate(initialDate) ? initialDate : datesInMonth(initialDate.slice(0, 7)).find((date) => date > initialDate) ?? datesInMonth(initialDate.slice(0, 7))[0];
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
@@ -227,6 +226,17 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary, ini
     });
   }, []);
 
+  const shiftSelectedDate = useCallback((offset: -1 | 1) => {
+    if (completionPending.current) return;
+    const current = parseLocalDate(selectedDate);
+    if (!current) return;
+    setPanelMinHeight((height) => Math.max(height, selectedDaySectionRef.current?.getBoundingClientRect().height ?? 0));
+    let next = toDateString(addDays(current, offset));
+    while (!isWorkingDate(next)) next = toDateString(addDays(parseLocalDate(next)!, offset));
+    setMonth(next.slice(0, 7));
+    setSelectedDate(next);
+  }, [selectedDate]);
+
   return <div className="min-h-screen pb-10">
     <main className="mx-auto max-w-6xl px-3 py-5 sm:px-4">
       <h1 className="page-title">カレンダー</h1>
@@ -253,10 +263,10 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary, ini
       {message && <div className="mt-4 notice-error"><p role="alert">{message}</p><button type="button" className="btn btn-secondary mt-2" disabled={loading || completionBusy} onClick={() => { setMasterRefreshVersion(value => value + 1); setVersion(value => value + 1); }}>再読み込み</button></div>}
       {!hasLoaded && loading ? <div className="mt-4 min-h-80"><LoadingIndicator label="カレンダーを読み込み中…" className="min-h-80" /></div> : <section className="panel relative mt-4 overflow-x-auto" aria-busy={loading}>
         {loading && <LoadingOverlay label="カレンダーを更新中…" />}
-        <div className={`grid grid-cols-6 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500 ${company ? "min-w-[56rem]" : ""}`}>
+        <div className="grid grid-cols-6 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-500">
           {weekdays.map((weekday, index) => <div key={weekday} className={`py-2 ${index === 5 ? "bg-sky-50/70 text-sky-700" : ""}`}>{weekday}</div>)}
         </div>
-        <div className={`grid grid-cols-6 bg-border/70 gap-px ${company ? "min-w-[56rem]" : ""}`}>
+        <div className="grid grid-cols-6 gap-px bg-border/70">
           {Array.from({ length: firstDayOffset }, (_, index) => <div key={`blank-${index}`} className="min-h-20 bg-slate-50" />)}
           {days.map((date) => <CalendarDay key={date} date={date} selected={selectedDate === date} company={company}
             schedules={scheduleMap[date]} entrants={entrantMap[date]}
@@ -268,24 +278,33 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary, ini
       <section ref={selectedDaySectionRef} className="mt-4 scroll-mt-4" style={{ minHeight: panelMinHeight || undefined }}>
         <div className="mb-3 flex flex-wrap items-center gap-x-1 gap-y-2 lg:gap-2">
           <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
-            <h2 className="whitespace-nowrap text-lg font-bold">{Number(selectedDate.slice(5, 7))}月{Number(selectedDate.slice(8, 10))}日の予定</h2>
             <IconButton className="h-9 w-9" disabled={loading || detailLoading || completionBusy} onClick={() => { setMasterRefreshVersion((value) => value + 1); setVersion((value) => value + 1); }} label={loading ? "予定を更新中" : "予定を更新"}>
               <RefreshCw size={18} className={loading ? "animate-spin" : ""} aria-hidden="true" />
             </IconButton>
+            <span className="h-6 w-px bg-slate-300" aria-hidden="true" />
+            <div className="flex items-center gap-1">
+              <IconButton className="h-9 w-9" disabled={loading || detailLoading || completionBusy} onClick={() => shiftSelectedDate(-1)} label="前の日の予定を表示">
+                <ChevronLeft size={18} aria-hidden="true" />
+              </IconButton>
+              <h2 className="whitespace-nowrap px-1 text-lg font-bold">{Number(selectedDate.slice(5, 7))}月{Number(selectedDate.slice(8, 10))}日の予定</h2>
+              <IconButton className="h-9 w-9" disabled={loading || detailLoading || completionBusy} onClick={() => shiftSelectedDate(1)} label="次の日の予定を表示">
+                <ChevronRight size={18} aria-hidden="true" />
+              </IconButton>
+            </div>
             <button type="button" className="btn btn-secondary h-9 min-h-0 min-w-9 gap-1 px-2 disabled:opacity-40 sm:min-w-[6.75rem]" disabled={scheduleTab !== "company"} onClick={toggleDetails} aria-pressed={scheduleTab === "company" ? detailsExpanded : undefined} aria-label={scheduleTab === "company" ? (detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示") : "補足表示は会社予定で利用できます"} title={scheduleTab === "company" ? (detailsExpanded ? "設備・注意事項を隠す" : "設備・注意事項を表示") : "会社予定で利用できます"}>
               {detailsExpanded ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
               <span className="hidden text-xs sm:inline">{detailsExpanded ? "補足を隠す" : "補足を表示"}</span>
             </button>
           </div>
-        <div className="flex w-fit max-w-full gap-0.5 rounded-lg border border-sky-200 bg-sky-50 p-0.5 lg:p-1" role="tablist" aria-label="予定の表示切り替え">
-          {([{ id: "company", label: "会社予定" }, { id: "equipment", label: "高車・立馬予定" }] as const).map(tab => <button key={tab.id} type="button" role="tab" id={`schedule-tab-${tab.id}`} aria-selected={scheduleTab === tab.id} aria-controls={`schedule-panel-${tab.id}`} className={`min-h-11 rounded-md px-1.5 py-2 text-xs sm:px-3 sm:text-sm font-semibold transition-colors ${scheduleTab === tab.id ? "bg-sky-700 text-white shadow-sm" : "text-sky-800 hover:bg-sky-100"}`} onPointerEnter={() => tab.id === "equipment" && prefetchEquipment(selectedDate)} onFocus={() => tab.id === "equipment" && prefetchEquipment(selectedDate)} onClick={() => switchScheduleTab(tab.id)}>{tab.label}</button>)}
+        <div className="flex h-9 w-fit max-w-full gap-0.5 rounded-lg border border-sky-200 bg-sky-50 p-0.5" role="tablist" aria-label="予定の表示切り替え">
+          {([{ id: "company", label: "会社予定" }, { id: "equipment", label: "高車・立馬予定" }] as const).map(tab => <button key={tab.id} type="button" role="tab" id={`schedule-tab-${tab.id}`} aria-selected={scheduleTab === tab.id} aria-controls={`schedule-panel-${tab.id}`} className={`min-h-0 rounded-md px-1.5 py-1 text-xs sm:px-3 sm:text-sm font-semibold transition-colors ${scheduleTab === tab.id ? "bg-sky-700 text-white shadow-sm" : "text-sky-800 hover:bg-sky-100"}`} onPointerEnter={() => tab.id === "equipment" && prefetchEquipment(selectedDate)} onFocus={() => tab.id === "equipment" && prefetchEquipment(selectedDate)} onClick={() => switchScheduleTab(tab.id)}>{tab.label}</button>)}
         </div>
           <div className="ml-auto flex gap-1 lg:gap-1.5">
             {[{ label: "作業入力", pathname: "/schedule" }, { label: "新規入場", pathname: "/new-entrants" }].map((item) => (
               <Link
                 prefetch={false}
                 key={item.pathname}
-                className="btn btn-primary min-h-11 whitespace-nowrap px-1.5 py-1 text-xs sm:px-2.5 sm:text-sm"
+                className="btn btn-primary h-9 min-h-0 whitespace-nowrap px-1.5 py-1 text-xs sm:px-2.5 sm:text-sm"
                 href={{ pathname: item.pathname, query: { date: selectedDate, ...(company ? { primaryCompany: company } : {}) } }}
               >
                 {item.label}
@@ -293,7 +312,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary, ini
             ))}
           </div>
         </div>
-        <div hidden={scheduleTab !== "equipment"} role="tabpanel" id="schedule-panel-equipment" aria-labelledby="schedule-tab-equipment"><EquipmentBoard key={selectedDate} date={selectedDate} version={version} initialData={selectedDate === initialSelectedDate ? initialEquipment : null} /></div>
+        {scheduleTab === "equipment" && <div role="tabpanel" id="schedule-panel-equipment" aria-labelledby="schedule-tab-equipment"><EquipmentBoard key={selectedDate} date={selectedDate} version={version} /></div>}
         <div hidden={scheduleTab !== "company"} role="tabpanel" id="schedule-panel-company" aria-labelledby="schedule-tab-company">
         {detailMessage && <div className="mb-3 notice-error"><p role="alert">{detailMessage}</p><button type="button" className="btn btn-secondary mt-2" disabled={loading || detailLoading || completionBusy} onClick={() => setVersion(value => value + 1)}>再読み込み</button></div>}
         {detailLoading ? <LoadingIndicator label="予定を読み込み中…" className="min-h-32" /> : detail.schedules.length === 0 && detail.entrants.length === 0 && detail.completions.length === 0 ? !detailMessage && <div className="panel p-5 text-slate-500">予定はありません。</div> : <div className={`grid gap-2 transition-opacity sm:grid-cols-2 lg:grid-cols-3 ${loading ? "pointer-events-none opacity-60" : ""}`} aria-busy={loading}>

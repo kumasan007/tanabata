@@ -83,7 +83,7 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
                 {row.uses_aerial_work_vehicle && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-sm font-bold leading-none text-white shadow-sm" title="高所作業車あり">高</span>}
                 {row.uses_tachiuma && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold leading-none text-white shadow-sm" title="立ち馬使用あり">立</span>}
                 {row.uses_fire && <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-sm font-bold leading-none text-white shadow-sm" title="火気使用あり">火</span>}
-                <button type="button" className="btn btn-secondary h-11 min-h-11 w-11 p-0" disabled={completionBusy} onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={15} aria-hidden="true" /></button>
+                <button type="button" className="btn btn-secondary h-9 min-h-9 w-9 p-0" disabled={completionBusy} onClick={() => setEditing(row)} aria-label={`${row.primary_company}の予定を編集`} title="予定を編集"><Pencil size={14} aria-hidden="true" /></button>
               </div>
               </div>
               <p className="mt-2 truncate text-slate-700" title={area ?? ""}>{area ? <CopyValue value={area} label="作業エリア" compact stopPropagation /> : "エリア未入力"}</p>
@@ -127,14 +127,14 @@ export const CalendarDetails = memo(function CalendarDetails({ detail, master, s
           {selectedEntrantGroups.map(({ primaryCompany, rows }) => {
             const summary = entrantSummary(rows);
             const companyGroups = Object.entries(Object.groupBy(rows, (row) => row.secondary_company || primaryCompany));
-            return <article key={`entrant-${primaryCompany}`} className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm">
-              <p className="font-bold"><CopyValue value={primaryCompany} label="一次会社名" compact stopPropagation />　新規入場</p>
-              <details className="mt-2 rounded-md border border-amber-200 bg-white/70">
-                <summary className="cursor-pointer px-3 py-2 font-semibold text-amber-900">{summary.companies}社・{summary.people}人</summary>
-                <div className="grid gap-3 border-t border-amber-200 p-3">
+            return <article key={`entrant-${primaryCompany}`} className="rounded-md border border-orange-400 bg-orange-100 p-3 text-sm shadow-sm">
+              <p className="font-bold text-orange-950"><CopyValue value={primaryCompany} label="一次会社名" compact stopPropagation />　新規入場</p>
+              <details className="mt-2 rounded-md border border-orange-300 bg-orange-50">
+                <summary className="cursor-pointer px-3 py-2 font-semibold text-orange-950">{summary.companies}社・{summary.people}人</summary>
+                <div className="grid gap-3 border-t border-orange-300 p-3">
                   {companyGroups.map(([companyName, companyRows]) => <div key={companyName}>
                     <p className="font-semibold">{companyName === primaryCompany ? `${primaryCompany}（一次会社所属）` : <CopyValue value={companyName} label="所属会社名" compact stopPropagation />}　{entrantSummary(companyRows ?? []).people}人</p>
-                    <div className="mt-1 grid gap-1">{(companyRows ?? []).map((row) => <div key={row.id} className="flex min-w-0 items-center gap-2 rounded bg-amber-50 px-2 py-1.5"><button type="button" className="min-w-0 flex-1 text-left" disabled={completionBusy} onClick={() => setEditingEntrant(row)}><span className="break-words font-medium">{row.person_names || "氏名未入力"}</span>{row.person_count > 1 && <span className="ml-1 text-xs text-amber-800">（旧形式 {row.person_count}人）</span>}</button><button type="button" className="btn btn-secondary h-8 min-h-8 w-8 shrink-0 p-0" disabled={completionBusy} onClick={() => setEditingEntrant(row)} aria-label={`${row.person_names || "新規入場者"}を編集`}><Pencil size={14} /></button></div>)}</div>
+                    <div className="mt-1 grid gap-1">{(companyRows ?? []).map((row) => <div key={row.id} className="flex min-w-0 items-center gap-2 rounded border border-orange-200 bg-orange-100 px-2 py-1.5"><button type="button" className="min-w-0 flex-1 text-left" disabled={completionBusy} onClick={() => setEditingEntrant(row)}><span className="break-words font-medium">{row.person_names || "氏名未入力"}</span>{row.person_count > 1 && <span className="ml-1 text-xs text-orange-900">（旧形式 {row.person_count}人）</span>}</button><button type="button" className="btn btn-secondary h-8 min-h-8 w-8 shrink-0 p-0" disabled={completionBusy} onClick={() => setEditingEntrant(row)} aria-label={`${row.person_names || "新規入場者"}を編集`}><Pencil size={14} /></button></div>)}</div>
                   </div>)}
                 </div>
               </details>

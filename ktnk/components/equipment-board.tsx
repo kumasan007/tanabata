@@ -37,17 +37,11 @@ export function prefetchEquipmentBoard(date: string, force = false) {
   return request;
 }
 
-export function EquipmentBoard({ date, version, initialData = null }: { date: string; version: number; initialData?: EquipmentBoardData | null }) {
+export function EquipmentBoard({ date, version }: { date: string; version: number }) {
   const { confirm, dialog: confirmationDialog } = useConfirmDialog();
-  const [data, setData] = useState<EquipmentBoardData | null>(() => {
-    if (typeof window !== "undefined" && initialData && !boardCache.has(date)) {
-      boardCache.set(date, initialData);
-      boardCachedAt.set(date, Date.now());
-    }
-    return boardCache.get(date) ?? initialData;
-  });
+  const [data, setData] = useState<EquipmentBoardData | null>(() => boardCache.get(date) ?? null);
   const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(() => !initialData && !boardCache.has(date));
+  const [loading, setLoading] = useState(() => !boardCache.has(date));
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const sequence = useRef(0);
