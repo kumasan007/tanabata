@@ -1,10 +1,22 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { CopyButton } from "@/components/copy-button";
 
 export function SectionHeading({ title }: { title: string }) {
   return <h2 className="mb-5 text-lg font-bold text-slate-900">{title}</h2>;
+}
+
+export function InputSelectionSummary({ company, date }: { company?: string; date?: ReactNode }) {
+  if (!company && !date) return null;
+  return <div className="flex min-w-0 items-baseline gap-3 break-words text-sm text-slate-600">
+    {company && <p className="min-w-0 max-w-[50%] font-semibold">{company}</p>}
+    {date && <p className="min-w-0 flex-1">{date}</p>}
+  </div>;
+}
+
+export function InputBackButton({ disabled, onClick }: { disabled?: boolean; onClick: () => void }) {
+  return <button type="button" className="btn btn-secondary w-full" disabled={disabled} onClick={onClick}>戻る</button>;
 }
 
 export function WorkField({ label, value, placeholder, multiline = false, required = false, previousValue, onChange }: {

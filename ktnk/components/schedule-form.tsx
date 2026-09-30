@@ -2,7 +2,7 @@
 
 import { SchedulePreview } from "@/components/schedule-preview";
 import { LoadingIndicator } from "@/components/loading-indicator";
-import { SectionHeading, WorkField } from "@/components/schedule-form-fields";
+import { InputBackButton, InputSelectionSummary, SectionHeading, WorkField } from "@/components/schedule-form-fields";
 import {parseTachiumaValue, scheduleToFormData} from "@/lib/schedule-fields";
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -528,17 +528,13 @@ export function ScheduleForm({
       <main className="mx-auto max-w-2xl px-3 py-5 sm:px-4">
         <h1 className="page-title">作業入力</h1>
         <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
-          {(form.primaryCompany || form.startDate) && (
-            <div className="flex min-w-0 items-baseline gap-3 break-words text-sm text-slate-600">
-              {form.primaryCompany && <p className="min-w-0 max-w-[50%] font-semibold">{form.primaryCompany}</p>}
-              {form.startDate && step !== "existing" && <p className="min-w-0 flex-1">{displaySelectedDates(form.dates, form.startDate, form.endDate)}</p>}
-            </div>
-          )}
+          <InputSelectionSummary
+            company={form.primaryCompany}
+            date={form.startDate && step !== "existing" ? displaySelectedDates(form.dates, form.startDate, form.endDate) : undefined}
+          />
           {!choosingCompany && (
             <div className="grid gap-2 text-sm text-slate-600">
-              <button
-                type="button"
-                className="btn btn-secondary"
+              <InputBackButton
                 disabled={busy}
                 onClick={() => {
                   setSubmitState({ status: "idle" });
@@ -566,9 +562,7 @@ export function ScheduleForm({
                     setStep("copy");
                   }
                 }}
-              >
-                戻る
-              </button>
+              />
             </div>
           )}
           <fieldset disabled={busy} className="grid min-w-0 gap-4">

@@ -31,18 +31,6 @@ export function MultiDateCalendar({ value, today, onChange, onConfirm }: {
         <strong>{month.getFullYear()}年{month.getMonth() + 1}月</strong>
         <button type="button" className="btn btn-secondary px-3" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>翌月</button>
       </div>
-      {toDateString(month) !== today.slice(0, 7) + "-01" && (
-        <button
-          type="button"
-          className="btn btn-secondary w-full"
-          onClick={() => {
-            const current = parseLocalDate(today)!;
-            setMonth(new Date(current.getFullYear(), current.getMonth(), 1));
-          }}
-        >
-          今日へ
-        </button>
-      )}
       <div className="grid grid-cols-7 gap-1 text-center text-sm">
         {"日月火水木金土".split("").map((day) => <span key={day} className="py-1 font-semibold text-slate-500">{day}</span>)}
         {cells.map((date, index) => date ? (

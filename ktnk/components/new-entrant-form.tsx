@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CompanyMaster } from "@/lib/types";
 import { isWorkingDate, workingDateOptions, shortDateWithWeekday, parseLocalDate } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
+import { InputBackButton, InputSelectionSummary } from "@/components/schedule-form-fields";
 
 type Step = "company" | "date" | "details" | "success";
 type Nationality = "japanese_only" | "includes_foreign" | "";
@@ -99,8 +100,8 @@ export function NewEntrantForm({ today, initialDate = "", initialCompany = "", i
   }
 
   return <div className="simple-schedule min-h-screen pb-32 sm:pb-8"><main className="mx-auto max-w-2xl px-3 py-5 sm:px-4"><h1 className="page-title">新規入場</h1><form onSubmit={submit} className="space-y-4">
-    {(primaryCompany || entryDate) && <div className="min-w-0 space-y-1 break-words text-sm text-slate-600">{primaryCompany && <p className="font-semibold">{primaryCompany}</p>}{entryDate && <p>{displayDate(entryDate)}</p>}</div>}
-    {step !== "company" && step !== "success" && !editingSubmitted && <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setStep(step === "date" ? "company" : "date")}>戻る</button>}
+    <InputSelectionSummary company={primaryCompany} date={entryDate ? displayDate(entryDate) : undefined} />
+    {step !== "company" && step !== "success" && !editingSubmitted && <InputBackButton disabled={busy} onClick={() => setStep(step === "date" ? "company" : "date")} />}
 
     {step === "company" && <section className="panel p-5 sm:p-6"><h2 className="mb-5 text-lg font-bold">一次会社を選んでください</h2><div className="relative"><select autoFocus className="input appearance-none pr-12" value={primaryCompany} onChange={(event) => { setPrimaryCompany(event.target.value); setMessage(""); if (event.target.value) setStep(isWorkingDate(entryDate) ? "details" : "date"); }}><option value="" disabled>会社を選択</option>{master.primaryCompanies.map((company) => <option key={company}>{company}</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-500" size={21} aria-hidden="true" /></div></section>}
 
