@@ -46,8 +46,7 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
   const pending = useRef(false);
   const sequence = useRef(0);
   const loadedVersion = useRef(version);
-  const [extra, setExtra] = useState<Record<EquipmentType, string[]>>({ aerial_work_vehicle: [], tachiuma: [] });
-  const [adding, setAdding] = useState<EquipmentType | null>(null);
+  const [showAllFloors, setShowAllFloors] = useState<Record<EquipmentType, boolean>>({ aerial_work_vehicle: false, tachiuma: false });
   const [info, setInfo] = useState<{ title: string; notes: string } | null>(null);
   const managerDialog = useRef<HTMLDialogElement>(null);
   const tachiumaDialog = useRef<HTMLDialogElement>(null);
@@ -146,7 +145,11 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
     </span>;
   }
   function tachiumaChip(item: TachiumaUnit) {
-    return <TooltipButton key={item.id} label={item.name} description={item.notes} className="min-h-9 rounded border border-primary/60 bg-muted px-2 py-1 font-bold text-foreground" />;
+    return <span key={item.id} draggable={Boolean(data?.canEdit && !disabled)}
+      onDragStart={event => { event.dataTransfer.setData("text/plain", item.id); event.dataTransfer.effectAllowed = "move"; }}
+      className="cursor-grab select-none">
+      <TooltipButton label={item.name} description={item.notes} className="min-h-9 rounded border border-primary/60 bg-muted px-2 py-1 font-bold text-foreground" />
+    </span>;
   }
   return <div className="grid gap-4" aria-busy={disabled}>
     {data && !data.canEdit && <p className="text-xs text-slate-500">編集する場合は、サイト右上のアイコンからログインしてください。</p>}
@@ -159,18 +162,21 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
       const vehiclesByFloor = Map.groupBy(data.vehicles, row => row.floor_id);
       const tachiumasByFloor = Map.groupBy(data.tachiumas, row => row.floor_id);
       const countAt = (floor: string) => type === "aerial_work_vehicle" ? vehiclesByFloor.get(floor)?.length ?? 0 : tachiumasByFloor.get(floor)?.length ?? 0;
-      const visible = data.floors.filter(floor => countAt(floor.id) > 0 || requestsByFloor.has(floor.id) || (data.canEdit && extra[type].includes(floor.id)));
-      const hidden = data.floors.filter(floor => !visible.some(row => row.id === floor.id));
+      const visible = showAllFloors[type]
+        ? data.floors
+        : data.floors.filter(floor => countAt(floor.id) > 0 || requestsByFloor.has(floor.id));
       return <section className="panel equipment-panel min-w-0 overflow-hidden" key={type}>
         <div className="equipment-section-header flex flex-wrap items-center justify-between gap-2 border-b p-3">
           <h3 className="font-bold">{type === "aerial_work_vehicle" ? "高所作業車" : "立ち馬"}</h3>
           {data.canEdit && <div className="flex flex-wrap gap-2">
+            <div className="flex overflow-hidden rounded-md border border-slate-300 text-xs" role="group" aria-label={`${type === "aerial_work_vehicle" ? "高車" : "立ち馬"}の表示フロア`}>
+              <button type="button" className={`min-h-8 px-2 font-semibold ${!showAllFloors[type] ? "bg-sky-700 text-white" : "bg-white text-slate-700"}`} aria-pressed={!showAllFloors[type]} onClick={() => setShowAllFloors(current => ({ ...current, [type]: false }))}>配置・希望あり</button>
+              <button type="button" className={`min-h-8 border-l border-slate-300 px-2 font-semibold ${showAllFloors[type] ? "bg-sky-700 text-white" : "bg-white text-slate-700"}`} aria-pressed={showAllFloors[type]} onClick={() => setShowAllFloors(current => ({ ...current, [type]: true }))}>全フロア</button>
+            </div>
             {type === "aerial_work_vehicle" && <button type="button" className="btn btn-primary h-8 min-h-0 px-2 py-1 text-xs" disabled={disabled || !data.floors.length} onClick={() => { setVehicleEditor(null); setMessage(""); managerDialog.current?.showModal(); }}>高車管理</button>}
             {type === "tachiuma" && <button type="button" className="btn btn-primary h-8 min-h-0 px-2 py-1 text-xs" disabled={disabled || !data.floors.length} onClick={() => { setTachiumaEditor(null); setMessage(""); tachiumaDialog.current?.showModal(); }}>立ち馬管理</button>}
-            <button type="button" className="btn btn-secondary h-8 min-h-0 px-2 py-1 text-xs" disabled={disabled || hidden.length === 0} onClick={() => setAdding(adding === type ? null : type)}>フロアを追加</button>
           </div>}
         </div>
-        {adding === type && data.canEdit && <label className="block px-3 pb-3 text-sm">表示するフロア<select className="input mt-1" value="" onChange={event => { const id = event.target.value; if (id) setExtra(current => ({ ...current, [type]: [...current[type], id] })); setAdding(null); }}><option value="">フロアを選択</option>{hidden.map(floor => <option key={floor.id} value={floor.id}>{floor.name}</option>)}</select></label>}
         <div className="relative overflow-x-auto">
           {busy && <LoadingOverlay label="保存中…"/>}
           <table className="equipment-grid w-full select-none border-collapse whitespace-nowrap text-center text-sm">
@@ -180,12 +186,18 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
               const count = countAt(floor.id);
               const floorRequests = requestsByFloor.get(floor.id) ?? [];
               const total = floorRequests.reduce((sum, row) => sum + row.requested_count, 0);
-              return <tr key={floor.id} className="hover:bg-sky-50" onDragOver={event => { if (data.canEdit && !disabled && type === "aerial_work_vehicle") { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }} onDrop={event => {
-                event.preventDefault(); if (!data.canEdit || disabled || type !== "aerial_work_vehicle") return;
-                const vehicle = data.vehicles.find(row => row.id === event.dataTransfer.getData("text/plain"));
-                if (vehicle && vehicle.floor_id !== floor.id) void save({ action: "move_vehicle", vehicleId: vehicle.id, floorId: floor.id, company: null, date, expected: vehicle.updated_at });
+              return <tr key={floor.id} className="hover:bg-sky-50" onDragOver={event => { if (data.canEdit && !disabled) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }} onDrop={event => {
+                event.preventDefault(); if (!data.canEdit || disabled) return;
+                const id = event.dataTransfer.getData("text/plain");
+                if (type === "aerial_work_vehicle") {
+                  const vehicle = data.vehicles.find(row => row.id === id);
+                  if (vehicle && vehicle.floor_id !== floor.id) void save({ action: "move_vehicle", vehicleId: vehicle.id, floorId: floor.id, company: null, date, expected: vehicle.updated_at });
+                } else {
+                  const item = data.tachiumas.find(row => row.id === id);
+                  if (item && item.floor_id !== floor.id) void save({ action: "save_tachiuma", unitId: item.id, name: item.name, notes: item.notes ?? "", floorId: floor.id, expected: item.updated_at });
+                }
               }}>
-                <th scope="row" className="sticky left-0 z-10 w-16 bg-white px-1 py-2"><span className="inline-flex items-center gap-1">{floor.name}{data.canEdit && count === 0 && total === 0 && <button type="button" disabled={disabled} className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40" aria-label={`${floor.name}を表から削除`} title="表から削除" onClick={() => { if (countAt(floor.id) === 0 && !floorRequests.some(row => row.requested_count > 0)) setExtra(current => ({ ...current, [type]: current[type].filter(id => id !== floor.id) })); }}><X size={14} aria-hidden="true" /></button>}</span></th>
+                <th scope="row" className="sticky left-0 z-10 w-16 bg-white px-1 py-2">{floor.name}</th>
                 <td className={`w-20 px-2 py-1.5 font-bold leading-tight ${total > count ? "bg-warning-subtle text-warning-foreground" : ""}`}>
                   {count}<span className="ml-0.5 text-xs font-normal">台</span>
                   {total > count && <span className="block text-[11px] font-medium">{total - count}台不足</span>}
@@ -210,7 +222,7 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
         </div>
         {!visible.length && <p className="p-4 text-sm text-slate-500">配置・使用希望のあるフロアはありません。</p>}
         {data.canEdit && type === "aerial_work_vehicle" && <p className="p-3 text-xs text-slate-500">号車を会社欄へドラッグして割当。「号車」欄へ戻すと解除できます。追加・編集・削除・並び替えは「高車管理」から行えます。</p>}
-        {data.canEdit && type === "tachiuma" && <p className="p-3 text-xs text-slate-500">名称・スペック・配置フロアは「立ち馬管理」から変更できます。</p>}
+        {data.canEdit && type === "tachiuma" && <p className="p-3 text-xs text-slate-500">立ち馬を別の行へドラッグすると配置フロアを変更できます。会社への割り当ては行いません。名称・スペックは「立ち馬管理」から変更できます。</p>}
       </section>;
     })}
     <dialog ref={managerDialog} aria-labelledby="vehicle-manager-title" className="modal-dialog max-w-lg !p-3 sm:!p-4" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => { setVehicleEditor(null); setManagerDelete(false); }}>

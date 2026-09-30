@@ -18,7 +18,17 @@ import type { CalendarSchedule, CalendarEntrant, CompanyMaster, NewEntrantRecord
 
 const loadCalendarDetails = () => import("@/components/calendar-details");
 const CalendarDetails = dynamic(() => import("@/components/calendar-details").then((module) => module.CalendarDetails), { loading: () => <LoadingIndicator /> });
-const AdminScheduleEditor = dynamic(() => import("@/components/admin-schedule-editor").then((module) => module.AdminScheduleEditor));
+let scheduleEditorImport: ReturnType<typeof importScheduleEditor> | undefined;
+function importScheduleEditor() {
+  return import("@/components/admin-schedule-editor");
+}
+function loadScheduleEditor() {
+  scheduleEditorImport ??= importScheduleEditor();
+  return scheduleEditorImport;
+}
+const AdminScheduleEditor = dynamic(() => loadScheduleEditor().then((module) => module.AdminScheduleEditor), {
+  loading: () => <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4"><div className="panel w-full max-w-sm"><LoadingIndicator label="編集画面を準備しています…" /></div></div>,
+});
 const NewEntrantEditor = dynamic(() => import("@/components/new-entrant-editor").then((module) => module.NewEntrantEditor));
 const DETAILS_PREFERENCE_KEY = "calendar-supplement-expanded";
 
@@ -163,6 +173,11 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary, ini
       }).finally(() => { if (!controller.signal.aborted) setDetailLoadedKey(detailKey); });
     return () => controller.abort();
   }, [selectedDate, company, version, detailKey, loading, hasSelectedRecords]);
+  useEffect(() => {
+    if (detailLoading || detail.schedules.length === 0) return;
+    const timer = window.setTimeout(() => { void loadScheduleEditor(); }, 500);
+    return () => window.clearTimeout(timer);
+  }, [detailLoading, detail.schedules.length]);
   useEffect(() => {
     if (!pendingEditId || detailLoading) return;
     const row = detail.schedules.find((item) => item.id === pendingEditId);
