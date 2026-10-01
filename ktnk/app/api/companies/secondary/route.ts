@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ensureSecondaryCompany } from "@/lib/companies";
+import { mutationLimitResponse, publicMutationAllowed } from "@/lib/public-mutation-limit";
+import { mutationErrorResponse } from "@/lib/mutation-error";
 
 export const runtime = "nodejs";
 const inputSchema = z.object({
@@ -9,6 +11,7 @@ const inputSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  if (!await publicMutationAllowed(request, "company-write")) return mutationLimitResponse();
   let body: unknown;
   try { body = await request.json(); } catch {
     return NextResponse.json({ error: "会社名を入力してください。" }, { status: 400 });
@@ -20,7 +23,7 @@ export async function POST(request: Request) {
     const primaryExists = await ensureSecondaryCompany(primaryCompany, secondaryCompany);
     if (!primaryExists) return NextResponse.json({ error: "一次会社が見つかりません。会社一覧を読み込み直してください。" }, { status: 404 });
     return NextResponse.json({ secondaryCompany });
-  } catch {
-    return NextResponse.json({ error: "二次会社の追加に失敗しました。再度お試しください。" }, { status: 500 });
+  } catch (error) {
+    return mutationErrorResponse(error, "二次会社の追加に失敗しました。再度お試しください。");
   }
 }

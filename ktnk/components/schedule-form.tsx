@@ -45,6 +45,7 @@ export function ScheduleForm({
   );
   const [companyError, setCompanyError] = useState("");
   const [companyRetry, setCompanyRetry] = useState(0);
+  const [companyAdding, setCompanyAdding] = useState(false);
   const [choosingCompany, setChoosingCompany] = useState(!initialCompany);
   const [choice, setChoice] = useState<"same" | "new" | null>(null);
   const [customDate, setCustomDate] = useState(false);
@@ -135,14 +136,14 @@ export function ScheduleForm({
     step === "confirm",
   );
   const showEditor = !choosingCompany && step === "edit";
-  const busy = submitState.status === "submitting";
+  const busy = submitState.status === "submitting" || companyAdding;
   const activeRows = form.currentSubcompanies;
   const activeCount = form.primaryCount;
   const totalCount =
     (activeCount ?? 0) +
     activeRows.reduce((sum, row) => sum + (row.workerCount ?? 0), 0);
   const secondaryRowsComplete = activeRows.every(
-    (row) => row.secondaryCompany.trim() && (row.workerCount ?? 0) >= 0,
+    (row) => row.secondaryCompany.trim() && row.workerCount !== null && Number.isInteger(row.workerCount) && row.workerCount >= 0,
   );
   const area = form.workArea;
   const content = form.workContent;
@@ -332,10 +333,10 @@ export function ScheduleForm({
         .filter((row) => row.secondaryCompany)
         .map((row) => ({
           ...row,
-          workerCount: row.workerCount ?? 0,
+          workerCount: row.workerCount,
           usePreviousWorkerCount: false,
         }));
-      next.primaryCount = source.primaryCount ?? 0;
+      next.primaryCount = source.primaryCount;
       next.workArea = source.workArea ?? "";
       next.workContent = source.workContent ?? "";
       next.currentSubcompanies = copiedRows;
@@ -446,8 +447,13 @@ export function ScheduleForm({
       setEditorPart("people");
       setSubmitState({
         status: "error",
-        message: "作業する二次会社を選び、人数を1人以上で入力してください。",
+        message: "二次会社を選び、人数を0以上の整数で入力してください。",
       });
+      return;
+    }
+    if (activeCount === null || !Number.isInteger(activeCount) || activeCount < 0) {
+      setStep("edit"); setEditorPart("people");
+      setSubmitState({ status: "error", message: "一次会社人数を0以上の整数で入力してください。" });
       return;
     }
     if (totalCount < 1) {
@@ -480,13 +486,13 @@ export function ScheduleForm({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             ...form,
-            primaryCount: form.primaryCount ?? 0,
+            primaryCount: form.primaryCount,
             excludeWeekends: false,
             usePreviousPrimaryCount: false,
             overwriteExisting: overwrite,
             currentSubcompanies: form.currentSubcompanies.map((row) => ({
               ...row,
-              workerCount: row.workerCount ?? 0,
+              workerCount: row.workerCount,
               usePreviousWorkerCount: false,
             })),
           }),
@@ -495,6 +501,7 @@ export function ScheduleForm({
       };
 
       const { response, body } = await submit(overwriteExisting);
+      if (response.status === 409 && body.code !== "SCHEDULE_ALREADY_EXISTS") setCompanyRetry(v => v + 1);
       if (
         response.status === 409 &&
         body.code === "SCHEDULE_ALREADY_EXISTS"
@@ -878,7 +885,9 @@ export function ScheduleForm({
                           subcompanies={secondaryWorkChoice ? activeRows : []}
                           previousCounts={previousCounts}
                           onPrimaryCountChange={(count, copied) => patch({ primaryCount: count, usePreviousPrimaryCount: copied })}
-                          onSubcompaniesChange={(rows) => patch({ currentSubcompanies: rows })}
+                          onSubcompaniesChange={(rows) => { setSecondaryWorkChoice(rows.length > 0); patch({ currentSubcompanies: rows }); }}
+                          onSecondaryCompanyAdded={() => setCompanyRetry(v => v + 1)}
+                          onSecondaryCompanyBusyChange={setCompanyAdding}
                         />
                       )}
                     </div>
@@ -932,6 +941,11 @@ export function ScheduleForm({
                       type="button"
                       className="btn btn-primary mt-5 w-full"
                       onClick={() => {
+                        if (activeCount === null || !Number.isInteger(activeCount) || activeCount < 0) {
+                          setEditorPart("people");
+                          setSubmitState({ status: "error", message: "一次会社人数を0以上の整数で入力してください。" });
+                          return;
+                        }
                         if (editorPart === "people" && secondaryWorkChoice === null) {
                           setSubmitState({
                             status: "error",
@@ -946,7 +960,7 @@ export function ScheduleForm({
                         ) {
                           setSubmitState({
                             status: "error",
-                            message: "作業する二次会社を選び、人数を1人以上で入力してください。",
+                            message: "二次会社を選び、人数を0以上の整数で入力してください。",
                           });
                           return;
                         }
@@ -990,7 +1004,7 @@ export function ScheduleForm({
           </fieldset>
           {!ready && submitState.status === "error" && <p role="alert" className="notice-error">{submitState.message}</p>}
 
-          {ready && <ScheduleSubmitStatus state={submitState} dates={form.dates} startDate={form.startDate} endDate={form.endDate} totalCount={totalCount} busy={busy} disabled={!companyMaster || Boolean(companyError)} resultRef={resultRef} onContinue={() => { setSubmitState({ status: "idle" }); setContinuingInput(true); setCustomDate(false); setStep("date"); window.scrollTo({ top: 0, behavior: "smooth" }); }} onReset={resetForm}/>} 
+          {ready && <ScheduleSubmitStatus state={submitState} dates={form.dates} startDate={form.startDate} endDate={form.endDate} totalCount={totalCount} busy={busy} disabled={!companyMaster || Boolean(companyError)} resultRef={resultRef} onContinue={() => { patch({ id: undefined, expectedUpdatedAt: undefined }); setContinuingInput(true); setCustomDate(false); setStep("date"); window.scrollTo({ top: 0, behavior: "smooth" }); }} onReset={resetForm}/>}
           {ready && (
             <>
               <p className="px-1 text-sm leading-6 text-slate-500">

@@ -49,6 +49,8 @@ export type PreviousSchedule = {
 };
 
 export type ScheduleSubmitInput = {
+  id?: string;
+  expectedUpdatedAt?: string;
   dates?: string[];
   startDate: string;
   endDate: string;

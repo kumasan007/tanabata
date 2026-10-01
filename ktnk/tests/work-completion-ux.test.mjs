@@ -6,7 +6,7 @@ import test from "node:test";
 import ts from "typescript";
 
 const require = createRequire(import.meta.url);
-const report = { work_date: "2026-09-16", primary_company: "A", reported_at: "2026-09-16T08:00:00.000Z", notes: "" };
+const report = { work_date: "2026-09-16", primary_company: "A", reported_at: "2026-09-16T08:00:00.000Z", notes: "", revision: 1 };
 const response = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
 
 // Drive the component's hooks and events with API responses; no live reports are written.
@@ -105,6 +105,7 @@ test("existing report supports notes editing and cancellation", async () => {
   button(screen.render(), "備考の変更を保存").props.onClick(); await flush();
   assert.match(text(screen.render()), /備考の変更を保存しました/);
   assert.equal(calls[0].body.expectedReportedAt, report.reported_at);
+  assert.equal(calls[0].body.expectedRevision, report.revision);
   button(screen.render(), "報告を取り消す").props.onClick(); await flush();
   tree = screen.render();
   assert.match(text(tree), /取り消しました/);

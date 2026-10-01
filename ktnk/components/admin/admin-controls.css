@@ -1,27 +1,25 @@
 /* Dense controls for the administrative screens. */
+.admin-dashboard {
+  --control-height: 2.75rem;
+  --control-padding: 0.625rem;
+}
+@media (min-width: 640px) {
+  .admin-dashboard {
+    --control-font-size: 0.875rem;
+  }
+}
 .admin-dashboard .field {
   gap: 0.25rem;
 }
 .admin-dashboard .label {
   font-size: 0.875rem;
 }
-.admin-dashboard .input {
-  height: 2.75rem;
-  border-radius: 6px;
-  padding-inline: 0.625rem;
-  font-size: 0.875rem;
-}
 .admin-dashboard .textarea {
   min-height: 5rem;
-  border-radius: 6px;
   padding: 0.5rem 0.625rem;
-  font-size: 0.875rem;
 }
 .admin-dashboard .btn {
-  min-height: 2.5rem;
-  border-radius: 6px;
   padding: 0.375rem 0.625rem;
-  font-size: 0.875rem;
   box-shadow: none;
 }
 .admin-dashboard .btn.w-9 {
@@ -29,9 +27,7 @@
   height: 2.5rem;
   padding: 0;
 }
-.admin-dashboard .panel,
-.admin-dashboard .compact-panel {
-  border-radius: 6px;
+.admin-dashboard .panel {
   box-shadow: none;
 }
 

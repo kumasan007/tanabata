@@ -2,68 +2,72 @@
 import "@/components/admin/admin-controls.css";
 
 import { Plus, X } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { CompanyMaster, NewEntrantRecord } from "@/lib/types";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import { apiFetch } from "@/lib/api-client";
+import { recordMutationParams } from "@/lib/record-version";
+import { EntrantFields } from "@/components/entrant-fields";
+import { MutationNotice } from "@/components/ui/mutation-notice";
+import { emptyEntrantDraft, entrantPerson, entrantDraftError, entrantToDraft } from "@/lib/entrant-form-model";
 
-const PRIMARY = "__primary__";
-const NEW_COMPANY = "__new_company__";
-
-export function NewEntrantEditor({ record, master, onClose, onSaved }: { record: NewEntrantRecord; master: CompanyMaster; onClose: () => void; onSaved: () => void }) {
+export function NewEntrantEditor({ record: initialRecord, master: initialMaster, onClose, onSaved }: { record: NewEntrantRecord; master: CompanyMaster; onClose: () => void; onSaved: () => void }) {
   const { confirm, dialog: confirmationDialog } = useConfirmDialog();
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-  const secondaryOptions = useMemo(() => master.secondariesByPrimary[record.primary_company] ?? [], [master, record.primary_company]);
-  const initialCompany = record.secondary_company ? secondaryOptions.includes(record.secondary_company) ? record.secondary_company : NEW_COMPANY : PRIMARY;
-  const [companyChoice, setCompanyChoice] = useState(initialCompany);
-  const [newCompany, setNewCompany] = useState(initialCompany === NEW_COMPANY ? record.secondary_company ?? "" : "");
-  const [personName, setPersonName] = useState(record.person_names ?? "");
-  const [nationalityStatus, setNationalityStatus] = useState(record.nationality_status ?? "");
-  const [notes, setNotes] = useState(record.notes ?? "");
+  const [record, setRecord] = useState(initialRecord);
+  const [master, setMaster] = useState(initialMaster);
+  const [draft, setDraft] = useState(() => entrantToDraft(initialRecord));
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [conflict, setConflict] = useState(false);
+  const pending = useRef(false);
+  const requestId = useRef<string | null>(null);
   const legacy = record.person_count > 1;
   useEffect(() => { const element = dialog.current; element?.showModal(); return () => element?.close(); }, []);
 
-  async function submit(remove = false) {
-    if (busy) return;
-    if (remove && !await confirm("この入場者を削除しますか？", personName || "この新規入場者", "削除する")) return;
-    const secondaryCompany = companyChoice === PRIMARY ? "" : companyChoice === NEW_COMPANY ? newCompany.trim() : companyChoice;
-    if (!remove && companyChoice === NEW_COMPANY && !secondaryCompany) { setError("新しい二次会社名を入力してください。"); return; }
-    if (!remove && !personName.trim()) { setError("氏名を入力してください。"); return; }
-    if (!remove && !nationalityStatus) { setError("日本籍か外国籍かを選択してください。"); return; }
-    setBusy(true); setError("");
+  async function reload() {
+    if (pending.current) return;
+    pending.current = true; setBusy(true);
     try {
-      const response = await apiFetch(`/api/new-entrants${remove ? `?id=${encodeURIComponent(record.id)}` : ""}`, {
+      let response = await apiFetch(`/api/new-entrants?id=${encodeURIComponent(adding && requestId.current ? requestId.current : record.id)}`);
+      if (adding && response.status === 404) response = await apiFetch(`/api/new-entrants?id=${encodeURIComponent(record.id)}`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "最新の内容を読み込めませんでした。");
+      const companyResponse = await apiFetch("/api/companies");
+      const companies = await companyResponse.json();
+      if (!companyResponse.ok) throw new Error(companies.error ?? "会社一覧を読み込めませんでした。");
+      setRecord(body.record); setMaster(companies); setDraft(entrantToDraft(body.record)); setAdding(false); setError(""); setConflict(false);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "読み込みに失敗しました。"); }
+    finally { pending.current = false; setBusy(false); }
+  }
+  async function submit(remove = false) {
+    if (pending.current) return;
+    if (!remove) { const validation = entrantDraftError(draft); if (validation) { setError(validation); return; } }
+    pending.current = true; setBusy(true);
+    try {
+      if (remove && !await confirm("この入場者を削除しますか？", record.person_names || "この新規入場者", "削除する")) return;
+      setError(""); setConflict(false);
+      requestId.current ??= crypto.randomUUID();
+      const person = entrantPerson(draft, adding ? requestId.current : record.id);
+      const response = await apiFetch(`/api/new-entrants${remove ? `?${recordMutationParams(record.id, record.updated_at)}` : ""}`, {
         method: remove ? "DELETE" : adding ? "POST" : "PATCH", headers: { "content-type": "application/json" },
         ...(!remove ? { body: JSON.stringify(adding
-          ? { entryDate: record.entry_date, primaryCompany: record.primary_company, people: [{ secondaryCompany, personName, nationalityStatus, notes }] }
-          : { id: record.id, entryDate: record.entry_date, primaryCompany: record.primary_company, secondaryCompany, personName, nationalityStatus, notes }) } : {}),
+          ? { entryDate: record.entry_date, primaryCompany: record.primary_company, people: [person] }
+          : { ...person, entryDate: record.entry_date, primaryCompany: record.primary_company, expectedUpdatedAt: record.updated_at }) } : {}),
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "保存に失敗しました。");
+      if (!response.ok) { setConflict(response.status === 409); throw new Error(body.error ?? "保存に失敗しました。"); }
       onSaved();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "通信に失敗しました。"); }
-    finally { setBusy(false); }
+    finally { pending.current = false; setBusy(false); }
   }
-
-  function startAdding() {
-    setAdding(true);
-    setCompanyChoice(initialCompany);
-    setNewCompany(initialCompany === NEW_COMPANY ? record.secondary_company ?? "" : "");
-    setPersonName("");
-    setNationalityStatus("");
-    setNotes("");
-    setError("");
-  }
-
-  return <><dialog ref={dialog} aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }} className="admin-dashboard m-auto max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-2xl overflow-y-auto rounded-md border border-border p-4 backdrop:bg-slate-950/45">
-    <form onSubmit={(event) => { event.preventDefault(); void submit(); }}><div className="flex items-center justify-between gap-3"><h2 id={titleId} className="text-lg font-bold">{adding ? "同じ会社に新規入場者を追加" : "新規入場者を編集"}</h2><button type="button" className="btn btn-secondary h-9 min-h-9 px-3" disabled={busy} onClick={onClose}><X size={16} />閉じる</button></div><p className="mb-4 text-sm text-slate-600">{record.entry_date} / {record.primary_company}</p>
-      {legacy && !adding && <p className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">旧形式で登録された{record.person_count}人分のデータです。内容を保持するため、個人編集はできません。</p>}
-      <fieldset disabled={busy || (legacy && !adding)} className="grid gap-3"><div className="field"><span className="label">所属会社（必須）</span><div className="flex flex-col gap-2 sm:flex-row"><select className="input min-w-0 flex-1" value={companyChoice === NEW_COMPANY ? "" : companyChoice} onChange={(event) => { setCompanyChoice(event.target.value); setNewCompany(""); }} disabled={companyChoice === NEW_COMPANY}>{secondaryOptions.map((company) => <option key={company}>{company}</option>)}<option value={PRIMARY}>{record.primary_company}</option></select><button type="button" className="btn btn-secondary h-[46px] min-h-[46px] shrink-0 px-3" onClick={() => { setCompanyChoice(NEW_COMPANY); setNewCompany(""); }}><Plus size={18} aria-hidden="true" />新しい二次会社に変更</button></div>{companyChoice === NEW_COMPANY && <div className="mt-2 flex gap-2"><input autoFocus className="input min-w-0 flex-1" aria-label="新しい二次会社名" value={newCompany} maxLength={200} onChange={(event) => setNewCompany(event.target.value)} placeholder="新しい二次会社名" /><button type="button" className="btn btn-secondary h-[46px] min-h-[46px] w-[46px] shrink-0 p-0" onClick={() => { setCompanyChoice(initialCompany === NEW_COMPANY ? PRIMARY : initialCompany); setNewCompany(""); }} aria-label="変更を取り消す"><X size={18} /></button></div>}</div>
-        <label className="field"><span className="label">氏名（必須）</span><input className="input" required value={personName} onChange={(event) => setPersonName(event.target.value)} /></label><fieldset className="field"><legend className="label">国籍（必須）</legend><div className="grid grid-cols-2 gap-2"><button type="button" className="status-option" aria-pressed={nationalityStatus === "japanese_only"} onClick={() => setNationalityStatus("japanese_only")}>日本籍</button><button type="button" className="status-option" aria-pressed={nationalityStatus === "includes_foreign"} onClick={() => setNationalityStatus("includes_foreign")}>外国籍</button></div></fieldset><label className="field"><span className="label">備考（任意）</span><textarea className="textarea" rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label></fieldset>
-      {error && <p role="alert" className="mt-3 text-sm notice-error">{error}</p>}<div className="mt-4 flex flex-wrap gap-2"><button type="submit" className="btn btn-primary" disabled={busy || (legacy && !adding)}>{adding ? "この会社に追加" : "保存"}</button>{!adding && <button type="button" className="btn btn-secondary" disabled={busy} onClick={startAdding}><Plus size={18} aria-hidden="true" />この会社に人を追加</button>}<button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>閉じる</button>{!adding && <button type="button" className="btn btn-secondary ml-auto text-red-700" disabled={busy} onClick={() => void submit(true)}>削除</button>}</div>
+  return <><dialog ref={dialog} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); if (!pending.current) onClose(); }} className="admin-dashboard modal-dialog max-w-2xl !p-4">
+    <form onSubmit={event => { event.preventDefault(); void submit(); }}><div className="flex items-center justify-between gap-3"><h2 id={titleId} className="text-lg font-bold">{adding ? "同じ会社に新規入場者を追加" : "新規入場者を編集"}</h2><button type="button" className="btn btn-secondary h-9 min-h-9 px-3" disabled={busy} onClick={onClose}><X size={16} />閉じる</button></div><p className="mb-4 text-sm text-slate-600">{record.entry_date} / {record.primary_company}</p>
+      {legacy && !adding && <p className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">旧形式で登録された{record.person_count}人分のデータです。個人編集はできません。</p>}
+      <fieldset disabled={busy || (legacy && !adding)}><EntrantFields primaryCompany={record.primary_company} secondaryOptions={master.secondariesByPrimary[record.primary_company] ?? []} draft={draft} onChange={fields => setDraft(current => ({ ...current, ...fields }))} /></fieldset>
+      <MutationNotice message={error} busy={busy} onReload={conflict ? () => void reload() : undefined} />
+      <div className="mt-4 flex flex-wrap gap-2"><button type="submit" className="btn btn-primary" disabled={busy || (legacy && !adding)}>{busy ? "処理中…" : adding ? "この人を登録" : "変更を保存"}</button>{!adding && <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => { setAdding(true); setDraft(emptyEntrantDraft(entrantToDraft(record).companyChoice)); requestId.current = null; setError(""); setConflict(false); }}><Plus size={18} aria-hidden="true" />同じ所属会社に人を追加</button>}{adding && <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => { setAdding(false); setDraft(entrantToDraft(record)); setError(""); setConflict(false); }}>追加をやめる</button>}{!adding && <button type="button" className="btn btn-secondary ml-auto text-red-700" disabled={busy} onClick={() => void submit(true)}>削除</button>}</div>
     </form></dialog>{confirmationDialog}</>;
 }

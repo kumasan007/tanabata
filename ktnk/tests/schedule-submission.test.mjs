@@ -7,30 +7,30 @@ import ts from "typescript";
 
 const nodeRequire = createRequire(import.meta.url);
 
-test("date move preserves content and rejects collisions and stale dates", async () => {
+test("date move preserves content and rejects collisions and stale versions", async () => {
   const id = "11111111-1111-4111-8111-111111111111";
+  const expectedUpdatedAt = "2026-09-25T00:00:00Z";
   for (const outcome of ["saved", "collision", "stale"]) {
-    const updates = []; const filters = []; let invalidated = false;
-    const query = {
-      update(value) { updates.push(value); return query; },
-      eq(key, value) { filters.push([key, value]); return query; },
-      select() { return query; },
-      async maybeSingle() { return { data: outcome === "saved" ? { id } : null, error: outcome === "collision" ? { code: "23505" } : null }; },
-    };
+    const calls = []; let invalidated = false;
     const { PATCH } = loadModule("app/api/schedules/date/route.ts", {
       "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
-      "@/lib/supabase": { createServerClient: () => ({ from(table) { assert.equal(table, "schedule_groups"); return query; } }) },
+      "@/lib/supabase": { createServerClient: () => ({ rpc: async (name, args) => {
+        calls.push({ name, args });
+        return { error: outcome === "saved" ? null : outcome === "collision" ? { code: "23505" } : { message: "OPERATION_CHANGED" } };
+      } }) },
       "@/lib/data-cache": { invalidateScheduleData: () => { invalidated = true; } },
       "@/lib/utils": loadModule("lib/utils.ts"),
       "@/lib/public-mutation-limit": { publicMutationAllowed: async () => true, mutationLimitResponse: () => ({ status: 429 }) },
     });
-    const response = await PATCH({ json: async () => ({ id, originalDate: "2026-09-25", date: "2026-09-26", workContent: "must not overwrite" }) });
+    const response = await PATCH({ json: async () => ({ id, expectedUpdatedAt, originalDate: "2026-09-25", date: "2026-09-26", workContent: "must not overwrite" }) });
     assert.equal(response.status, outcome === "saved" ? 200 : 409);
-    assert.equal(JSON.stringify(updates), JSON.stringify([{ work_date: "2026-09-26" }]));
-    assert.deepEqual(filters, [["id", id], ["work_date", "2026-09-25"]]);
+    assert.equal(calls[0].name, "move_schedule_with_revision");
+    assert.equal(JSON.stringify(calls[0].args), JSON.stringify({p_id:id,p_original_date:"2026-09-25",p_date:"2026-09-26",p_expected_updated_at:expectedUpdatedAt}));
     assert.equal(invalidated, outcome === "saved");
-    assert.equal((await PATCH({ json: async () => ({ id, originalDate: "2026-09-25", date: "2026-09-27" }) })).status, 400);
-    assert.equal(updates.length, 1);
+    for (const invalid of [{ id, originalDate: "2026-09-25", date: "2026-09-26" }, { id, expectedUpdatedAt, originalDate: "2026-09-25", date: "2026-09-27" }]) {
+      assert.equal((await PATCH({ json: async () => invalid })).status, 400);
+    }
+    assert.equal(calls.length, 1);
   }
 });
 
@@ -518,10 +518,12 @@ test("admin schedule editing pins the date and company to the existing ID and va
     "@/lib/schedule-service": { saveScheduleSubmission: async (input) => saved.push(input) },
     "@/lib/validation": { scheduleSubmitSchema },
   });
-  assert.equal((await route.PATCH({ json: async () => ({ ...submission(), id, startDate: "2026-10-01", endDate: "2026-10-31", primaryCompany: "B" }) })).status, 200);
+  assert.equal((await route.PATCH({ json: async () => ({ ...submission(), id, expectedUpdatedAt: "2026-09-07T00:00:00Z", dates: ["2026-10-01"], startDate: "2026-10-01", endDate: "2026-10-31", primaryCompany: "B" }) })).status, 200);
   assert.equal(saved[0].startDate, "2026-09-07");
   assert.equal(saved[0].endDate, "2026-09-07");
   assert.equal(saved[0].primaryCompany, "A");
+  assert.equal(saved[0].dates.join(), "2026-09-07");
+  assert.equal((await route.PATCH({ json: async () => ({ ...submission(), id }) })).status, 400);
   assert.deepEqual(calls[0], ["id", id]);
   assert.equal((await route.PATCH({ json: async () => ({ ...submission(), id, workArea: "" }) })).status, 400);
   assert.equal(saved.length, 1);
@@ -537,54 +539,44 @@ test("admin schedule deletion is limited to one ID and reports missing schedules
         assert.equal(table, "schedule_groups");
         return { delete: () => ({ eq: (key, value) => { calls.push([key, value]); return { select: async () => ({ data: found ? [{ id }] : [], error: null }) }; } }) };
       } }) },
-      "@/lib/schedule-service": { deleteSchedule: async (target) => { calls.push(["id", target]); return found; } }, "@/lib/validation": { scheduleSubmitSchema },
+      "@/lib/schedule-service": { deleteSchedule: async (target, version) => { calls.push(["id", target]); assert.equal(version, "2026-09-25T00:00:00Z"); return found; } }, "@/lib/validation": { scheduleSubmitSchema },
     });
-    assert.equal((await route.DELETE({ url: `http://localhost/api/admin/schedules?id=${id}` })).status, found ? 200 : 404);
+    assert.equal((await route.DELETE({ url: `http://localhost/api/admin/schedules?id=${id}&expectedUpdatedAt=2026-09-25T00:00:00Z` })).status, found ? 200 : 404);
     assert.deepEqual(calls, [["id", id]]);
     assert.equal((await route.DELETE({ url: "http://localhost/api/admin/schedules?id=invalid" })).status, 400);
     assert.equal(calls.length, 1);
   }
 });
 
-test("worker secondary registration validates input and only adds under an existing primary", async () => {
-  for (const [body, existing, expected, insertedCount] of [
-    [{ primaryCompany: "A", secondaryCompany: "  B  " }, [{ secondary_company: null, sort_order: 4, primary_trade_roles: ["role"] }], 200, 1],
-    [{ primaryCompany: "A", secondaryCompany: "B" }, [{ secondary_company: "B", sort_order: 4 }], 200, 0],
-    [{ primaryCompany: "missing", secondaryCompany: "B" }, [], 404, 0],
-    [{ primaryCompany: "A", secondaryCompany: "   " }, [], 400, 0],
-    [{ primaryCompany: "A", secondaryCompany: 123 }, [], 400, 0],
-    [{ primaryCompany: "A", secondaryCompany: "x".repeat(201) }, [], 400, 0],
+test("worker secondary registration validates input and scopes its atomic RPC to the primary", async () => {
+  for (const [body, exists, expected] of [
+    [{ primaryCompany: "A", secondaryCompany: "  B  " }, true, 200],
+    [{ primaryCompany: "missing", secondaryCompany: "B" }, false, 404],
+    [{ primaryCompany: "A", secondaryCompany: "   " }, false, 400],
+    [{ primaryCompany: "A", secondaryCompany: 123 }, false, 400],
+    [{ primaryCompany: "A", secondaryCompany: "x".repeat(201) }, false, 400],
   ]) {
-    const inserted = [];
+    const calls = [];
     const companies = loadModule("lib/companies.ts", {
-      "next/cache": { unstable_cache: (fn) => fn },
+      "next/cache": { unstable_cache: fn => fn },
       "@/lib/data-cache": { DATA_CACHE_TAGS: { companies: "companies" }, invalidateCompanyData: () => {} },
-      "@/lib/supabase": { createServerClient: () => ({ from(table) {
-        assert.equal(table, "company_master");
-        return {
-          select: () => ({ eq: (column, value) => {
-            assert.equal(column, "primary_company"); assert.equal(value, body.primaryCompany);
-            return { order: async () => ({ data: existing, error: null }) };
-          } }),
-          insert: async (rows) => { inserted.push(...rows); return { error: null }; },
-        };
-      } }) },
+      "@/lib/supabase": { createServerClient: () => ({ rpc: async (name, args) => { calls.push({name,args}); return { data:exists,error:null }; } }) },
     });
     const { POST } = loadModule("app/api/companies/secondary/route.ts", {
       "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
       "@/lib/companies": companies,
+      "@/lib/public-mutation-limit": { publicMutationAllowed: async () => true, mutationLimitResponse: () => ({ status: 429 }) },
     });
-    const response = await POST({ json: async () => body });
-    assert.equal(response.status, expected);
-    assert.equal(inserted.length, insertedCount);
-    if (insertedCount) {
-      assert.equal(inserted[0].secondary_company, "B");
-      assert.equal(inserted[0].primary_company, "A");
-      assert.equal(inserted[0].sort_order, 5);
-      assert.deepEqual(inserted[0].primary_trade_roles, ["role"]);
+    assert.equal((await POST({ json: async () => body })).status, expected);
+    assert.equal(calls.length, expected === 400 ? 0 : 1);
+    if (calls.length) {
+      assert.equal(calls[0].name, "ensure_secondary_companies");
+      assert.equal(calls[0].args.p_primary, body.primaryCompany);
+      assert.equal(Array.from(calls[0].args.p_secondaries).join(), "B");
     }
   }
 });
+
 
 
 test("予定保存は複数日と全明細を一回のRPCへ渡す", async () => {

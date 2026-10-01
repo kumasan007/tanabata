@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { assertAdminFromRequest } from "@/lib/supabase";
 import { createServerClient } from "@/lib/supabase";
-import { invalidateCompanyData } from "@/lib/data-cache";
+import { invalidateCompanyData, invalidateAllOperationalData } from "@/lib/data-cache";
 import { getCompanyMasterRows } from "@/lib/companies";
+import { z } from "zod";
+import { mutationErrorResponse } from "@/lib/mutation-error";
 
 export const runtime = "nodejs";
 
@@ -178,50 +180,16 @@ export async function PATCH(request: Request) {
     const supabase = createServerClient();
 
     if (Array.isArray(body.orderedIds)) {
-      const orderedIds = [
-        ...new Set(
-          body.orderedIds.filter((id) => typeof id === "string" && id.trim()),
-        ),
-      ];
-      if (orderedIds.length !== body.orderedIds.length) {
+      const parsed = z.array(z.string().uuid()).safeParse(body.orderedIds);
+      if (!parsed.success || new Set(parsed.data).size !== parsed.data.length) {
         return NextResponse.json(
           { error: "並び順の指定が正しくありません。" },
           { status: 400 },
         );
       }
 
-      const { data: rows, error: rowsError } = await supabase
-        .from("company_master")
-        .select("id,primary_company,secondary_company,primary_trade_roles,sort_order");
-      if (rowsError) throw rowsError;
-
-      const existingIds = new Set((rows ?? []).map((row) => row.id));
-      if (
-        orderedIds.length !== existingIds.size ||
-        orderedIds.some((id) => !existingIds.has(id))
-      ) {
-        return NextResponse.json(
-          { error: "会社一覧が更新されています。再読み込みしてください。" },
-          { status: 409 },
-        );
-      }
-
-      const rowsById = new Map((rows ?? []).map((row) => [row.id, row]));
-      const changedRows = orderedIds.flatMap((id, sortOrder) => {
-          const row = rowsById.get(id)!;
-          return row.sort_order === sortOrder ? [] : [{
-            ...row,
-            primary_trade_roles: row.primary_trade_roles ?? [],
-            sort_order: sortOrder,
-          }];
-        });
-      if (changedRows.length > 0) {
-        const { error: updateError } = await supabase.from("company_master").upsert(
-          changedRows,
-          { onConflict: "id" },
-        );
-        if (updateError) throw updateError;
-      }
+      const { error } = await supabase.rpc("reorder_company_master", { p_ids: parsed.data });
+      if (error) return mutationErrorResponse(error, "並び順を保存できませんでした。");
 
       invalidateCompanyData();
       return NextResponse.json({ ok: true });
@@ -237,23 +205,19 @@ export async function PATCH(request: Request) {
         );
       }
 
-      const { data, error } = await supabase
-        .from("company_master")
-        .update({
-          primary_company: primaryCompany,
-          primary_trade_roles: normalizeTradeRoles(body.primaryTradeRoles),
-        })
-        .eq("primary_company", tradeRolesPrimaryCompany)
-        .select("id");
+      const { data, error } = await supabase.rpc("update_company_master_atomically", {
+        p_id: null, p_old_primary: tradeRolesPrimaryCompany, p_primary: primaryCompany,
+        p_secondary: null, p_roles: normalizeTradeRoles(body.primaryTradeRoles),
+      });
       if (error) throw error;
-      if (!data?.length) {
+      if (!data) {
         return NextResponse.json(
           { error: "更新対象の一次会社が見つかりません。" },
           { status: 404 },
         );
       }
 
-      invalidateCompanyData();
+      invalidateAllOperationalData();
       return NextResponse.json({ ok: true });
     }
 
@@ -287,15 +251,10 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const { data, error } = await supabase
-      .from("company_master")
-      .update({
-        primary_company: primaryCompany,
-        secondary_company: secondaryCompany || null,
-      })
-      .eq("id", id)
-      .select("id")
-      .maybeSingle();
+    const { data, error } = await supabase.rpc("update_company_master_atomically", {
+      p_id: id, p_old_primary: null, p_primary: primaryCompany,
+      p_secondary: secondaryCompany || null, p_roles: null,
+    });
     if (error) throw error;
     if (!data) {
       return NextResponse.json(
@@ -304,7 +263,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    invalidateCompanyData();
+    invalidateAllOperationalData();
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(

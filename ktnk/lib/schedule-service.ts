@@ -21,6 +21,13 @@ export class ScheduleAlreadyExistsError extends Error {
   }
 }
 
+export class ScheduleChangedError extends Error {
+  constructor(message = "予定が変更されています。読み込み直してから編集してください。") {
+    super(message);
+    this.name = "ScheduleChangedError";
+  }
+}
+
 export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expectedId?: string) {
   const dates = input.dates?.length
     ? [...new Set(input.dates)].sort()
@@ -72,12 +79,19 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expect
     ...(input.usesAerialWorkVehicle ? input.aerialWorkVehicleRequests.map((row) => ({ equipment_type: "aerial_work_vehicle", floor_id: row.floorId, requested_count: row.count })) : []),
     ...(input.usesTachiuma ? input.tachiumaRequests.map((row) => ({ equipment_type: "tachiuma", floor_id: row.floorId, requested_count: row.count })) : []),
   ];
-  const { data, error } = await supabase.rpc("save_schedule_atomically", {
+  const id = expectedId ?? input.id;
+  if (id && !input.expectedUpdatedAt) throw new ScheduleChangedError();
+  const { data, error } = await supabase.rpc(id ? "save_schedule_with_revision" : "save_schedule_atomically", {
     p_groups: payloads, p_subcompanies: subcompanies, p_equipment_requests: equipmentRequests,
     p_overwrite: input.overwriteExisting, p_skip_existing: input.skipExisting,
-    p_expected_id: expectedId ?? null,
+    p_expected_id: id ?? null,
+    ...(id ? { p_expected_updated_at: input.expectedUpdatedAt } : {}),
   });
   if (error) {
+    if (error.message === "SCHEDULE_CHANGED") throw new ScheduleChangedError();
+    if (error.message === "COMPANY_NOT_FOUND" || error.message === "SECONDARY_COMPANY_CHANGED") {
+      throw new ScheduleChangedError("会社一覧が変更されています。最新の会社を選び直してください。");
+    }
     if (error.message === "SCHEDULE_ALREADY_EXISTS") {
       let conflicts = dates;
       try { const parsed: unknown = JSON.parse(error.details ?? "[]");
@@ -87,7 +101,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expect
     }
     if (error.message === "SCHEDULE_NOT_FOUND") throw new Error("予定は削除されています。カレンダーを更新してください。");
     if (error.code === "PGRST202" || error.code === "42883") {
-      throw new Error("予定保存用の追加SQL（202609150001_save_schedule_atomically.sql）を実行してください。");
+      throw new Error(id ? "予定編集用の追加SQL（202610010001_review_fixes.sql）を実行してください。" : "予定保存用の追加SQL（202609150001_save_schedule_atomically.sql）を実行してください。");
     }
     throwSupabaseError(error, "予定の保存に失敗しました。");
   }
@@ -100,14 +114,15 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expect
   return result;
 }
 
-export async function deleteSchedule(id: string) {
-  const { data, error } = await createServerClient()
-    .from("schedule_groups")
-    .delete()
-    .eq("id", id)
-    .select("id");
-  if (error) throwSupabaseError(error, "予定の削除に失敗しました。");
-  if (!data?.length) return false;
+export async function deleteSchedule(id: string, expectedUpdatedAt: string) {
+  const { data, error } = await createServerClient().rpc("delete_operational_record", {
+    p_table: "schedule_groups", p_id: id, p_expected_updated_at: expectedUpdatedAt,
+  });
+  if (error) {
+    if (error.message === "OPERATION_CHANGED") throw new ScheduleChangedError();
+    throwSupabaseError(error, "予定の削除に失敗しました。");
+  }
+  if (!data) return false;
   invalidateScheduleData();
   return true;
 }
@@ -187,6 +202,14 @@ export async function getSchedules(params: ScheduleSearchParams) {
     params.secondaryCompany?.trim() ?? "",
     params.exactPrimaryCompany ?? false,
   );
+}
+
+export async function getScheduleById(id: string) {
+  const { data, error } = await createServerClient().from("schedule_groups")
+    .select("*, schedule_subcompanies(*), schedule_equipment_requests(*, equipment_floor_master(id, name, sort_order))")
+    .eq("id", id).maybeSingle();
+  if (error) throwSupabaseError(error, "予定を読み込めませんでした。");
+  return data ? normalizeScheduleRow(data) : null;
 }
 
 async function queryPreviousScheduleForCopy(primaryCompany: string, workDate: string) {

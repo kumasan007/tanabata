@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { SchedulePreview } from "@/components/schedule-preview";
 import { ScheduleDateChange } from "@/components/schedule-date-change";
@@ -10,6 +10,7 @@ import type { NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 import { shortDateWithWeekday } from "@/lib/utils";
 import { calendarApiParams } from "@/lib/calendar-dates";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
+import { recordMutationParams } from "@/lib/record-version";
 
 type Records = { schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[] };
 
@@ -27,18 +28,21 @@ export function ExistingEntryCheck({ date, dates, company, kind, onNew, onOtherD
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const pending = useRef(false);
   const { confirm, dialog: confirmationDialog } = useConfirmDialog();
 
   async function removeSchedule(row: ScheduleWithSubcompanies) {
-    if (!await confirm("この予定を削除しますか？", `${shortDateWithWeekday(row.work_date)}「${row.primary_company}」\n人数内訳や設備情報も削除されます。`, "削除する")) return;
-    setDeletingId(row.id); setError("");
+    if (pending.current || deletingId) return;
+    pending.current = true; setDeletingId(row.id);
     try {
-      const response = await apiFetch(`/api/schedules?id=${encodeURIComponent(row.id)}`, { method: "DELETE" });
+      if (!await confirm("この予定を削除しますか？", `${shortDateWithWeekday(row.work_date)}「${row.primary_company}」\n人数内訳や設備情報も削除されます。`, "削除する")) return;
+      setError("");
+      const response = await apiFetch(`/api/schedules?${recordMutationParams(row.id, row.updated_at)}`, { method: "DELETE" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "予定を削除できませんでした。");
       onOtherDate();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "予定を削除できませんでした。"); }
-    finally { setDeletingId(null); }
+    finally { pending.current = false; setDeletingId(null); }
   }
 
   useEffect(() => {
@@ -70,7 +74,7 @@ export function ExistingEntryCheck({ date, dates, company, kind, onNew, onOtherD
     {schedules.map((row) => <article key={row.id} className="space-y-2 rounded-md bg-slate-50 p-4">
       <SchedulePreview primaryCompany={row.primary_company} schedule={scheduleToCopyData(row)!} notes={row.notes} hideZeroSecondaryCompanies />
       {requested.length === 1 && <div className="grid grid-cols-2 gap-2 [&>div]:col-span-2">
-        <ScheduleDateChange id={row.id} originalDate={row.work_date} onSaved={onOtherDate} disabled={deletingId === row.id} />
+        <ScheduleDateChange key={row.updated_at} id={row.id} originalDate={row.work_date} expectedUpdatedAt={row.updated_at} onSaved={onOtherDate} onReload={() => setRetry(v => v + 1)} disabled={deletingId === row.id} onBusyChange={value => setDeletingId(value ? row.id : null)} />
         <button type="button" className="btn btn-primary w-full" disabled={deletingId === row.id} onClick={() => onSchedule?.(row)}>内容を変更</button>
       </div>}
       {requested.length === 1 && <button type="button" className="btn btn-secondary w-full text-red-700" disabled={deletingId === row.id} onClick={() => void removeSchedule(row)}>{deletingId === row.id ? "削除中…" : "予定を削除"}</button>}

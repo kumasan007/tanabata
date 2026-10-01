@@ -1,10 +1,21 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { deleteSchedule, saveScheduleSubmission, ScheduleAlreadyExistsError } from "@/lib/schedule-service";
+import { deleteSchedule, getScheduleById, saveScheduleSubmission, ScheduleAlreadyExistsError, ScheduleChangedError } from "@/lib/schedule-service";
 import { scheduleSubmitSchema } from "@/lib/validation";
 import { mutationLimitResponse, publicMutationAllowed } from "@/lib/public-mutation-limit";
+import { recordMutationSchema } from "@/lib/mutation-validation";
 
 export const runtime = "nodejs";
+
+export async function GET(request: Request) {
+  const id = z.string().uuid().safeParse(new URL(request.url).searchParams.get("id"));
+  if (!id.success) return NextResponse.json({ error: "予定の指定が正しくありません。" }, { status: 400 });
+  try {
+    const record = await getScheduleById(id.data);
+    if (!record) return NextResponse.json({ error: "この予定は既に削除されています。" }, { status: 404 });
+    return NextResponse.json({ record }, { headers: { "cache-control": "no-store" } });
+  } catch { return NextResponse.json({ error: "予定を読み込めませんでした。" }, { status: 500 }); }
+}
 
 export async function POST(request: Request) {
   if (!await publicMutationAllowed(request, "schedule-write")) return mutationLimitResponse();
@@ -27,6 +38,7 @@ export async function POST(request: Request) {
     const result = await saveScheduleSubmission(parsed.data, id.data);
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof ScheduleChangedError) return NextResponse.json({ error: error.message }, { status: 409 });
     if (error instanceof ScheduleAlreadyExistsError) {
       return NextResponse.json(
         {
@@ -48,12 +60,13 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   if (!await publicMutationAllowed(request, "schedule-write")) return mutationLimitResponse();
-  const id = z.string().uuid().safeParse(new URL(request.url).searchParams.get("id"));
-  if (!id.success) return NextResponse.json({ error: "予定の指定が正しくありません。" }, { status: 400 });
+  const parsed = recordMutationSchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
+  if (!parsed.success) return NextResponse.json({ error: "予定を読み込み直してから削除してください。" }, { status: 400 });
   try {
-    if (!await deleteSchedule(id.data)) return NextResponse.json({ error: "予定は既に削除されています。カレンダーを更新してください。" }, { status: 404 });
+    if (!await deleteSchedule(parsed.data.id, parsed.data.expectedUpdatedAt)) return NextResponse.json({ error: "予定は既に削除されています。カレンダーを更新してください。" }, { status: 404 });
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (error) {
+    if (error instanceof ScheduleChangedError) return NextResponse.json({ error: error.message }, { status: 409 });
     return NextResponse.json({ error: "予定の削除に失敗しました。" }, { status: 500 });
   }
 }

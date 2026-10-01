@@ -26,6 +26,8 @@ const equipmentRequestSchema = z.object({
 
 export const scheduleSubmitSchema = z
   .object({
+    id: z.string().uuid().optional(),
+    expectedUpdatedAt: z.string().datetime({ offset: true }).optional(),
     dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(MAX_SUBMISSION_DATES).optional(),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "開始日を入力してください。"),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "終了日を入力してください。"),
@@ -49,6 +51,9 @@ export const scheduleSubmitSchema = z
     skipExisting: z.boolean().optional().default(false),
   })
   .superRefine((value, ctx) => {
+    if (value.id && !value.expectedUpdatedAt) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["expectedUpdatedAt"], message: "予定を読み込み直してから編集してください。" });
+    }
     if (value.dates?.length) {
       value.dates.forEach((date, index) => {
         if (!isWorkingDate(date)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["dates", index], message: "日曜日は入力できません。" });

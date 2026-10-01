@@ -202,7 +202,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary, ini
       const response = await apiFetch("/api/work-completions", {
         method: report && notes === undefined ? "DELETE" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, primaryCompany, notes: notes ?? "", expectedReportedAt: report?.reported_at }),
+        body: JSON.stringify({ date, primaryCompany, notes: notes ?? "", expectedReportedAt: report?.reported_at, expectedRevision: report?.revision }),
       });
       const body = await response.json();
       if (response.ok || response.status === 409) {

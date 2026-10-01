@@ -10,8 +10,10 @@ import type { CompanyMaster, ScheduleSubmitInput, ScheduleWithSubcompanies } fro
 import { CompanyPeopleFields } from "@/components/company-people-fields";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import { apiFetch } from "@/lib/api-client";
+import { recordMutationParams } from "@/lib/record-version";
+import { MutationNotice } from "@/components/ui/mutation-notice";
 
-export function AdminScheduleEditor({ schedule, master, onClose, onSaved, workerMode = false }: {
+export function AdminScheduleEditor({ schedule: initialSchedule, master: initialMaster, onClose, onSaved, workerMode = false }: {
   schedule: ScheduleWithSubcompanies;
   master: CompanyMaster | null;
   onClose: () => void;
@@ -19,6 +21,10 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
   workerMode?: boolean;
 }) {
   const { confirm, dialog: confirmationDialog } = useConfirmDialog();
+  const [schedule, setSchedule] = useState(initialSchedule);
+  const [master, setMaster] = useState(initialMaster);
+  const [conflict, setConflict] = useState(false);
+  const pending = useRef(false);
   const secondaryCompanies = [...new Set([
     ...(master?.secondariesByPrimary[schedule.primary_company] ?? []),
     ...schedule.subcompanies.map((row) => row.secondary_company ?? ""),
@@ -31,24 +37,42 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
   const [form, setForm] = useState<ScheduleSubmitInput>(() => scheduleToFormData(schedule, secondaryCompanies));
   useEffect(() => { const element = dialog.current; element?.showModal(); return () => element?.close(); }, []);
 
-  async function submit(remove = false) {
-    if (busy) return;
-    if (remove && !await confirm("この予定を削除しますか？", `${schedule.work_date}「${schedule.primary_company}」\n二次会社の人数内訳も削除されます。`, "削除する")) return;
-    setBusy(true); setError("");
+  async function reload() {
+    if (pending.current) return;
+    pending.current = true; setBusy(true);
     try {
+      const response = await apiFetch(`/api/schedules?id=${encodeURIComponent(schedule.id)}`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error);
+      const companyResponse = await apiFetch("/api/companies");
+      const companies = await companyResponse.json();
+      if (!companyResponse.ok) throw new Error(companies.error);
+      setSchedule(body.record); setMaster(companies);
+      setForm(scheduleToFormData(body.record, companies.secondariesByPrimary[body.record.primary_company] ?? []));
+      setError(""); setConflict(false);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "読み込みに失敗しました。"); }
+    finally { pending.current = false; setBusy(false); }
+  }
+
+  async function submit(remove = false) {
+    if (pending.current || busy) return;
+    pending.current = true; setBusy(true);
+    try {
+      if (remove && !await confirm("この予定を削除しますか？", `${schedule.work_date}「${schedule.primary_company}」\n二次会社の人数内訳も削除されます。`, "削除する")) return;
+      setError(""); setConflict(false);
       const endpoint = workerMode
-        ? `/api/schedules${remove ? `?id=${encodeURIComponent(schedule.id)}` : ""}`
-        : `/api/admin/schedules${remove ? `?id=${encodeURIComponent(schedule.id)}` : ""}`;
+        ? `/api/schedules${remove ? `?${recordMutationParams(schedule.id, schedule.updated_at)}` : ""}`
+        : `/api/admin/schedules${remove ? `?${recordMutationParams(schedule.id, schedule.updated_at)}` : ""}`;
       const response = await apiFetch(endpoint, {
         method: remove ? "DELETE" : workerMode ? "POST" : "PATCH",
         headers: { "content-type": "application/json" },
         ...(!remove ? { body: JSON.stringify({ ...form, id: schedule.id, overwriteExisting: true }) } : {}),
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "保存に失敗しました。");
+      if (!response.ok) { setConflict(response.status === 409); throw new Error(body.error ?? "保存に失敗しました。"); }
       onSaved();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "通信に失敗しました。"); }
-    finally { setBusy(false); }
+    finally { pending.current = false; setBusy(false); }
   }
 
   return <><dialog
@@ -67,7 +91,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
       pointerStartedOnBackdrop.current = false;
       if (clickedOutside) onClose();
     }}
-    className="admin-dashboard m-auto max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-2xl overflow-y-auto rounded-md border border-border p-4 backdrop:bg-slate-950/45"
+    className="admin-dashboard modal-dialog max-w-2xl !p-4"
   >
     <form onSubmit={(event) => { event.preventDefault(); void submit(); }}>
       <div className="flex items-center justify-between gap-3">
@@ -78,7 +102,7 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
         </button>
       </div>
       <p className="mb-4 text-sm text-slate-600">{schedule.work_date} / {schedule.primary_company}</p>
-      <div className="mb-4"><ScheduleDateChange id={schedule.id} originalDate={schedule.work_date} onSaved={onSaved} disabled={busy} onBusyChange={setBusy} /></div>
+      <div className="mb-4"><ScheduleDateChange key={schedule.updated_at} id={schedule.id} originalDate={schedule.work_date} expectedUpdatedAt={schedule.updated_at} onSaved={onSaved} onReload={() => void reload()} disabled={busy} onBusyChange={setBusy} /></div>
       <fieldset disabled={busy} className="grid gap-3">
         <CompanyPeopleFields
           primaryCompany={form.primaryCompany}
@@ -90,13 +114,14 @@ export function AdminScheduleEditor({ schedule, master, onClose, onSaved, worker
           showPrevious={false}
           onPrimaryCountChange={(primaryCount) => setForm({ ...form, primaryCount })}
           onSubcompaniesChange={(currentSubcompanies) => setForm({ ...form, currentSubcompanies })}
+          onSecondaryCompanyBusyChange={setBusy}
         />
         <label className="field"><span className="label">作業エリア（必須）</span><input className="input" required value={form.workArea} onChange={(event) => setForm({ ...form, workArea: event.target.value })} /></label>
         <label className="field"><span className="label">作業内容（必須）</span><textarea className="textarea" required value={form.workContent} onChange={(event) => setForm({ ...form, workContent: event.target.value })} /></label>
         <ScheduleEquipmentFields form={form} onChange={(fields) => setForm((current) => ({ ...current, ...fields }))} />
         <label className="field"><span className="label">備考（任意）</span><textarea className="textarea" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
       </fieldset>
-      {error && <p role="alert" className="mt-3 text-sm notice-error">{error}</p>}
+      <MutationNotice message={error} busy={busy} onReload={conflict ? () => void reload() : undefined} />
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "処理中…" : "保存"}</button>
         <button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>閉じる</button>

@@ -52,7 +52,7 @@ export function WorkCompletionForm({ date = "", primaryCompany, automaticDate = 
         method: cancel ? "DELETE" : "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller?.signal,
-        body: JSON.stringify({ date: cancel ? report?.work_date : date || undefined, automaticDate: automaticDate && !cancel, primaryCompany, notes, expectedReportedAt: report?.reported_at }),
+        body: JSON.stringify({ date: cancel ? report?.work_date : date || undefined, automaticDate: automaticDate && !cancel, primaryCompany, notes, expectedReportedAt: report?.reported_at, expectedRevision: report?.revision }),
       });
       const body = await response.json();
       if (controller?.signal.aborted) return;

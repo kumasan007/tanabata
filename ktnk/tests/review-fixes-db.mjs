@@ -1,0 +1,50 @@
+// Optional isolated PostgreSQL regression runner. No production connection is used.
+// Set KTNK_PGLITE_MODULE to an installed @electric-sql/pglite dist/index.js file.
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const { PGlite } = await import(process.env.KTNK_PGLITE_MODULE
+  ? pathToFileURL(process.env.KTNK_PGLITE_MODULE).href : "@electric-sql/pglite");
+const db = new PGlite();
+try {
+  const schema = readFileSync(new URL("../supabase/schema.sql", import.meta.url), "utf8").replaceAll("\r\n", "\n");
+  const backupSchema = readFileSync(new URL("../supabase/migrations/20260907_add_daily_backups.sql", import.meta.url), "utf8").replaceAll("\r\n", "\n");
+  await db.exec("create role anon; create role authenticated; create role service_role;");
+  const tables = new Map([...schema.matchAll(/create table if not exists public\.(\w+) \([\s\S]*?\n\);/g)].map(match => [match[1], match[0]]));
+  for (const name of ["company_master", "schedule_groups", "schedule_subcompanies", "new_entrant_records", "work_completion_reports",
+    "equipment_floor_master", "schedule_equipment_requests", "aerial_work_vehicles", "tachiuma_floor_stocks", "tachiuma_units", "equipment_movements"]) {
+    if (!tables.has(name)) throw new Error(`Missing table fixture: ${name}`);
+    await db.exec(tables.get(name));
+  }
+  await db.exec(backupSchema.match(/create table if not exists public\.data_backups \([\s\S]*?\n\);/)[0]);
+  await db.exec(`
+    create unique index data_backups_one_automatic_per_day_idx on public.data_backups(backup_date) where source='automatic';
+    create unique index company_pair_idx on public.company_master(primary_company,coalesce(secondary_company,''));
+    alter table public.aerial_work_vehicles add column assigned_company text, add column notes text, add column sort_order integer not null default 0;
+    alter table public.equipment_movements add column from_company text, add column to_company text, add column work_date date, add column vehicle_number text;
+  `);
+  for (const match of schema.split("-- 2026-10-01 review fixes")[0].matchAll(/create or replace function public\.save_schedule_atomically\([\s\S]*?\$\$;/g)) {
+    await db.exec(match[0]);
+  }
+  const migration = readFileSync(new URL("../supabase/migrations/202610010001_review_fixes.sql", import.meta.url), "utf8");
+  await db.exec(migration);
+  // Repeat application must not reset revisions or fail on already-created objects.
+  await db.exec(migration);
+  await db.exec(`
+    create trigger schedule_groups_set_updated_at before update on public.schedule_groups
+      for each row execute function public.set_updated_at();
+    create trigger new_entrant_records_set_updated_at before update on public.new_entrant_records
+      for each row execute function public.set_updated_at();
+  `);
+  await db.exec(readFileSync(new URL("./review-fixes.sql", import.meta.url), "utf8"));
+  const atomicMigration = readFileSync(new URL("../supabase/migrations/202610010002_atomic_flows.sql", import.meta.url), "utf8");
+  await db.exec(atomicMigration);
+  await db.exec(atomicMigration);
+  await db.exec(readFileSync(new URL("./atomic-flows.sql", import.meta.url), "utf8"));
+  process.stdout.write("Database regression checks passed (backup, legacy restore, renames, revisions, history).\n");
+} catch (error) {
+  console.error(error.message, error.where ?? "");
+  process.exitCode = 1;
+} finally {
+  await db.close();
+}

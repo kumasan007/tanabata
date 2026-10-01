@@ -1,8 +1,8 @@
 "use client";
-import Link from "next/link";
+import { AddSecondaryCompany } from "@/components/add-secondary-company";
 import { useId } from "react";
 import type { ScheduleSubmitInput } from "@/lib/types";
-export function CompanyPeopleFields({ primaryCompany, primaryCount, primaryCountCopied, previousPrimaryCount, subcompanies, previousCounts, onPrimaryCountChange, onSubcompaniesChange, showPrevious = true, }: {
+export function CompanyPeopleFields({ primaryCompany, primaryCount, primaryCountCopied, previousPrimaryCount, subcompanies, previousCounts, onPrimaryCountChange, onSubcompaniesChange, onSecondaryCompanyAdded, onSecondaryCompanyBusyChange, showPrevious = true, }: {
     primaryCompany: string;
     primaryCount: number | null;
     primaryCountCopied: boolean;
@@ -11,6 +11,8 @@ export function CompanyPeopleFields({ primaryCompany, primaryCount, primaryCount
     previousCounts: Map<string, number | null>;
     onPrimaryCountChange: (count: number | null, copied: boolean) => void;
     onSubcompaniesChange: (rows: ScheduleSubmitInput["currentSubcompanies"]) => void;
+    onSecondaryCompanyAdded?: () => void;
+    onSecondaryCompanyBusyChange?: (busy: boolean) => void;
     showPrevious?: boolean;
 }) {
     const id = useId();
@@ -61,10 +63,12 @@ export function CompanyPeopleFields({ primaryCompany, primaryCount, primaryCount
           </div>))}
       </div>
       <div className="border-t border-border bg-slate-50 p-3 text-sm">
-        <p className="text-slate-600">ここにない二次会社は、新規入場から追加できます。</p>
-        <Link className="btn btn-secondary mt-2 w-full" href="/new-entrants">
-          新規入場から二次会社を追加
-        </Link>
+        <AddSecondaryCompany primaryCompany={primaryCompany} onBusyChange={onSecondaryCompanyBusyChange} onAdded={company => {
+          if (!subcompanies.some(row => row.secondaryCompany === company)) {
+            onSubcompaniesChange([...subcompanies, { secondaryCompany: company, workerCount: null, usePreviousWorkerCount: false }]);
+          }
+          onSecondaryCompanyAdded?.();
+        }} />
       </div>
     </section>);
 }

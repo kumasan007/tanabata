@@ -8,10 +8,11 @@ export function scheduleToFormData(row: ScheduleWithSubcompanies, secondaryCompa
     const savedCounts = new Map(row.subcompanies.map((sub) => [sub.secondary_company ?? "", sub.worker_count]));
     const tachiuma = parseTachiumaValue(row.tachiuma_notes);
     return {
+        id: row.id, expectedUpdatedAt: row.updated_at,
         dates: [row.work_date], startDate: row.work_date, endDate: row.work_date, excludeWeekends: false,
         primaryCompany: row.primary_company, primaryCount: row.primary_count,
         currentSubcompanies: (secondaryCompanies ?? row.subcompanies.map((sub) => sub.secondary_company ?? ""))
-            .map((secondaryCompany) => ({ secondaryCompany, workerCount: savedCounts.get(secondaryCompany) ?? 0 })),
+            .map((secondaryCompany) => ({ secondaryCompany, workerCount: savedCounts.has(secondaryCompany) ? savedCounts.get(secondaryCompany) ?? null : 0 })),
         workArea: row.work_area ?? "", workContent: row.work_content ?? "",
         usesAerialWorkVehicle: row.uses_aerial_work_vehicle,
         aerialWorkVehicleNotes: row.aerial_work_vehicle_notes ?? "",

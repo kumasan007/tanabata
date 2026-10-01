@@ -1,31 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { MutationNotice } from "@/components/ui/mutation-notice";
 import { isWorkingDate } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
 
-export function ScheduleDateChange({ id, originalDate, onSaved, disabled = false, onBusyChange }: {
-  id: string; originalDate: string; onSaved: () => void; disabled?: boolean; onBusyChange?: (busy: boolean) => void;
+export function ScheduleDateChange({ id, originalDate, expectedUpdatedAt, onSaved, onReload, disabled = false, onBusyChange }: {
+  id: string; originalDate: string; expectedUpdatedAt: string; onSaved: () => void; onReload?: () => void; disabled?: boolean; onBusyChange?: (busy: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(originalDate);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [conflict, setConflict] = useState(false);
+  const pending = useRef(false);
 
   async function save() {
-    if (busy || disabled) return;
+    if (pending.current || disabled) return;
     if (!isWorkingDate(date)) { setError("月曜〜土曜の日付を選択してください。"); return; }
-    setBusy(true); onBusyChange?.(true); setError("");
+    pending.current = true; setBusy(true); onBusyChange?.(true); setError(""); setConflict(false);
     try {
       const response = await apiFetch("/api/schedules/date", {
         method: "PATCH", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id, originalDate, date }),
+        body: JSON.stringify({ id, originalDate, date, expectedUpdatedAt }),
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "日付の変更に失敗しました。");
+      if (!response.ok) { setConflict(body.code === "OPERATION_CHANGED"); throw new Error(body.error ?? "日付の変更に失敗しました。"); }
       onSaved();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "日付の変更に失敗しました。"); }
-    finally { setBusy(false); onBusyChange?.(false); }
+    finally { pending.current = false; setBusy(false); onBusyChange?.(false); }
   }
 
   if (!open) return <button type="button" className="btn btn-secondary w-full" disabled={disabled} onClick={() => setOpen(true)}>日付を変更</button>;
@@ -36,6 +39,6 @@ export function ScheduleDateChange({ id, originalDate, onSaved, disabled = false
       <button type="button" className="btn btn-primary" disabled={busy || disabled || !date || date === originalDate} onClick={() => void save()}>{busy ? "変更中…" : "この日付に移動"}</button>
       <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => { setOpen(false); setError(""); }}>キャンセル</button>
     </div>
-    {error && <p role="alert" className="notice-error text-sm">{error}</p>}
+    <MutationNotice message={error} onReload={conflict ? onReload : undefined} busy={busy || disabled} />
   </div>;
 }

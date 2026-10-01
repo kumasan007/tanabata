@@ -2,15 +2,16 @@ import { createServerClient } from "@/lib/supabase";
 import type { CompanyMaster, CompanyMasterRow } from "@/lib/types";
 import { unstable_cache } from "next/cache";
 import { DATA_CACHE_TAGS, invalidateCompanyData } from "@/lib/data-cache";
+import { readAllRows } from "@/lib/read-all-rows";
 
 const getCachedCompanyMasterRows = unstable_cache(async (): Promise<CompanyMasterRow[]> => {
   const supabase = createServerClient();
-  const { data, error } = await supabase
+  const { data, error } = await readAllRows(supabase
     .from("company_master")
     .select("id, primary_company, secondary_company, primary_trade_roles, sort_order")
     .order("sort_order", { ascending: true })
     .order("primary_company", { ascending: true })
-    .order("secondary_company", { ascending: true, nullsFirst: true });
+    .order("secondary_company", { ascending: true, nullsFirst: true }).order("id"));
 
   if (error) {
     throw new Error(`Supabaseから会社マスタを取得できませんでした: ${error.message}`);
@@ -35,32 +36,12 @@ export async function ensureSecondaryCompany(primaryCompany: string, secondaryCo
 }
 
 export async function ensureSecondaryCompanies(primaryCompany: string, secondaryCompanies: string[]) {
-  const db = createServerClient();
-  const { data: rows, error } = await db
-    .from("company_master")
-    .select("secondary_company,primary_trade_roles,sort_order")
-    .eq("primary_company", primaryCompany)
-    .order("sort_order", { ascending: true });
+  const { data, error } = await createServerClient().rpc("ensure_secondary_companies", {
+    p_primary: primaryCompany, p_secondaries: secondaryCompanies,
+  });
   if (error) throw error;
-  if (!rows?.length) return false;
-
-  const requested = [...new Set(secondaryCompanies.map((company) => company.trim()).filter(Boolean))];
-  const existing = new Set(rows.map((row) => row.secondary_company ?? ""));
-  const missing = requested.filter((company) => !existing.has(company));
-
-  if (missing.length) {
-    const firstSortOrder = Math.max(...rows.map((row) => row.sort_order)) + 1;
-    const { error: insertError } = await db.from("company_master").insert(missing.map((secondaryCompany, index) => ({
-      primary_company: primaryCompany,
-      secondary_company: secondaryCompany,
-      primary_trade_roles: rows[0].primary_trade_roles ?? [],
-      sort_order: firstSortOrder + index,
-    })));
-    // 同時登録は会社ペアのユニーク制約に任せる。
-    if (insertError && insertError.code !== "23505") throw insertError;
-    invalidateCompanyData();
-  }
-  return true;
+  if (data) invalidateCompanyData();
+  return data === true;
 }
 
 function buildCompanyMaster(rows: CompanyMasterRow[]): CompanyMaster {
