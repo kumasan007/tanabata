@@ -23,6 +23,22 @@ const CompanyPeopleFields = dynamic(() => import("@/components/company-people-fi
 const ScheduleEquipmentFields = dynamic(() => import("@/components/schedule-equipment-fields").then((module) => module.ScheduleEquipmentFields), { loading: () => <LoadingIndicator /> });
 const MultiDateCalendar = dynamic(() => import("@/components/multi-date-calendar").then((module) => module.MultiDateCalendar));
 
+function equipmentValidationError(form: ScheduleSubmitInput) {
+  for (const [label, enabled, rows] of [
+    ["高所作業車", form.usesAerialWorkVehicle, form.aerialWorkVehicleRequests],
+    ["立ち馬", form.usesTachiuma, form.tachiumaRequests],
+  ] as const) {
+    if (!enabled) continue;
+    if (!rows.length || rows.some((row) => !row.floorId.trim())) {
+      return `${label}のフロアを選択してください。`;
+    }
+    if (rows.some((row) => row.count === null || !Number.isInteger(row.count) || row.count < 1 || row.count > 999)) {
+      return `${label}の希望台数を1〜999の整数で入力してください。`;
+    }
+  }
+  return "";
+}
+
 export function ScheduleForm({
   today,
   initialDate = "",
@@ -422,6 +438,13 @@ export function ScheduleForm({
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!ready || submitting.current) return;
+    const equipmentError = equipmentValidationError(form);
+    if (equipmentError) {
+      setStep("edit");
+      setEditorPart("content");
+      setSubmitState({ status: "error", message: equipmentError });
+      return;
+    }
     if (!area.trim() || !content.trim()) {
       setStep("edit");
       setEditorPart("content");
@@ -988,6 +1011,13 @@ export function ScheduleForm({
                               : "作業内容を入力してください。",
                           });
                           return;
+                        }
+                        if (editorPart === "content") {
+                          const equipmentError = equipmentValidationError(form);
+                          if (equipmentError) {
+                            setSubmitState({ status: "error", message: equipmentError });
+                            return;
+                          }
                         }
                         setSubmitState({ status: "idle" });
                         if (editorPart === "people") {
