@@ -2,7 +2,7 @@
 
 import { calendarApiParams, monthRange, shiftMonth, datesInMonth } from "@/lib/calendar-dates";
 import type { CalendarSummaryData } from "@/lib/calendar-summary";
-import { CalendarClientCache } from "@/lib/calendar-client-cache";
+import { ClientCache } from "@/lib/client-cache";
 import type { WorkCompletion } from "@/lib/work-completions";
 import { LoadingIndicator, LoadingOverlay } from "@/components/loading-indicator";
 import { CalendarDay } from "@/components/calendar-day";
@@ -58,8 +58,8 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary, ini
   const [detail, setDetail] = useState<DayDetail>(initialDetail ?? { date: "", schedules: [], entrants: [], completions: [] });
   const [detailLoadedKey, setDetailLoadedKey] = useState(initialDetail ? JSON.stringify([initialDetail.date, "", 0]) : "");
   const [detailMessage, setDetailMessage] = useState("");
-  const summaryCache = useRef(new CalendarClientCache<{ schedules: CalendarSchedule[]; entrants: CalendarEntrant[]; completions: WorkCompletion[]; warning?: string }>());
-  const detailCache = useRef(new CalendarClientCache<{ schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[]; warning?: string }>());
+  const summaryCache = useRef(new ClientCache<{ schedules: CalendarSchedule[]; entrants: CalendarEntrant[]; completions: WorkCompletion[]; warning?: string }>());
+  const detailCache = useRef(new ClientCache<{ schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[]; warning?: string }>());
   const cacheVersion = useRef(0);
 
   useEffect(() => {
@@ -87,12 +87,20 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary, ini
   const requestKey = JSON.stringify([month, company, version]);
   const [loadedKey, setLoadedKey] = useState(initialSummary ? JSON.stringify([initialDate.slice(0, 7), "", 0]) : "");
   const initialSummaryPending = useRef(Boolean(initialSummary));
+  const initialDetailPending = useRef(Boolean(initialDetail));
   const loading = loadedKey !== requestKey;
   useEffect(() => {
     const controller = new AbortController();
     if (initialSummaryPending.current) {
       initialSummaryPending.current = false;
       if (initialSummary && !initialSummary.warning) summaryCache.current.set(JSON.stringify([initialDate.slice(0, 7), "", 0]), initialSummary);
+    }
+    if (initialDetailPending.current) {
+      initialDetailPending.current = false;
+      if (initialDetail) {
+        const { date, ...records } = initialDetail;
+        detailCache.current.set(JSON.stringify([date, "", 0]), records);
+      }
     }
     if (cacheVersion.current !== version) {
       summaryCache.current.clear();
@@ -128,7 +136,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary, ini
       if (!controller.signal.aborted) { setCompletions([]); setSchedules([]); setEntrants([]); setMessage(error instanceof Error ? error.message : "取得できませんでした。"); }
     }).finally(() => { if (!controller.signal.aborted) setLoadedKey(requestKey); });
     return () => controller.abort();
-  }, [month, company, version, range.from, range.to, requestKey, initialDate, initialSummary, masterRefreshVersion]);
+  }, [month, company, version, range.from, range.to, requestKey, initialDate, initialSummary, initialDetail, masterRefreshVersion]);
   const hasSelectedRecords = schedules.some(row => row.work_date === selectedDate)
     || entrants.some(row => row.entry_date === selectedDate)
     || completions.some(row => row.work_date === selectedDate);

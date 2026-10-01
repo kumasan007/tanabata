@@ -139,6 +139,44 @@ test("pagination preserves rows beyond the response limit and rejects incomplete
   assert.equal(failure.error.message, "offline");
 });
 
+test("completion reads paginate in a stable order and retain all reports", async () => {
+  const rows = Array.from({ length: 1201 }, (_, id) => ({ work_date: "2026-10-01", primary_company: String(id), notes: "note" }));
+  const orders = [];
+  const query = {
+    select() { return this; }, gte() { return this; }, lte() { return this; }, eq() { return this; },
+    order(column) { orders.push(column); return this; },
+    range(from, to) { return Promise.resolve({ data: rows.slice(from, to + 1), error: null }); },
+  };
+  const api = load("lib/work-completions.ts", {}, {
+    "next/cache": { unstable_cache: fn => fn },
+    "@/lib/data-cache": { DATA_CACHE_TAGS: {} },
+    "@/lib/read-all-rows": load("lib/read-all-rows.ts"),
+    "@/lib/supabase": { createServerClient: () => ({ from: () => query }) },
+  });
+  const reports = await api.getWorkCompletions("2026-10-01", "2026-10-31", null, true);
+  assert.equal(reports.length, 1201);
+  assert.deepEqual(orders, ["work_date", "primary_company"]);
+  assert.equal(reports[1200].notes, "");
+  assert.equal((await api.getScheduledCompletionCompanies("2026-10-01")).size, 1201);
+});
+
+test("client cache expires entries and bounds memory across many visited dates", () => {
+  let now = 0;
+  const { ClientCache } = load("lib/client-cache.ts", { Date: { now: () => now } });
+  const cache = new ClientCache();
+  for (let i = 0; i < 100; i++) cache.set(String(i), i);
+  assert.equal(cache.get("67"), undefined);
+  assert.equal(cache.get("68"), 68);
+  assert.equal(cache.get("99"), 99);
+  cache.delete("99");
+  assert.equal(cache.get("99"), undefined);
+  now = 30_000;
+  assert.equal(cache.get("68"), undefined);
+  cache.set("fresh", 1);
+  cache.clear();
+  assert.equal(cache.get("fresh"), undefined);
+});
+
 test("calendar reads default to one month and reject reversed, invalid or oversized ranges", () => {
   const utils = load("lib/utils.ts");
   const { calendarQueryRange, calendarApiParams } = load("lib/calendar-dates.ts", { URLSearchParams }, {

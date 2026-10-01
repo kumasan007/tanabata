@@ -11,7 +11,8 @@ const getCachedCompanyMasterRows = unstable_cache(async (): Promise<CompanyMaste
     .select("id, primary_company, secondary_company, primary_trade_roles, sort_order")
     .order("sort_order", { ascending: true })
     .order("primary_company", { ascending: true })
-    .order("secondary_company", { ascending: true, nullsFirst: true }).order("id"));
+    .order("secondary_company", { ascending: true, nullsFirst: true })
+    .order("id"));
 
   if (error) {
     throw new Error(`Supabaseから会社マスタを取得できませんでした: ${error.message}`);

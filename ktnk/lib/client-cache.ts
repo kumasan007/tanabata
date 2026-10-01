@@ -1,5 +1,5 @@
-// Bounded, per-calendar cache. Refreshes and writes clear it explicitly.
-export class CalendarClientCache<T> {
+// Short-lived, bounded cache shared by calendar and equipment views.
+export class ClientCache<T> {
   private entries = new Map<string, { value: T; expires: number }>();
 
   get(key: string): T | undefined {
@@ -19,4 +19,6 @@ export class CalendarClientCache<T> {
   }
 
   clear() { this.entries.clear(); }
+
+  delete(key: string) { this.entries.delete(key); }
 }

@@ -10,8 +10,15 @@ export function resolveVehicleAssignments(vehicles: EquipmentVehicle[], requests
     const key = `${request.floor_id}\0${request.company}`;
     capacities.set(key, (capacities.get(key) ?? 0) + request.requested_count);
   }
+  const byVehicle = new Map<string, VehicleAssignmentHistory[]>();
+  for (const row of history) {
+    if (!row.vehicle_id || row.work_date > date) continue;
+    const entries = byVehicle.get(row.vehicle_id);
+    if (entries) entries.push(row);
+    else byVehicle.set(row.vehicle_id, [row]);
+  }
   const candidates = vehicles.flatMap((vehicle) => {
-    const entries = history.filter(row => row.vehicle_id === vehicle.id && row.work_date <= date)
+    const entries = (byVehicle.get(vehicle.id) ?? [])
       .sort((a, b) => b.work_date.localeCompare(a.work_date) || b.moved_at.localeCompare(a.moved_at));
     const exact = entries.find(row => row.work_date === date);
     if (exact) {

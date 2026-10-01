@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { SESSION_CHANGED } from "@/lib/employee-session";
 import { apiFetch } from "@/lib/api-client";
+import { ClientCache } from "@/lib/client-cache";
 import type { EquipmentBoardData, EquipmentVehicle, TachiumaUnit } from "@/lib/equipment-board";
 import type { EquipmentType } from "@/lib/types";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -12,14 +13,12 @@ import { EquipmentOrderList } from "@/components/equipment-order-list";
 import { TooltipButton } from "@/components/ui/tooltip-button";
 import { LoadingIndicator, LoadingOverlay } from "@/components/loading-indicator";
 
-const boardCache = new Map<string, EquipmentBoardData>();
-const boardCachedAt = new Map<string, number>();
+const boardCache = new ClientCache<EquipmentBoardData>();
 const boardRequests = new Map<string, Promise<EquipmentBoardData>>();
-const BOARD_CACHE_MS = 30_000;
 
 export function prefetchEquipmentBoard(date: string, force = false) {
   const cached = boardCache.get(date);
-  if (!force && cached && Date.now() - (boardCachedAt.get(date) ?? 0) < BOARD_CACHE_MS) return Promise.resolve(cached);
+  if (!force && cached) return Promise.resolve(cached);
   const pending = boardRequests.get(date);
   if (!force && pending) return pending;
   const request = apiFetch(`/api/equipment-board?date=${date}`, { cache: "no-store", dedupe: !force })
@@ -28,7 +27,6 @@ export function prefetchEquipmentBoard(date: string, force = false) {
       if (!response.ok) throw new Error(body.error);
       if (boardRequests.get(date) === request) {
         boardCache.set(date, body);
-        boardCachedAt.set(date, Date.now());
       }
       return body as EquipmentBoardData;
     })
@@ -41,7 +39,7 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
   const { confirm, dialog: confirmationDialog } = useConfirmDialog();
   const [data, setData] = useState<EquipmentBoardData | null>(() => boardCache.get(date) ?? null);
   const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(() => !boardCache.has(date));
+  const [loading, setLoading] = useState(() => !boardCache.get(date));
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const sequence = useRef(0);
@@ -66,7 +64,7 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
     setLoading(true);
     setMessage("");
     try {
-      boardCache.delete(date); boardCachedAt.delete(date);
+      boardCache.delete(date);
       const body = await prefetchEquipmentBoard(date, force);
       if (current === sequence.current) setData(body);
     } catch (error) {
@@ -78,16 +76,17 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
     setMessage("");
     const changed = loadedVersion.current !== version;
     loadedVersion.current = version;
-    if (changed || !boardCache.has(date) || Date.now() - (boardCachedAt.get(date) ?? 0) >= BOARD_CACHE_MS) void refresh(changed);
+    if (changed || !boardCache.get(date)) void refresh(changed);
     else setLoading(false);
     const onFocus = () => {
-      if (!pending.current && Date.now() - (boardCachedAt.get(date) ?? 0) >= BOARD_CACHE_MS) void refresh();
+      if (!pending.current && !boardCache.get(date)) void refresh();
     };
+    const onSessionChanged = () => { boardCache.clear(); void refresh(true); };
     window.addEventListener("focus", onFocus);
-    window.addEventListener(SESSION_CHANGED, onFocus);
-    const onStorage = (event: StorageEvent) => { if (event.key === SESSION_CHANGED) onFocus(); };
+    window.addEventListener(SESSION_CHANGED, onSessionChanged);
+    const onStorage = (event: StorageEvent) => { if (event.key === SESSION_CHANGED) onSessionChanged(); };
     window.addEventListener("storage", onStorage);
-    return () => { ++sequence.current; window.removeEventListener("focus", onFocus); window.removeEventListener(SESSION_CHANGED, onFocus); window.removeEventListener("storage", onStorage); };
+    return () => { ++sequence.current; window.removeEventListener("focus", onFocus); window.removeEventListener(SESSION_CHANGED, onSessionChanged); window.removeEventListener("storage", onStorage); };
   }, [refresh, version]);
 
   async function save(payload: object, closeOperation = true) {
