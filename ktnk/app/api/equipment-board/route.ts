@@ -13,7 +13,9 @@ export async function GET(request: Request) {
     return NextResponse.json(await getEquipmentBoardData(date, assertAdminFromRequest(request)), { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
-    const message = ["42P01", "42703", "PGRST200", "PGRST204", "PGRST205"].includes(code)
+    const message = code === "PGRST202" || code === "42883"
+      ? "機材情報の取得用SQL（202610010001_optimize_equipment_board_reads.sql）を適用してください。"
+      : ["42P01", "42703", "PGRST200", "PGRST204", "PGRST205"].includes(code)
       ? "機材管理に必要なテーブル・項目を確認できません。フロア希望用SQLと機材配置用SQLの適用状況を確認してください。"
       : code === "42501" || code === "PGRST301" || code === "PGRST302"
         ? "機材情報の取得権限を確認できません。Supabaseのサーバー用キーの設定を確認してください。"

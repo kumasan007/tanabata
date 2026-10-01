@@ -2,15 +2,17 @@ import { createServerClient } from "@/lib/supabase";
 import type { CompanyMaster, CompanyMasterRow } from "@/lib/types";
 import { unstable_cache } from "next/cache";
 import { DATA_CACHE_TAGS, invalidateCompanyData } from "@/lib/data-cache";
+import { readAllRows } from "@/lib/read-all-rows";
 
 const getCachedCompanyMasterRows = unstable_cache(async (): Promise<CompanyMasterRow[]> => {
   const supabase = createServerClient();
-  const { data, error } = await supabase
+  const { data, error } = await readAllRows(supabase
     .from("company_master")
     .select("id, primary_company, secondary_company, primary_trade_roles, sort_order")
     .order("sort_order", { ascending: true })
     .order("primary_company", { ascending: true })
-    .order("secondary_company", { ascending: true, nullsFirst: true });
+    .order("secondary_company", { ascending: true, nullsFirst: true })
+    .order("id"));
 
   if (error) {
     throw new Error(`Supabaseから会社マスタを取得できませんでした: ${error.message}`);
