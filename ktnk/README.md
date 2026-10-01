@@ -43,6 +43,8 @@ anonキー運用では公開キーを知る利用者がSupabase REST APIを直�
 
 ### 2026-10-01のレビュー修正
 
+機材履歴インデックスの定義更新には `supabase/migrations/202610010007_fix_equipment_history_index.sql` をSQL Editorで実行してください。`004_optimize_equipment_board_reads`まで適用済みでも必要です。既存データを保持して、同名の旧インデックスを`id DESC`・`INCLUDE`付きの定義に作り直します。
+
 既存DBでは `supabase/migrations/202610010001_review_fixes.sql` をSQL Editorで1回実行してからデプロイしてください。終了報告の版番号、予定の同時編集チェック、関連データを含む会社名変更、機材履歴取得、バックアップ対象・復元順序を更新します。既存データは保持します。
 
 続けて `supabase/migrations/202610010002_atomic_flows.sql` を実行してください。新規入場の登録・編集、予定の削除・日付変更、会社の並べ替えを同時更新に対応させます。旧バックアップの階名が衝突した場合は、現在の機材が参照する階を「（復元前）」付きの名前で保持します。適用順は `001` → `002` → アプリのデプロイです。

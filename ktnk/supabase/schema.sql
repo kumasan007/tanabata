@@ -1170,7 +1170,9 @@ commit;
 begin;
 
 -- Latest dated override, including an explicit blank assignment.
-create index if not exists equipment_movements_vehicle_date_idx
+-- Replace the earlier definition: IF NOT EXISTS does not update an index.
+drop index if exists public.equipment_movements_vehicle_date_idx;
+create index equipment_movements_vehicle_date_idx
   on public.equipment_movements (vehicle_id, work_date desc, moved_at desc, id desc)
   include (to_floor_id, to_company)
   where work_date is not null;
