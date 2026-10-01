@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertAdminFromRequest, createAdminServerClient } from "@/lib/supabase";
 import { getEquipmentBoardData } from "@/lib/equipment-board";
+import { todayInTokyoString } from "@/lib/utils";
 
 export async function GET(request: Request) {
   const date = new URL(request.url).searchParams.get("date");
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
     const message = code === "PGRST202" || code === "42883"
-      ? "機材情報の取得用SQL（202610010001_optimize_equipment_board_reads.sql）を適用してください。"
+      ? "機材情報の取得用SQL（202610010004_optimize_equipment_board_reads.sql）を適用してください。"
       : ["42P01", "42703", "PGRST200", "PGRST204", "PGRST205"].includes(code)
       ? "機材管理に必要なテーブル・項目を確認できません。フロア希望用SQLと機材配置用SQLの適用状況を確認してください。"
       : code === "42501" || code === "PGRST301" || code === "PGRST302"
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
 
 const uuid = z.string().uuid();
 const input = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("save_vehicle"), vehicleId: uuid.nullable(), number: z.string().trim().min(1).max(30), notes: z.string().trim().max(500), floorId: uuid, company: z.string().trim().min(1).max(200).nullable(), expected: z.string().datetime({ offset: true }).nullable() }),
+  z.object({ action: z.literal("save_vehicle"), vehicleId: uuid.nullable(), number: z.string().trim().min(1).max(30), notes: z.string().trim().max(500), floorId: uuid, company: z.string().trim().min(1).max(200).nullable(), expected: z.string().datetime({ offset: true }).nullable(), date: z.string().date().optional() }),
   z.object({ action: z.literal("reorder_vehicles"), vehicleIds: z.array(uuid).max(500) }),
   z.object({ action: z.literal("delete_vehicle"), vehicleId: uuid, expected: z.string().datetime({ offset: true }) }),
   z.object({ action: z.literal("register_vehicle"), floorId: uuid, number: z.string().trim().min(1).max(30) }),
@@ -44,8 +45,8 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "入力内容を確認してください。" }, { status: 400 });
   const value = parsed.data;
   const db = createAdminServerClient();
-  const { error } = value.action === "save_vehicle" ? await db.rpc("save_equipment_vehicle", {
-    p_vehicle: value.vehicleId, p_number: value.number, p_notes: value.notes, p_floor: value.floorId, p_company: value.company, p_expected: value.expected,
+  const { error } = value.action === "save_vehicle" ? await db.rpc("save_equipment_vehicle_for_date", {
+    p_vehicle: value.vehicleId, p_number: value.number, p_notes: value.notes, p_floor: value.floorId, p_company: value.company, p_expected: value.expected, p_date: value.date ?? todayInTokyoString(),
   }) : value.action === "reorder_vehicles" ? await db.rpc("reorder_equipment_vehicles", {
     p_ids: value.vehicleIds,
   }) : value.action === "delete_vehicle" ? await db.rpc("delete_equipment_vehicle", {

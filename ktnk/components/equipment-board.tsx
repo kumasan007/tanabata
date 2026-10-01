@@ -207,10 +207,10 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
                   const requested = floorRequests.filter(row => row.company === company).reduce((sum, row) => sum + row.requested_count, 0);
                   const assigned = type === "aerial_work_vehicle" && requested > 0 ? (vehiclesByFloor.get(floor.id) ?? []).filter(row => row.assigned_company === company) : [];
                   const shortage = type === "aerial_work_vehicle" && requested > assigned.length;
-                  return <td className="min-w-24 p-1.5 hover:bg-sky-50" key={company} onDrop={type === "aerial_work_vehicle" ? event => assignDropped(event, floor.id, company) : undefined}>
+                  return <td className={`${type === "aerial_work_vehicle" ? "min-w-40" : "min-w-24"} p-1.5 hover:bg-sky-50`} key={company} onDrop={type === "aerial_work_vehicle" ? event => assignDropped(event, floor.id, company) : undefined}>
                     {(requested > 0 || assigned.length > 0) && <div className={`rounded px-2 py-1.5 ${shortage ? "border border-warning bg-warning-subtle" : "border border-transparent"}`}>
                       {requested > 0 && <span className="text-xs text-slate-600">{type === "aerial_work_vehicle" ? "希望 " : ""}{requested}台</span>}
-                      {assigned.length > 0 && <div className="mt-1 flex flex-wrap justify-center gap-1">{assigned.map(vehicle => vehicleChip(vehicle, true))}</div>}
+                      {assigned.length > 0 && <div className="mx-auto mt-1 grid max-w-48 grid-cols-3 gap-1 [&>span]:min-w-0 [&>span]:w-full">{assigned.map(vehicle => vehicleChip(vehicle, true))}</div>}
                     </div>}
                   </td>;
                 })}
@@ -240,7 +240,7 @@ export function EquipmentBoard({ date, version }: { date: string; version: numbe
         </> : <form className="grid gap-3" onSubmit={async event => {
           event.preventDefault(); if (managerDelete) return;
           const current = vehicleEditor === "new" ? null : vehicleEditor;
-          if (await save({ action: "save_vehicle", vehicleId: current?.id ?? null, number: vehicleNumber.trim(), notes: vehicleNotes.trim(), floorId: vehicleFloor, company: vehicleCompany || null, expected: current?.updated_at ?? null }, false)) setVehicleEditor(null);
+          if (await save({ action: "save_vehicle", vehicleId: current?.id ?? null, number: vehicleNumber.trim(), notes: vehicleNotes.trim(), floorId: vehicleFloor, company: vehicleCompany || null, date, expected: current?.updated_at ?? null }, false)) setVehicleEditor(null);
         }}>
           <label className="grid gap-1 text-sm font-semibold">号車番号<input className="input" required maxLength={30} value={vehicleNumber} onChange={event => setVehicleNumber(event.target.value)} /></label>
           <label className="grid gap-1 text-sm font-semibold">フロア<select className="input" required value={vehicleFloor} onChange={event => { setVehicleFloor(event.target.value); setVehicleCompany(""); }}>{data.floors.map(floor => <option key={floor.id} value={floor.id}>{floor.name}</option>)}</select></label>

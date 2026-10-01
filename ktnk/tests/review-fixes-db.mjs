@@ -2,6 +2,9 @@
 // Set KTNK_PGLITE_MODULE to an installed @electric-sql/pglite dist/index.js file.
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import assert from "node:assert/strict";
+import { runInNewContext } from "node:vm";
+import ts from "typescript";
 
 const { PGlite } = await import(process.env.KTNK_PGLITE_MODULE
   ? pathToFileURL(process.env.KTNK_PGLITE_MODULE).href : "@electric-sql/pglite");
@@ -55,6 +58,35 @@ try {
   await db.exec(cleanup);
   await db.exec(cleanup);
   await db.exec(readFileSync(new URL("./sql-cleanup.sql", import.meta.url), "utf8"));
+  await db.exec(schema.match(/create or replace function public\.save_equipment_vehicle\([\s\S]*?\$\$;/)[0]);
+  const capacity = readFileSync(new URL("../supabase/migrations/202610010006_vehicle_assignment_capacity.sql", import.meta.url), "utf8");
+  await db.exec(capacity);
+  await db.exec(capacity);
+  await db.exec(readFileSync(new URL("./vehicle-assignment-capacity.sql", import.meta.url), "utf8"));
+  // The database writer must choose the same visible assignments as the board.
+  const exports = {};
+  const { outputText } = ts.transpileModule(readFileSync(new URL("../lib/equipment-assignment.ts", import.meta.url), "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  });
+  runInNewContext(outputText, { exports });
+  const floor = "00000000-0000-0000-0000-000000000001";
+  const otherFloor = "00000000-0000-0000-0000-000000000002";
+  const ids = [1, 2, 3, 4].map(id => `10000000-0000-0000-0000-${String(id).padStart(12, "0")}`);
+  const vehicles = ids.map((id, sort_order) => ({ id, floor_id: floor, assigned_company: "A", vehicle_number: String(sort_order + 1), sort_order }));
+  const requests = [{ equipment_type: "aerial_work_vehicle", floor_id: floor, company: "A", requested_count: 3 }];
+  const used = (id, company, date, hour, toFloor = floor) => ({ vehicle_id: id, to_company: company, to_floor_id: toFloor, work_date: date, moved_at: `${date}T${hour}:00:00Z` });
+  for (const history of [
+    [],
+    ids.map((id, index) => used(id, "A", "2026-10-01", `0${index + 1}`)),
+    [used(ids[0], "A", "2026-09-30", "01"), used(ids[0], null, "2026-10-01", "02")],
+    [used(ids[0], "A", "2026-09-30", "01"), used(ids[0], null, "2026-09-30", "02", otherFloor)],
+    [used(ids[0], "A", "2026-09-29", "01"), used(ids[0], "B", "2026-09-30", "02")],
+  ]) {
+    const visible = exports.resolveVehicleAssignments(vehicles, requests, history, "2026-10-01")
+      .filter(row => row.assigned_company).map(row => row.id).sort();
+    const { rows } = await db.query("select vehicle_id from public.get_equipment_assignment_candidates($1::jsonb,$2::date) where assignment_rank<=requested_count", [{ vehicles, requests, history }, "2026-10-01"]);
+    assert.deepEqual(rows.map(row => row.vehicle_id).sort(), [...visible]);
+  }
   process.stdout.write("Database regression checks passed (backup, legacy restore, renames, revisions, history).\n");
 } catch (error) {
   console.error(error.message, error.where ?? "");
