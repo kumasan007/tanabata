@@ -72,6 +72,11 @@ export const scheduleSubmitSchema = z
     for (const [field, label] of [["workArea", "作業エリア"], ["workContent", "作業内容"]] as const) {
       if (!value[field].trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${label}を入力してください。` });
     }
+    const secondaryTotal = value.currentSubcompanies.reduce((sum, row) => sum + (row.secondaryCompany.trim() && !row.usePreviousWorkerCount ? row.workerCount : 0), 0);
+    const hasPreviousSecondaryCount = value.currentSubcompanies.some((row) => row.secondaryCompany.trim() !== "" && row.usePreviousWorkerCount);
+    if (!value.usePreviousPrimaryCount && value.primaryCount === 0 && secondaryTotal < 1 && !hasPreviousSecondaryCount) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["primaryCount"], message: "?????1???????????" });
+    }
     for (const [enabled, requests, path, label] of [
       [value.usesAerialWorkVehicle, value.aerialWorkVehicleRequests, "aerialWorkVehicleRequests", "高所作業車"],
       [value.usesTachiuma, value.tachiumaRequests, "tachiumaRequests", "立ち馬"],

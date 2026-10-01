@@ -479,6 +479,12 @@ export function ScheduleForm({
       setSubmitState({ status: "error", message: "一次会社人数を0以上の整数で入力してください。" });
       return;
     }
+    if (totalCount < 1) {
+      setStep("edit");
+      setEditorPart("people");
+      setSubmitState({ status: "error", message: "?????1???????????" });
+      return;
+    }
     if (
       activeRows.some(
         (row) => !row.secondaryCompany.trim() && (row.workerCount ?? 0) > 0,
@@ -946,11 +952,6 @@ export function ScheduleForm({
                         onChange={(value) => patch({ notes: value })}
                       />
                     </div>
-                    {submitState.status === "error" && (
-                      <p role="alert" className="mt-3 notice-error">
-                        {submitState.message}
-                      </p>
-                    )}
                     <button
                       type="button"
                       className="btn btn-primary mt-5 w-full"
@@ -979,6 +980,7 @@ export function ScheduleForm({
                           return;
                         }
                         if (
+                          totalCount < 1 ||
                           activeRows.some(
                             (row) =>
                               !row.secondaryCompany.trim() &&

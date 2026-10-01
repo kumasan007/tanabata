@@ -62,6 +62,9 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expect
       notes: emptyToNull(input.notes),
     };
 
+    if ((payload.primary_count ?? 0) + resolvedSubcompanies.reduce((sum, row) => sum + (row.workerCount ?? 0), 0) < 1) {
+      throw new Error("?????1???????????");
+    }
     return payload;
   });
 
