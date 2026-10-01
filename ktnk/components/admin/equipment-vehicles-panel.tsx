@@ -65,7 +65,7 @@ export function EquipmentVehiclesPanel() {
       <label className="field"><span className="label">現在のフロア</span><select className="input" required value={floorId} onChange={event => setFloorId(event.target.value)}>{data?.floors.map(floor => <option key={floor.id} value={floor.id}>{floor.name}</option>)}</select></label>
       <label className="field sm:col-span-2"><span className="label">備考（任意）</span><textarea className="textarea min-h-20" maxLength={500} value={notes} onChange={event => setNotes(event.target.value)}/></label>
       {editing !== "new" && <button type="button" className="justify-self-start text-xs text-red-700 underline sm:col-span-2" disabled={busy} onClick={async () => { if (await confirm("号車を削除しますか？", `${editing.vehicle_number}号車を削除します。`, "削除する")) void mutate({ action: "delete_vehicle", vehicleId: editing.id, expected: editing.updated_at }); }}>この号車を削除</button>}
-      <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setEditing(null)}>取消</button><button type="submit" className="btn btn-primary min-h-9 px-3 py-1 text-sm" disabled={busy || !number.trim() || !floorId}>保存</button></div>
+      <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setEditing(null)}>戻る</button><button type="submit" className="btn btn-primary min-h-9 px-3 py-1 text-sm" disabled={busy || !number.trim() || !floorId}>保存</button></div>
     </form>}
     {!data && !message && <p className="py-6 text-center text-slate-600">読み込み中…</p>}
     <EquipmentOrderList rows={data?.vehicles ?? []} floors={data?.floors ?? []} busy={busy} disabled={editing !== null}

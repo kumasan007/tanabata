@@ -41,6 +41,20 @@ try {
   await db.exec(atomicMigration);
   await db.exec(atomicMigration);
   await db.exec(readFileSync(new URL("./atomic-flows.sql", import.meta.url), "utf8"));
+  for (const name of ["202610010003_completion_atomic.sql", "202610010004_optimize_equipment_board_reads.sql"]) {
+    await db.exec(readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8"));
+  }
+  await db.exec(`
+    create index company_master_primary_idx on public.company_master(primary_company);
+    create index schedule_groups_primary_company_idx on public.schedule_groups(primary_company);
+    create index schedule_groups_work_date_idx on public.schedule_groups(work_date);
+    create index new_entrant_records_entry_date_idx on public.new_entrant_records(entry_date);
+    create unique index schedule_groups_work_date_primary_company_idx on public.schedule_groups(work_date,primary_company);
+  `);
+  const cleanup = readFileSync(new URL("../supabase/migrations/202610010005_sql_cleanup.sql", import.meta.url), "utf8");
+  await db.exec(cleanup);
+  await db.exec(cleanup);
+  await db.exec(readFileSync(new URL("./sql-cleanup.sql", import.meta.url), "utf8"));
   process.stdout.write("Database regression checks passed (backup, legacy restore, renames, revisions, history).\n");
 } catch (error) {
   console.error(error.message, error.where ?? "");

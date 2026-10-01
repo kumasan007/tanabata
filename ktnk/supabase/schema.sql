@@ -46,8 +46,6 @@ where duplicate.ctid > keeper.ctid
   and duplicate.primary_company = keeper.primary_company
   and duplicate.secondary_company is not distinct from keeper.secondary_company;
 
-create index if not exists company_master_primary_idx
-  on public.company_master (primary_company);
 
 create unique index if not exists company_master_company_unique_idx
   on public.company_master (primary_company, coalesce(secondary_company, ''));
@@ -116,11 +114,6 @@ create table if not exists public.new_entrant_records (
   updated_at timestamptz not null default now()
 );
 
-create index if not exists schedule_groups_work_date_idx
-  on public.schedule_groups (work_date);
-
-create index if not exists schedule_groups_primary_company_idx
-  on public.schedule_groups (primary_company);
 
 create index if not exists schedule_groups_primary_date_idx
   on public.schedule_groups (primary_company, work_date);
@@ -179,14 +172,11 @@ create policy new_entrant_records_app_all on public.new_entrant_records
 for all to anon, authenticated using (true) with check (true);
 
 create or replace function public.set_updated_at()
-returns trigger
-language plpgsql
-as $$
+returns trigger language plpgsql set search_path = public, pg_temp as $$
 begin
-  new.updated_at = now();
+  new.updated_at := greatest(clock_timestamp(), old.updated_at + interval '1 microsecond');
   return new;
-end;
-$$;
+end $$;
 
 drop trigger if exists schedule_groups_set_updated_at on public.schedule_groups;
 create trigger schedule_groups_set_updated_at
@@ -450,50 +440,113 @@ declare backup_id uuid; backup_payload jsonb; backup_counts jsonb;
 begin
   if p_source not in ('automatic', 'manual') then raise exception 'Invalid backup source'; end if;
   backup_payload := jsonb_build_object(
-    'company_master', coalesce((select jsonb_agg(to_jsonb(r) order by r.sort_order, r.id) from public.company_master r), '[]'::jsonb),
-    'equipment_floor_master', coalesce((select jsonb_agg(to_jsonb(r) order by r.sort_order, r.id) from public.equipment_floor_master r), '[]'::jsonb),
-    'schedule_groups', coalesce((select jsonb_agg(to_jsonb(r) order by r.work_date, r.id) from public.schedule_groups r), '[]'::jsonb),
-    'schedule_subcompanies', coalesce((select jsonb_agg(to_jsonb(r) order by r.schedule_group_id, r.sort_order, r.id) from public.schedule_subcompanies r), '[]'::jsonb),
-    'schedule_equipment_requests', coalesce((select jsonb_agg(to_jsonb(r) order by r.schedule_group_id, r.sort_order, r.id) from public.schedule_equipment_requests r), '[]'::jsonb),
-    'new_entrant_records', coalesce((select jsonb_agg(to_jsonb(r) order by r.entry_date, r.id) from public.new_entrant_records r), '[]'::jsonb)
+    'company_master', coalesce((select jsonb_agg(to_jsonb(r)) from public.company_master r), '[]'::jsonb),
+    'equipment_floor_master', coalesce((select jsonb_agg(to_jsonb(r)) from public.equipment_floor_master r), '[]'::jsonb),
+    'schedule_groups', coalesce((select jsonb_agg(to_jsonb(r)) from public.schedule_groups r), '[]'::jsonb),
+    'schedule_subcompanies', coalesce((select jsonb_agg(to_jsonb(r)) from public.schedule_subcompanies r), '[]'::jsonb),
+    'schedule_equipment_requests', coalesce((select jsonb_agg(to_jsonb(r)) from public.schedule_equipment_requests r), '[]'::jsonb),
+    'new_entrant_records', coalesce((select jsonb_agg(to_jsonb(r)) from public.new_entrant_records r), '[]'::jsonb),
+    'work_completion_reports', coalesce((select jsonb_agg(to_jsonb(r)) from public.work_completion_reports r), '[]'::jsonb),
+    'aerial_work_vehicles', coalesce((select jsonb_agg(to_jsonb(r)) from public.aerial_work_vehicles r), '[]'::jsonb),
+    'tachiuma_floor_stocks', coalesce((select jsonb_agg(to_jsonb(r)) from public.tachiuma_floor_stocks r), '[]'::jsonb),
+    'tachiuma_units', coalesce((select jsonb_agg(to_jsonb(r)) from public.tachiuma_units r), '[]'::jsonb),
+    'equipment_movements', coalesce((select jsonb_agg(to_jsonb(r)) from public.equipment_movements r), '[]'::jsonb)
   );
-  backup_counts := jsonb_build_object(
-    'company_master', jsonb_array_length(backup_payload->'company_master'), 'equipment_floor_master', jsonb_array_length(backup_payload->'equipment_floor_master'),
-    'schedule_groups', jsonb_array_length(backup_payload->'schedule_groups'), 'schedule_subcompanies', jsonb_array_length(backup_payload->'schedule_subcompanies'),
-    'schedule_equipment_requests', jsonb_array_length(backup_payload->'schedule_equipment_requests'), 'new_entrant_records', jsonb_array_length(backup_payload->'new_entrant_records')
-  );
-  insert into public.data_backups(source, schema_version, row_counts, payload) values(p_source, 4, backup_counts, backup_payload)
-  on conflict (backup_date) where source = 'automatic' do update set created_at=now(), schema_version=4, row_counts=excluded.row_counts, payload=excluded.payload
-  returning id into backup_id; return backup_id;
+  select jsonb_object_agg(key, jsonb_array_length(value)) into backup_counts from jsonb_each(backup_payload);
+  insert into public.data_backups(source, schema_version, row_counts, payload) values(p_source, 6, backup_counts, backup_payload)
+    on conflict (backup_date) where source = 'automatic' do update
+      set created_at = now(), schema_version = 6, row_counts = excluded.row_counts, payload = excluded.payload
+    returning id into backup_id;
+  return backup_id;
 end $$;
 
 create or replace function public.restore_data_backup(p_backup_id uuid)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
-declare backup_payload jsonb; normalized_groups jsonb; restored_counts jsonb;
+declare backup_payload jsonb; normalized_groups jsonb; restored_counts jsonb; target text; floor_row record; candidate text; suffix integer;
 begin
-  select payload into backup_payload from public.data_backups where id=p_backup_id;
+  select payload into backup_payload from public.data_backups where id = p_backup_id;
   if backup_payload is null then raise exception 'Backup not found'; end if;
+  foreach target in array array['company_master','schedule_groups','schedule_subcompanies','new_entrant_records'] loop
+    if jsonb_typeof(backup_payload->target) is distinct from 'array' then raise exception 'Invalid backup: %', target; end if;
+  end loop;
+  foreach target in array array['equipment_floor_master','schedule_equipment_requests','work_completion_reports',
+    'aerial_work_vehicles','tachiuma_floor_stocks','tachiuma_units','equipment_movements'] loop
+    if backup_payload ? target and jsonb_typeof(backup_payload->target) is distinct from 'array' then raise exception 'Invalid backup: %', target; end if;
+  end loop;
+  perform pg_advisory_xact_lock(250925001);
   select coalesce(jsonb_agg((item - 'aerial_work_vehicle_count' - 'aerial_work_vehicle_floor') || jsonb_build_object(
+    'updated_at', clock_timestamp(),
     'uses_aerial_work_vehicle', coalesce((item->>'uses_aerial_work_vehicle')::boolean, coalesce((item->>'aerial_work_vehicle_count')::integer,0)>0),
     'aerial_work_vehicle_notes', coalesce(item->>'aerial_work_vehicle_notes', item->>'aerial_work_vehicle_floor')
   )), '[]'::jsonb) into normalized_groups from jsonb_array_elements(backup_payload->'schedule_groups') item;
+  backup_payload := jsonb_set(backup_payload, '{schedule_groups}', normalized_groups);
+  select coalesce(jsonb_agg(item || jsonb_build_object('updated_at', clock_timestamp())), '[]'::jsonb)
+    into normalized_groups from jsonb_array_elements(backup_payload->'new_entrant_records') item;
+  backup_payload := jsonb_set(backup_payload, '{new_entrant_records}', normalized_groups);
+  if backup_payload ? 'work_completion_reports' then
+    select coalesce(jsonb_agg(item || jsonb_build_object('revision', greatest(coalesce((item->>'revision')::integer,1),coalesce((select revision from public.work_completion_reports where id=(item->>'id')::uuid),0))+1)), '[]'::jsonb)
+      into normalized_groups from jsonb_array_elements(backup_payload->'work_completion_reports') item;
+    backup_payload := jsonb_set(backup_payload, '{work_completion_reports}', normalized_groups);
+  end if;
   perform set_config('app.skip_audit','on',true);
-  delete from public.schedule_equipment_requests; delete from public.schedule_subcompanies; delete from public.schedule_groups;
-  delete from public.new_entrant_records; delete from public.company_master;
-  if backup_payload ? 'equipment_floor_master' then delete from public.equipment_floor_master; end if;
-  insert into public.company_master select * from jsonb_populate_recordset(null::public.company_master, backup_payload->'company_master');
-  if backup_payload ? 'equipment_floor_master' then insert into public.equipment_floor_master select * from jsonb_populate_recordset(null::public.equipment_floor_master, backup_payload->'equipment_floor_master'); end if;
-  insert into public.schedule_groups select * from jsonb_populate_recordset(null::public.schedule_groups, normalized_groups);
-  insert into public.schedule_subcompanies select * from jsonb_populate_recordset(null::public.schedule_subcompanies, backup_payload->'schedule_subcompanies');
-  insert into public.schedule_equipment_requests select * from jsonb_populate_recordset(null::public.schedule_equipment_requests, coalesce(backup_payload->'schedule_equipment_requests','[]'::jsonb));
-  insert into public.new_entrant_records select * from jsonb_populate_recordset(null::public.new_entrant_records, backup_payload->'new_entrant_records');
-  restored_counts := jsonb_build_object('company_master',jsonb_array_length(backup_payload->'company_master'),'equipment_floor_master',jsonb_array_length(coalesce(backup_payload->'equipment_floor_master','[]'::jsonb)),'schedule_groups',jsonb_array_length(normalized_groups),'schedule_subcompanies',jsonb_array_length(backup_payload->'schedule_subcompanies'),'schedule_equipment_requests',jsonb_array_length(coalesce(backup_payload->'schedule_equipment_requests','[]'::jsonb)),'new_entrant_records',jsonb_array_length(backup_payload->'new_entrant_records'));
+  -- Delete dependent equipment before floors. Missing legacy sections are preserved.
+  foreach target in array array['equipment_movements','aerial_work_vehicles','tachiuma_floor_stocks','tachiuma_units','work_completion_reports'] loop
+    if backup_payload ? target then execute format('delete from public.%I', target); end if;
+  end loop;
+  delete from public.schedule_equipment_requests;
+  delete from public.schedule_subcompanies;
+  delete from public.schedule_groups;
+  delete from public.new_entrant_records;
+  delete from public.company_master;
+  if backup_payload ?& array['equipment_floor_master','aerial_work_vehicles','tachiuma_floor_stocks','tachiuma_units','equipment_movements'] then
+    delete from public.equipment_floor_master;
+  end if;
+  -- Legacy backups preserve floors referenced by omitted equipment sections.
+  -- Free conflicting names before restoring identities, including name swaps.
+  if backup_payload ? 'equipment_floor_master' then
+    for floor_row in select floor.id from public.equipment_floor_master floor
+      join jsonb_array_elements(backup_payload->'equipment_floor_master') item on floor.id=(item->>'id')::uuid
+      where floor.name is distinct from item->>'name' loop
+      loop
+        candidate := '_restore_' || substr(replace(gen_random_uuid()::text,'-',''),1,20);
+        exit when not exists(select 1 from public.equipment_floor_master where name=candidate)
+          and not exists(select 1 from jsonb_array_elements(backup_payload->'equipment_floor_master') item where item->>'name'=candidate);
+      end loop;
+      update public.equipment_floor_master set name=candidate where id=floor_row.id;
+    end loop;
+    for floor_row in select floor.id,floor.name from public.equipment_floor_master floor
+      where not exists(select 1 from jsonb_array_elements(backup_payload->'equipment_floor_master') item where (item->>'id')::uuid=floor.id)
+        and exists(select 1 from jsonb_array_elements(backup_payload->'equipment_floor_master') item where item->>'name'=floor.name) loop
+      suffix:=0;
+      loop
+        candidate:=left(floor_row.name,15)||'（復元前'||case when suffix=0 then '' else suffix::text end||'）';
+        exit when not exists(select 1 from public.equipment_floor_master where name=candidate)
+          and not exists(select 1 from jsonb_array_elements(backup_payload->'equipment_floor_master') item where item->>'name'=candidate);
+        suffix:=suffix+1;
+      end loop;
+      update public.equipment_floor_master set name=candidate where id=floor_row.id;
+    end loop;
+  end if;
+  foreach target in array array['company_master','equipment_floor_master','schedule_groups','schedule_subcompanies',
+    'schedule_equipment_requests','new_entrant_records','work_completion_reports','aerial_work_vehicles',
+    'tachiuma_floor_stocks','tachiuma_units','equipment_movements'] loop
+    if backup_payload ? target then
+      if target = 'equipment_floor_master' then
+        insert into public.equipment_floor_master select * from jsonb_populate_recordset(null::public.equipment_floor_master, backup_payload->target)
+          on conflict(id) do update set name = excluded.name, sort_order = excluded.sort_order;
+      else
+        execute format('insert into public.%I select * from jsonb_populate_recordset(null::public.%I, $1)', target, target)
+          using backup_payload->target;
+      end if;
+    end if;
+  end loop;
+  select jsonb_object_agg(key, jsonb_array_length(value)) into restored_counts from jsonb_each(backup_payload)
+    where jsonb_typeof(value) = 'array';
   return restored_counts;
 end $$;
 
 notify pgrst, 'reload schema';
 commit;
-
 
 
 -- Equipment positions and transfers
@@ -610,71 +663,22 @@ begin
   return saved_id;
 end $$;
 create or replace function public.delete_tachiuma_unit(p_unit uuid,p_expected timestamptz) returns void language plpgsql security invoker set search_path=public,pg_temp as $$ declare item public.tachiuma_units; begin select * into item from public.tachiuma_units where id=p_unit for update; if item.id is null or item.updated_at is distinct from p_expected then raise exception '立ち馬情報が変更されています。更新して再度操作してください。'; end if; delete from public.tachiuma_units where id=p_unit; end $$;
-create or replace function public.reorder_tachiuma_units(p_ids uuid[]) returns void language plpgsql security invoker set search_path=public,pg_temp as $$ begin if cardinality(p_ids) is distinct from (select count(*) from public.tachiuma_units) or cardinality(p_ids) is distinct from (select count(distinct id) from unnest(p_ids) item(id)) then raise exception '立ち馬一覧が変更されています。'; end if; update public.tachiuma_units unit set sort_order=ordered.position,updated_at=clock_timestamp() from (select id,ordinality-1 position from unnest(p_ids) with ordinality item(id,ordinality)) ordered where ordered.id=unit.id; end $$;
+create or replace function public.reorder_tachiuma_units(p_ids uuid[])
+returns void language plpgsql security invoker set search_path=public,pg_temp as $$
+begin
+  perform pg_advisory_xact_lock(250925001);
+  lock table public.tachiuma_units in share row exclusive mode;
+  if cardinality(p_ids) is distinct from (select count(*) from public.tachiuma_units)
+    or cardinality(p_ids) is distinct from (select count(distinct id) from unnest(p_ids) item(id))
+    or exists(select 1 from unnest(p_ids) item(id) where not exists(select 1 from public.tachiuma_units where id=item.id)) then
+    raise exception '立ち馬一覧が変更されています。更新して再度操作してください。';
+  end if;
+  update public.tachiuma_units unit set sort_order=ordered.position,updated_at=clock_timestamp()
+    from (select id,ordinality-1 position from unnest(p_ids) with ordinality item(id,ordinality)) ordered
+    where unit.id=ordered.id and unit.sort_order is distinct from ordered.position;
+end $$;
 revoke all on function public.save_tachiuma_unit(uuid,text,text,uuid,timestamptz), public.delete_tachiuma_unit(uuid,timestamptz), public.reorder_tachiuma_units(uuid[]) from public,anon,authenticated;
 grant execute on function public.save_tachiuma_unit(uuid,text,text,uuid,timestamptz), public.delete_tachiuma_unit(uuid,timestamptz), public.reorder_tachiuma_units(uuid[]) to service_role;
-
-create or replace function public.create_data_backup(p_source text default 'manual')
-returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
-declare backup_id uuid; backup_payload jsonb; backup_counts jsonb;
-begin
-  if p_source not in ('automatic', 'manual') then raise exception 'Invalid backup source'; end if;
-  backup_payload := jsonb_build_object(
-    'aerial_work_vehicles', coalesce((select jsonb_agg(to_jsonb(r)) from public.aerial_work_vehicles r), '[]'::jsonb),
-    'tachiuma_floor_stocks', coalesce((select jsonb_agg(to_jsonb(r)) from public.tachiuma_floor_stocks r), '[]'::jsonb),
-    'equipment_movements', coalesce((select jsonb_agg(to_jsonb(r)) from public.equipment_movements r), '[]'::jsonb),
-    'company_master', coalesce((select jsonb_agg(to_jsonb(r) order by r.sort_order, r.id) from public.company_master r), '[]'::jsonb),
-    'equipment_floor_master', coalesce((select jsonb_agg(to_jsonb(r) order by r.sort_order, r.id) from public.equipment_floor_master r), '[]'::jsonb),
-    'schedule_groups', coalesce((select jsonb_agg(to_jsonb(r) order by r.work_date, r.id) from public.schedule_groups r), '[]'::jsonb),
-    'schedule_subcompanies', coalesce((select jsonb_agg(to_jsonb(r) order by r.schedule_group_id, r.sort_order, r.id) from public.schedule_subcompanies r), '[]'::jsonb),
-    'schedule_equipment_requests', coalesce((select jsonb_agg(to_jsonb(r) order by r.schedule_group_id, r.sort_order, r.id) from public.schedule_equipment_requests r), '[]'::jsonb),
-    'new_entrant_records', coalesce((select jsonb_agg(to_jsonb(r) order by r.entry_date, r.id) from public.new_entrant_records r), '[]'::jsonb)
-  );
-  backup_counts := jsonb_build_object(
-    'aerial_work_vehicles', jsonb_array_length(backup_payload->'aerial_work_vehicles'),
-    'tachiuma_floor_stocks', jsonb_array_length(backup_payload->'tachiuma_floor_stocks'),
-    'equipment_movements', jsonb_array_length(backup_payload->'equipment_movements'),
-    'company_master', jsonb_array_length(backup_payload->'company_master'), 'equipment_floor_master', jsonb_array_length(backup_payload->'equipment_floor_master'),
-    'schedule_groups', jsonb_array_length(backup_payload->'schedule_groups'), 'schedule_subcompanies', jsonb_array_length(backup_payload->'schedule_subcompanies'),
-    'schedule_equipment_requests', jsonb_array_length(backup_payload->'schedule_equipment_requests'), 'new_entrant_records', jsonb_array_length(backup_payload->'new_entrant_records')
-  );
-  insert into public.data_backups(source, schema_version, row_counts, payload) values(p_source, 5, backup_counts, backup_payload)
-  on conflict (backup_date) where source = 'automatic' do update set created_at=now(), schema_version=5, row_counts=excluded.row_counts, payload=excluded.payload
-  returning id into backup_id; return backup_id;
-end $$;
-
-create or replace function public.restore_data_backup(p_backup_id uuid)
-returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
-declare backup_payload jsonb; normalized_groups jsonb; restored_counts jsonb;
-begin
-  select payload into backup_payload from public.data_backups where id=p_backup_id;
-  if backup_payload is null then raise exception 'Backup not found'; end if;
-  select coalesce(jsonb_agg((item - 'aerial_work_vehicle_count' - 'aerial_work_vehicle_floor') || jsonb_build_object(
-    'uses_aerial_work_vehicle', coalesce((item->>'uses_aerial_work_vehicle')::boolean, coalesce((item->>'aerial_work_vehicle_count')::integer,0)>0),
-    'aerial_work_vehicle_notes', coalesce(item->>'aerial_work_vehicle_notes', item->>'aerial_work_vehicle_floor')
-  )), '[]'::jsonb) into normalized_groups from jsonb_array_elements(backup_payload->'schedule_groups') item;
-  perform set_config('app.skip_audit','on',true);
-  perform pg_advisory_xact_lock(250925001);
-  if backup_payload ? 'aerial_work_vehicles' then
-    delete from public.equipment_movements; delete from public.aerial_work_vehicles; delete from public.tachiuma_floor_stocks;
-  end if;
-  delete from public.schedule_equipment_requests; delete from public.schedule_subcompanies; delete from public.schedule_groups;
-  delete from public.new_entrant_records; delete from public.company_master;
-  if backup_payload ? 'equipment_floor_master' and backup_payload ? 'aerial_work_vehicles' then delete from public.equipment_floor_master; end if;
-  insert into public.company_master select * from jsonb_populate_recordset(null::public.company_master, backup_payload->'company_master');
-  if backup_payload ? 'equipment_floor_master' then insert into public.equipment_floor_master select * from jsonb_populate_recordset(null::public.equipment_floor_master, backup_payload->'equipment_floor_master') on conflict(id) do update set name=excluded.name, sort_order=excluded.sort_order; end if;
-  insert into public.schedule_groups select * from jsonb_populate_recordset(null::public.schedule_groups, normalized_groups);
-  insert into public.schedule_subcompanies select * from jsonb_populate_recordset(null::public.schedule_subcompanies, backup_payload->'schedule_subcompanies');
-  insert into public.schedule_equipment_requests select * from jsonb_populate_recordset(null::public.schedule_equipment_requests, coalesce(backup_payload->'schedule_equipment_requests','[]'::jsonb));
-  insert into public.new_entrant_records select * from jsonb_populate_recordset(null::public.new_entrant_records, backup_payload->'new_entrant_records');
-  if backup_payload ? 'aerial_work_vehicles' then
-    insert into public.aerial_work_vehicles select * from jsonb_populate_recordset(null::public.aerial_work_vehicles, coalesce(backup_payload->'aerial_work_vehicles','[]'::jsonb));
-    insert into public.tachiuma_floor_stocks select * from jsonb_populate_recordset(null::public.tachiuma_floor_stocks, coalesce(backup_payload->'tachiuma_floor_stocks','[]'::jsonb));
-    insert into public.equipment_movements select * from jsonb_populate_recordset(null::public.equipment_movements, coalesce(backup_payload->'equipment_movements','[]'::jsonb));
-  end if;
-  restored_counts := jsonb_build_object('company_master',jsonb_array_length(backup_payload->'company_master'),'equipment_floor_master',jsonb_array_length(coalesce(backup_payload->'equipment_floor_master','[]'::jsonb)),'schedule_groups',jsonb_array_length(normalized_groups),'schedule_subcompanies',jsonb_array_length(backup_payload->'schedule_subcompanies'),'schedule_equipment_requests',jsonb_array_length(coalesce(backup_payload->'schedule_equipment_requests','[]'::jsonb)),'new_entrant_records',jsonb_array_length(backup_payload->'new_entrant_records'));
-  return restored_counts;
-end $$;
 
 
 notify pgrst, 'reload schema';
@@ -690,32 +694,6 @@ alter table public.equipment_movements
   add column if not exists to_company text;
 
 -- Assignments describe current usage, independent of the selected calendar date.
-create or replace function public.assign_equipment_vehicle(
-  p_vehicle uuid, p_floor uuid, p_company text, p_expected timestamptz
-) returns void language plpgsql security invoker set search_path = public, pg_temp as $$
-declare v public.aerial_work_vehicles; company_name text := nullif(btrim(p_company), '');
-begin
-  perform pg_advisory_xact_lock(250925001);
-  select * into v from public.aerial_work_vehicles where id=p_vehicle for update;
-  if v.id is null or v.updated_at is distinct from p_expected then
-    raise exception '配置・割当が変更されています。更新して再度操作してください。';
-  end if;
-  if not exists(select 1 from public.equipment_floor_master where id=p_floor) then
-    raise exception 'フロアが存在しません。';
-  end if;
-  if company_name is not null and company_name is distinct from v.assigned_company
-    and not exists(select 1 from public.company_master where primary_company=company_name)
-    and not exists(select 1 from public.schedule_groups where primary_company=company_name) then
-    raise exception '会社が存在しません。更新して再度選択してください。';
-  end if;
-  if v.floor_id=p_floor and v.assigned_company is not distinct from company_name then return; end if;
-  update public.aerial_work_vehicles
-    set floor_id=p_floor,assigned_company=company_name,updated_at=clock_timestamp() where id=p_vehicle;
-  insert into public.equipment_movements(equipment_type,action,vehicle_id,from_floor_id,to_floor_id,quantity,from_company,to_company)
-    values('aerial_work_vehicle','assign_vehicle',v.id,v.floor_id,p_floor,1,v.assigned_company,company_name);
-end $$;
-revoke all on function public.assign_equipment_vehicle(uuid,uuid,text,timestamptz) from public, anon, authenticated;
-grant execute on function public.assign_equipment_vehicle(uuid,uuid,text,timestamptz) to service_role;
 
 notify pgrst, 'reload schema';
 commit;
@@ -775,11 +753,19 @@ begin
 end $$;
 revoke all on function public.save_equipment_vehicle(uuid,text,text,uuid,text,timestamptz) from public,anon,authenticated;
 grant execute on function public.save_equipment_vehicle(uuid,text,text,uuid,text,timestamptz) to service_role;
-create or replace function public.reorder_equipment_vehicles(p_ids uuid[]) returns void language plpgsql security invoker set search_path=public,pg_temp as $$
+create or replace function public.reorder_equipment_vehicles(p_ids uuid[])
+returns void language plpgsql security invoker set search_path=public,pg_temp as $$
 begin
- perform pg_advisory_xact_lock(250925001);
- if cardinality(p_ids) is distinct from(select count(*) from public.aerial_work_vehicles) or cardinality(p_ids) is distinct from(select count(distinct item.id) from unnest(p_ids)item(id)) or exists(select 1 from unnest(p_ids)item(id) left join public.aerial_work_vehicles v on v.id=item.id where v.id is null) then raise exception '号車一覧が変更されています。更新して再度操作してください。';end if;
- update public.aerial_work_vehicles v set sort_order=o.position,updated_at=clock_timestamp() from(select id,ordinality-1 position from unnest(p_ids) with ordinality item(id,ordinality))o where o.id=v.id;
+  perform pg_advisory_xact_lock(250925001);
+  lock table public.aerial_work_vehicles in share row exclusive mode;
+  if cardinality(p_ids) is distinct from (select count(*) from public.aerial_work_vehicles)
+    or cardinality(p_ids) is distinct from (select count(distinct id) from unnest(p_ids) item(id))
+    or exists(select 1 from unnest(p_ids) item(id) where not exists(select 1 from public.aerial_work_vehicles where id=item.id)) then
+    raise exception '号車一覧が変更されています。更新して再度操作してください。';
+  end if;
+  update public.aerial_work_vehicles vehicle set sort_order=ordered.position,updated_at=clock_timestamp()
+    from (select id,ordinality-1 position from unnest(p_ids) with ordinality item(id,ordinality)) ordered
+    where vehicle.id=ordered.id and vehicle.sort_order is distinct from ordered.position;
 end $$;
 revoke all on function public.reorder_equipment_vehicles(uuid[]) from public,anon,authenticated;
 grant execute on function public.reorder_equipment_vehicles(uuid[]) to service_role;
@@ -847,12 +833,7 @@ notify pgrst,'reload schema';
 begin;
 
 -- A second update in one transaction must still change the editor's version.
-create or replace function public.set_updated_at()
-returns trigger language plpgsql set search_path = public, pg_temp as $$
-begin
-  new.updated_at := greatest(clock_timestamp(), old.updated_at + interval '1 microsecond');
-  return new;
-end $$;
+
 
 -- A report's original timestamp remains unchanged when its notes are edited.
 alter table public.work_completion_reports add column if not exists revision integer not null default 1;
@@ -868,21 +849,16 @@ for each row execute function public.bump_completion_revision();
 
 -- Check the version while holding the same date lock used by ordinary saves.
 create or replace function public.save_schedule_with_revision(
-  p_groups jsonb, p_subcompanies jsonb, p_equipment_requests jsonb,
-  p_overwrite boolean, p_skip_existing boolean, p_expected_id uuid,
-  p_expected_updated_at timestamptz
-) returns jsonb language plpgsql security invoker set search_path = public, pg_temp as $$
+  p_groups jsonb,p_subcompanies jsonb,p_equipment_requests jsonb,p_overwrite boolean,p_skip_existing boolean,
+  p_expected_id uuid,p_expected_updated_at timestamptz
+) returns jsonb language plpgsql security invoker set search_path=public,pg_temp as $$
 declare current_row public.schedule_groups;
 begin
-  if p_expected_id is null or p_expected_updated_at is null or jsonb_array_length(p_groups) <> 1 then
-    raise exception 'Invalid schedule revision';
-  end if;
-  perform pg_advisory_xact_lock(hashtextextended((p_groups->0->>'primary_company') || ':' || (p_groups->0->>'work_date'), 0));
-  select * into current_row from public.schedule_groups where id = p_expected_id for update;
-  if current_row.id is null or current_row.updated_at is distinct from p_expected_updated_at then
-    raise exception using message = 'SCHEDULE_CHANGED';
-  end if;
-  return public.save_schedule_atomically(p_groups, p_subcompanies, p_equipment_requests, p_overwrite, p_skip_existing, p_expected_id);
+  if p_expected_id is null or p_expected_updated_at is null or jsonb_array_length(p_groups)<>1 then raise exception 'Invalid schedule revision'; end if;
+  perform pg_advisory_xact_lock(250925001);
+  select * into current_row from public.schedule_groups where id=p_expected_id for update;
+  if current_row.id is null or current_row.updated_at is distinct from p_expected_updated_at then raise exception 'SCHEDULE_CHANGED'; end if;
+  return public.save_schedule_atomically(p_groups,p_subcompanies,p_equipment_requests,p_overwrite,p_skip_existing,p_expected_id);
 end $$;
 revoke all on function public.save_schedule_with_revision(jsonb,jsonb,jsonb,boolean,boolean,uuid,timestamptz) from public,anon,authenticated;
 grant execute on function public.save_schedule_with_revision(jsonb,jsonb,jsonb,boolean,boolean,uuid,timestamptz) to service_role;
@@ -951,109 +927,8 @@ grant execute on function public.update_company_master_atomically(uuid,text,text
 -- Long-idle vehicles must not disappear behind the REST API's row limit.
 create index if not exists equipment_movements_vehicle_date_idx
   on public.equipment_movements(vehicle_id, work_date desc, moved_at desc, id) where work_date is not null;
-create or replace function public.get_equipment_assignment_history(p_date date)
-returns table(id uuid, vehicle_id uuid, to_floor_id uuid, to_company text, work_date date, moved_at timestamptz)
-language sql stable security invoker set search_path = public, pg_temp as $$
-  select history.id, history.vehicle_id, history.to_floor_id, history.to_company, history.work_date, history.moved_at
-  from public.aerial_work_vehicles vehicle
-  cross join lateral (
-    (select movement.* from public.equipment_movements movement
-      where movement.vehicle_id = vehicle.id and movement.work_date <= p_date
-      order by movement.work_date desc, movement.moved_at desc, movement.id limit 1)
-    union
-    (select distinct on (movement.to_company) movement.* from public.equipment_movements movement
-      where movement.vehicle_id = vehicle.id and movement.work_date <= p_date and movement.to_floor_id = vehicle.floor_id
-        and exists(select 1 from public.schedule_equipment_requests request
-          join public.schedule_groups grp on grp.id = request.schedule_group_id
-          where grp.work_date = p_date and grp.primary_company = movement.to_company
-            and request.floor_id = vehicle.floor_id and request.equipment_type = 'aerial_work_vehicle')
-      order by movement.to_company, movement.work_date desc, movement.moved_at desc, movement.id)
-  ) history
-  order by history.vehicle_id, history.work_date desc, history.moved_at desc, history.id;
-$$;
-revoke all on function public.get_equipment_assignment_history(date) from public,anon,authenticated;
-grant execute on function public.get_equipment_assignment_history(date) to service_role;
 
-create or replace function public.create_data_backup(p_source text default 'manual')
-returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
-declare backup_id uuid; backup_payload jsonb; backup_counts jsonb;
-begin
-  if p_source not in ('automatic', 'manual') then raise exception 'Invalid backup source'; end if;
-  backup_payload := jsonb_build_object(
-    'company_master', coalesce((select jsonb_agg(to_jsonb(r)) from public.company_master r), '[]'::jsonb),
-    'equipment_floor_master', coalesce((select jsonb_agg(to_jsonb(r)) from public.equipment_floor_master r), '[]'::jsonb),
-    'schedule_groups', coalesce((select jsonb_agg(to_jsonb(r)) from public.schedule_groups r), '[]'::jsonb),
-    'schedule_subcompanies', coalesce((select jsonb_agg(to_jsonb(r)) from public.schedule_subcompanies r), '[]'::jsonb),
-    'schedule_equipment_requests', coalesce((select jsonb_agg(to_jsonb(r)) from public.schedule_equipment_requests r), '[]'::jsonb),
-    'new_entrant_records', coalesce((select jsonb_agg(to_jsonb(r)) from public.new_entrant_records r), '[]'::jsonb),
-    'work_completion_reports', coalesce((select jsonb_agg(to_jsonb(r)) from public.work_completion_reports r), '[]'::jsonb),
-    'aerial_work_vehicles', coalesce((select jsonb_agg(to_jsonb(r)) from public.aerial_work_vehicles r), '[]'::jsonb),
-    'tachiuma_floor_stocks', coalesce((select jsonb_agg(to_jsonb(r)) from public.tachiuma_floor_stocks r), '[]'::jsonb),
-    'tachiuma_units', coalesce((select jsonb_agg(to_jsonb(r)) from public.tachiuma_units r), '[]'::jsonb),
-    'equipment_movements', coalesce((select jsonb_agg(to_jsonb(r)) from public.equipment_movements r), '[]'::jsonb)
-  );
-  select jsonb_object_agg(key, jsonb_array_length(value)) into backup_counts from jsonb_each(backup_payload);
-  insert into public.data_backups(source, schema_version, row_counts, payload) values(p_source, 6, backup_counts, backup_payload)
-    on conflict (backup_date) where source = 'automatic' do update
-      set created_at = now(), schema_version = 6, row_counts = excluded.row_counts, payload = excluded.payload
-    returning id into backup_id;
-  return backup_id;
-end $$;
 
-create or replace function public.restore_data_backup(p_backup_id uuid)
-returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
-declare backup_payload jsonb; normalized_groups jsonb; restored_counts jsonb; target text;
-begin
-  select payload into backup_payload from public.data_backups where id = p_backup_id;
-  if backup_payload is null then raise exception 'Backup not found'; end if;
-  foreach target in array array['company_master','schedule_groups','schedule_subcompanies','new_entrant_records'] loop
-    if jsonb_typeof(backup_payload->target) is distinct from 'array' then raise exception 'Invalid backup: %', target; end if;
-  end loop;
-  foreach target in array array['equipment_floor_master','schedule_equipment_requests','work_completion_reports',
-    'aerial_work_vehicles','tachiuma_floor_stocks','tachiuma_units','equipment_movements'] loop
-    if backup_payload ? target and jsonb_typeof(backup_payload->target) is distinct from 'array' then raise exception 'Invalid backup: %', target; end if;
-  end loop;
-  select coalesce(jsonb_agg((item - 'aerial_work_vehicle_count' - 'aerial_work_vehicle_floor') || jsonb_build_object(
-    'uses_aerial_work_vehicle', coalesce((item->>'uses_aerial_work_vehicle')::boolean, coalesce((item->>'aerial_work_vehicle_count')::integer,0)>0),
-    'aerial_work_vehicle_notes', coalesce(item->>'aerial_work_vehicle_notes', item->>'aerial_work_vehicle_floor')
-  )), '[]'::jsonb) into normalized_groups from jsonb_array_elements(backup_payload->'schedule_groups') item;
-  backup_payload := jsonb_set(backup_payload, '{schedule_groups}', normalized_groups);
-  if backup_payload ? 'work_completion_reports' then
-    select coalesce(jsonb_agg(item || jsonb_build_object('revision', coalesce((item->>'revision')::integer,1))), '[]'::jsonb)
-      into normalized_groups from jsonb_array_elements(backup_payload->'work_completion_reports') item;
-    backup_payload := jsonb_set(backup_payload, '{work_completion_reports}', normalized_groups);
-  end if;
-  perform pg_advisory_xact_lock(250925001);
-  perform set_config('app.skip_audit','on',true);
-  -- Delete dependent equipment before floors. Missing legacy sections are preserved.
-  foreach target in array array['equipment_movements','aerial_work_vehicles','tachiuma_floor_stocks','tachiuma_units','work_completion_reports'] loop
-    if backup_payload ? target then execute format('delete from public.%I', target); end if;
-  end loop;
-  delete from public.schedule_equipment_requests;
-  delete from public.schedule_subcompanies;
-  delete from public.schedule_groups;
-  delete from public.new_entrant_records;
-  delete from public.company_master;
-  if backup_payload ?& array['equipment_floor_master','aerial_work_vehicles','tachiuma_floor_stocks','tachiuma_units','equipment_movements'] then
-    delete from public.equipment_floor_master;
-  end if;
-  foreach target in array array['company_master','equipment_floor_master','schedule_groups','schedule_subcompanies',
-    'schedule_equipment_requests','new_entrant_records','work_completion_reports','aerial_work_vehicles',
-    'tachiuma_floor_stocks','tachiuma_units','equipment_movements'] loop
-    if backup_payload ? target then
-      if target = 'equipment_floor_master' then
-        insert into public.equipment_floor_master select * from jsonb_populate_recordset(null::public.equipment_floor_master, backup_payload->target)
-          on conflict(id) do update set name = excluded.name, sort_order = excluded.sort_order;
-      else
-        execute format('insert into public.%I select * from jsonb_populate_recordset(null::public.%I, $1)', target, target)
-          using backup_payload->target;
-      end if;
-    end if;
-  end loop;
-  select jsonb_object_agg(key, jsonb_array_length(value)) into restored_counts from jsonb_each(backup_payload)
-    where jsonb_typeof(value) = 'array';
-  return restored_counts;
-end $$;
 revoke all on function public.create_data_backup(text), public.restore_data_backup(uuid) from public,anon,authenticated;
 grant execute on function public.create_data_backup(text), public.restore_data_backup(uuid) to service_role;
 
@@ -1085,18 +960,7 @@ begin
   end if;
   return public.save_schedule_payload(p_groups,p_subcompanies,p_equipment_requests,p_overwrite,p_skip_existing,p_expected_id);
 end $$;
-create or replace function public.save_schedule_with_revision(
-  p_groups jsonb,p_subcompanies jsonb,p_equipment_requests jsonb,p_overwrite boolean,p_skip_existing boolean,
-  p_expected_id uuid,p_expected_updated_at timestamptz
-) returns jsonb language plpgsql security invoker set search_path=public,pg_temp as $$
-declare current_row public.schedule_groups;
-begin
-  if p_expected_id is null or p_expected_updated_at is null or jsonb_array_length(p_groups)<>1 then raise exception 'Invalid schedule revision'; end if;
-  perform pg_advisory_xact_lock(250925001);
-  select * into current_row from public.schedule_groups where id=p_expected_id for update;
-  if current_row.id is null or current_row.updated_at is distinct from p_expected_updated_at then raise exception 'SCHEDULE_CHANGED'; end if;
-  return public.save_schedule_atomically(p_groups,p_subcompanies,p_equipment_requests,p_overwrite,p_skip_existing,p_expected_id);
-end $$;
+
 
 create or replace function public.ensure_secondary_companies(p_primary text,p_secondaries text[])
 returns boolean language plpgsql security invoker set search_path=public,pg_temp as $$
@@ -1217,90 +1081,6 @@ grant execute on function public.save_schedule_atomically(jsonb,jsonb,jsonb,bool
   public.move_schedule_with_revision(uuid,date,date,timestamptz),public.save_new_entrants_atomically(date,text,jsonb,timestamptz)
   to service_role;
 
-create or replace function public.restore_data_backup(p_backup_id uuid)
-returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
-declare backup_payload jsonb; normalized_groups jsonb; restored_counts jsonb; target text; floor_row record; candidate text; suffix integer;
-begin
-  select payload into backup_payload from public.data_backups where id = p_backup_id;
-  if backup_payload is null then raise exception 'Backup not found'; end if;
-  foreach target in array array['company_master','schedule_groups','schedule_subcompanies','new_entrant_records'] loop
-    if jsonb_typeof(backup_payload->target) is distinct from 'array' then raise exception 'Invalid backup: %', target; end if;
-  end loop;
-  foreach target in array array['equipment_floor_master','schedule_equipment_requests','work_completion_reports',
-    'aerial_work_vehicles','tachiuma_floor_stocks','tachiuma_units','equipment_movements'] loop
-    if backup_payload ? target and jsonb_typeof(backup_payload->target) is distinct from 'array' then raise exception 'Invalid backup: %', target; end if;
-  end loop;
-  perform pg_advisory_xact_lock(250925001);
-  select coalesce(jsonb_agg((item - 'aerial_work_vehicle_count' - 'aerial_work_vehicle_floor') || jsonb_build_object(
-    'updated_at', clock_timestamp(),
-    'uses_aerial_work_vehicle', coalesce((item->>'uses_aerial_work_vehicle')::boolean, coalesce((item->>'aerial_work_vehicle_count')::integer,0)>0),
-    'aerial_work_vehicle_notes', coalesce(item->>'aerial_work_vehicle_notes', item->>'aerial_work_vehicle_floor')
-  )), '[]'::jsonb) into normalized_groups from jsonb_array_elements(backup_payload->'schedule_groups') item;
-  backup_payload := jsonb_set(backup_payload, '{schedule_groups}', normalized_groups);
-  select coalesce(jsonb_agg(item || jsonb_build_object('updated_at', clock_timestamp())), '[]'::jsonb)
-    into normalized_groups from jsonb_array_elements(backup_payload->'new_entrant_records') item;
-  backup_payload := jsonb_set(backup_payload, '{new_entrant_records}', normalized_groups);
-  if backup_payload ? 'work_completion_reports' then
-    select coalesce(jsonb_agg(item || jsonb_build_object('revision', greatest(coalesce((item->>'revision')::integer,1),coalesce((select revision from public.work_completion_reports where id=(item->>'id')::uuid),0))+1)), '[]'::jsonb)
-      into normalized_groups from jsonb_array_elements(backup_payload->'work_completion_reports') item;
-    backup_payload := jsonb_set(backup_payload, '{work_completion_reports}', normalized_groups);
-  end if;
-  perform set_config('app.skip_audit','on',true);
-  -- Delete dependent equipment before floors. Missing legacy sections are preserved.
-  foreach target in array array['equipment_movements','aerial_work_vehicles','tachiuma_floor_stocks','tachiuma_units','work_completion_reports'] loop
-    if backup_payload ? target then execute format('delete from public.%I', target); end if;
-  end loop;
-  delete from public.schedule_equipment_requests;
-  delete from public.schedule_subcompanies;
-  delete from public.schedule_groups;
-  delete from public.new_entrant_records;
-  delete from public.company_master;
-  if backup_payload ?& array['equipment_floor_master','aerial_work_vehicles','tachiuma_floor_stocks','tachiuma_units','equipment_movements'] then
-    delete from public.equipment_floor_master;
-  end if;
-  -- Legacy backups preserve floors referenced by omitted equipment sections.
-  -- Free conflicting names before restoring identities, including name swaps.
-  if backup_payload ? 'equipment_floor_master' then
-    for floor_row in select floor.id from public.equipment_floor_master floor
-      join jsonb_array_elements(backup_payload->'equipment_floor_master') item on floor.id=(item->>'id')::uuid
-      where floor.name is distinct from item->>'name' loop
-      loop
-        candidate := '_restore_' || substr(replace(gen_random_uuid()::text,'-',''),1,20);
-        exit when not exists(select 1 from public.equipment_floor_master where name=candidate)
-          and not exists(select 1 from jsonb_array_elements(backup_payload->'equipment_floor_master') item where item->>'name'=candidate);
-      end loop;
-      update public.equipment_floor_master set name=candidate where id=floor_row.id;
-    end loop;
-    for floor_row in select floor.id,floor.name from public.equipment_floor_master floor
-      where not exists(select 1 from jsonb_array_elements(backup_payload->'equipment_floor_master') item where (item->>'id')::uuid=floor.id)
-        and exists(select 1 from jsonb_array_elements(backup_payload->'equipment_floor_master') item where item->>'name'=floor.name) loop
-      suffix:=0;
-      loop
-        candidate:=left(floor_row.name,15)||'（復元前'||case when suffix=0 then '' else suffix::text end||'）';
-        exit when not exists(select 1 from public.equipment_floor_master where name=candidate)
-          and not exists(select 1 from jsonb_array_elements(backup_payload->'equipment_floor_master') item where item->>'name'=candidate);
-        suffix:=suffix+1;
-      end loop;
-      update public.equipment_floor_master set name=candidate where id=floor_row.id;
-    end loop;
-  end if;
-  foreach target in array array['company_master','equipment_floor_master','schedule_groups','schedule_subcompanies',
-    'schedule_equipment_requests','new_entrant_records','work_completion_reports','aerial_work_vehicles',
-    'tachiuma_floor_stocks','tachiuma_units','equipment_movements'] loop
-    if backup_payload ? target then
-      if target = 'equipment_floor_master' then
-        insert into public.equipment_floor_master select * from jsonb_populate_recordset(null::public.equipment_floor_master, backup_payload->target)
-          on conflict(id) do update set name = excluded.name, sort_order = excluded.sort_order;
-      else
-        execute format('insert into public.%I select * from jsonb_populate_recordset(null::public.%I, $1)', target, target)
-          using backup_payload->target;
-      end if;
-    end if;
-  end loop;
-  select jsonb_object_agg(key, jsonb_array_length(value)) into restored_counts from jsonb_each(backup_payload)
-    where jsonb_typeof(value) = 'array';
-  return restored_counts;
-end $$;
 
 notify pgrst,'reload schema';
 commit;
@@ -1418,4 +1198,43 @@ revoke all on function public.get_equipment_board_snapshot(date) from public, an
 grant execute on function public.get_equipment_board_snapshot(date) to service_role;
 
 notify pgrst, 'reload schema';
+commit;
+
+begin;
+
+-- Leftmost columns of the retained compound indexes cover these lookups.
+-- Keep all primary keys, unique constraints, and company/date indexes.
+drop index if exists public.company_master_primary_idx;
+drop index if exists public.schedule_groups_primary_company_idx;
+drop index if exists public.schedule_groups_work_date_idx;
+drop index if exists public.new_entrant_records_entry_date_idx;
+
+-- Older migrations added a second index for the table's existing unique key.
+-- Remove only the standalone duplicate when the constraint index is identical.
+do $$
+begin
+  if exists (
+    select 1 from pg_index duplicate
+    join pg_index keeper on keeper.indrelid=duplicate.indrelid
+      and keeper.indkey=duplicate.indkey and keeper.indclass=duplicate.indclass
+      and keeper.indcollation=duplicate.indcollation and keeper.indoption=duplicate.indoption
+    join pg_constraint constraint_row on constraint_row.conindid=keeper.indexrelid
+      and constraint_row.contype='u'
+    where duplicate.indexrelid=to_regclass('public.schedule_groups_work_date_primary_company_idx')
+      and keeper.indexrelid<>duplicate.indexrelid
+      and duplicate.indisunique and keeper.indisunique and keeper.indisvalid
+      and duplicate.indpred is null and keeper.indpred is null
+      and duplicate.indexprs is null and keeper.indexprs is null
+      and not exists(select 1 from pg_constraint where conindid=duplicate.indexrelid)
+  ) then
+    drop index public.schedule_groups_work_date_primary_company_idx;
+  end if;
+end $$;
+
+-- Both callers now use the dated assignment RPC and bounded snapshot RPC.
+-- No CASCADE: an unexpected database dependency must stop this migration.
+drop function if exists public.assign_equipment_vehicle(uuid,uuid,text,timestamptz);
+drop function if exists public.get_equipment_assignment_history(date);
+
+notify pgrst,'reload schema';
 commit;
