@@ -159,7 +159,7 @@ export function ScheduleForm({
     (activeCount ?? 0) +
     activeRows.reduce((sum, row) => sum + (row.workerCount ?? 0), 0);
   const secondaryRowsComplete = activeRows.every(
-    (row) => row.secondaryCompany.trim() && row.workerCount !== null && Number.isInteger(row.workerCount) && row.workerCount >= 0,
+    (row) => row.secondaryCompany.trim() && Number.isInteger(row.workerCount ?? 0) && (row.workerCount ?? 0) >= 0,
   );
   const area = form.workArea;
   const content = form.workContent;
@@ -349,7 +349,7 @@ export function ScheduleForm({
         .filter((row) => row.secondaryCompany)
         .map((row) => ({
           ...row,
-          workerCount: row.workerCount,
+          workerCount: row.workerCount ?? 0,
           usePreviousWorkerCount: false,
         }));
       next.primaryCount = source.primaryCount;
@@ -474,18 +474,9 @@ export function ScheduleForm({
       });
       return;
     }
-    if (activeCount === null || !Number.isInteger(activeCount) || activeCount < 0) {
+    if (!Number.isInteger(activeCount ?? 0) || (activeCount ?? 0) < 0) {
       setStep("edit"); setEditorPart("people");
       setSubmitState({ status: "error", message: "一次会社人数を0以上の整数で入力してください。" });
-      return;
-    }
-    if (totalCount < 1) {
-      setStep("edit");
-      setEditorPart("people");
-      setSubmitState({
-        status: "error",
-        message: "作業予定がある場合は、合計人数を1人以上にしてください。",
-      });
       return;
     }
     if (
@@ -509,13 +500,13 @@ export function ScheduleForm({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             ...form,
-            primaryCount: form.primaryCount,
+            primaryCount: form.primaryCount ?? 0,
             excludeWeekends: false,
             usePreviousPrimaryCount: false,
             overwriteExisting: overwrite,
             currentSubcompanies: form.currentSubcompanies.map((row) => ({
               ...row,
-              workerCount: row.workerCount,
+              workerCount: row.workerCount ?? 0,
               usePreviousWorkerCount: false,
             })),
           }),
@@ -964,7 +955,7 @@ export function ScheduleForm({
                       type="button"
                       className="btn btn-primary mt-5 w-full"
                       onClick={() => {
-                        if (activeCount === null || !Number.isInteger(activeCount) || activeCount < 0) {
+                        if (!Number.isInteger(activeCount ?? 0) || (activeCount ?? 0) < 0) {
                           setEditorPart("people");
                           setSubmitState({ status: "error", message: "一次会社人数を0以上の整数で入力してください。" });
                           return;
@@ -988,7 +979,6 @@ export function ScheduleForm({
                           return;
                         }
                         if (
-                          totalCount < 1 ||
                           activeRows.some(
                             (row) =>
                               !row.secondaryCompany.trim() &&

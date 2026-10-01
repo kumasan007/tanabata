@@ -45,10 +45,6 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expect
     input.currentSubcompanies,
     previous?.subcompanies ?? [],
   );
-  const secondaryTotal = resolvedSubcompanies.reduce(
-    (sum, subcompany) => sum + (subcompany.workerCount ?? 0),
-    0,
-  );
 
   const payloads = targetDates.map((workDate) => {
     const payload = {
@@ -66,9 +62,6 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expect
       notes: emptyToNull(input.notes),
     };
 
-    if (payload.primary_count === 0 && secondaryTotal < 1) {
-      throw new Error("一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。");
-    }
     return payload;
   });
 

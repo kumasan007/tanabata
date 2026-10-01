@@ -12,9 +12,11 @@ const countSchema = z
   })
   .refine((value) => value === null || (Number.isInteger(value) && value >= 0), "人数は0以上の整数で入力してください。");
 
+const workerCountSchema = countSchema.transform((value) => value ?? 0);
+
 export const subcompanySchema = z.object({
   secondaryCompany: z.string(),
-  workerCount: countSchema,
+  workerCount: workerCountSchema,
   usePreviousWorkerCount: z.boolean().optional().default(false),
 });
 
@@ -33,7 +35,7 @@ export const scheduleSubmitSchema = z
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "終了日を入力してください。"),
     excludeWeekends: z.boolean().default(false),
     primaryCompany: z.string().min(1, "一次会社を選択してください。"),
-    primaryCount: countSchema,
+    primaryCount: workerCountSchema,
     usePreviousPrimaryCount: z.boolean().optional().default(false),
     currentSubcompanies: z.array(subcompanySchema).default([]),
     workArea: z.string().default(""),
@@ -70,15 +72,6 @@ export const scheduleSubmitSchema = z
     for (const [field, label] of [["workArea", "作業エリア"], ["workContent", "作業内容"]] as const) {
       if (!value[field].trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${label}を入力してください。` });
     }
-    if (!value.usePreviousPrimaryCount && value.primaryCount === null) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["primaryCount"], message: "一次会社人数を入力してください。" });
-    }
-
-    const secondaryTotal = value.currentSubcompanies.reduce((sum, row) => sum + (row.secondaryCompany.trim() && !row.usePreviousWorkerCount ? row.workerCount ?? 0 : 0), 0);
-    const hasPreviousSecondaryCount = value.currentSubcompanies.some((row) => row.secondaryCompany.trim() !== "" && row.usePreviousWorkerCount);
-    if (!value.usePreviousPrimaryCount && value.primaryCount === 0 && secondaryTotal < 1 && !hasPreviousSecondaryCount) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["currentSubcompanies"], message: "一次会社人数が0人の場合は、二次会社人数の合計を1人以上にしてください。" });
-    }
     for (const [enabled, requests, path, label] of [
       [value.usesAerialWorkVehicle, value.aerialWorkVehicleRequests, "aerialWorkVehicleRequests", "高所作業車"],
       [value.usesTachiuma, value.tachiumaRequests, "tachiumaRequests", "立ち馬"],
@@ -87,9 +80,6 @@ export const scheduleSubmitSchema = z
       if (new Set(requests.map((row) => row.floorId)).size !== requests.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message: `${label}で同じフロアは重複して選択できません。` });
     }
     for (const [index, subcompany] of value.currentSubcompanies.entries()) {
-      if (subcompany.secondaryCompany.trim() !== "" && !subcompany.usePreviousWorkerCount && subcompany.workerCount === null) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["currentSubcompanies", index, "workerCount"], message: "二次会社人数を入力してください。" });
-      }
       if (((subcompany.workerCount ?? 0) > 0 || subcompany.usePreviousWorkerCount) && subcompany.secondaryCompany.trim() === "") {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["currentSubcompanies", index, "secondaryCompany"], message: "二次会社人数を入力する場合は、二次会社を選択してください。" });
       }

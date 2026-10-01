@@ -271,10 +271,7 @@ begin
       or coalesce(btrim(item->>'work_area'), '') = ''
       or coalesce(btrim(item->>'work_content'), '') = ''
       or (coalesce((item->>'uses_aerial_work_vehicle')::boolean, false)
-        and coalesce(btrim(item->>'aerial_work_vehicle_notes'), '') = '')
-      or ((item->>'primary_count')::integer = 0 and coalesce((
-        select sum((sub->>'worker_count')::integer) from jsonb_array_elements(p_subcompanies) sub
-      ), 0) < 1) then
+        and coalesce(btrim(item->>'aerial_work_vehicle_notes'), '') = '') then
       raise exception 'Invalid schedule fields';
     end if;
     -- ロックを使わない直接insertとの競合でも、未確認の上書きをしない。
