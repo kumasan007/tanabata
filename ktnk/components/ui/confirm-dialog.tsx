@@ -39,7 +39,7 @@ export function ConfirmDialog({
   if (!open) return null;
   return (
     <dialog ref={dialogRef} role="alertdialog" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} className="fixed inset-0 m-0 grid h-dvh max-h-none w-screen max-w-none place-items-center border-0 bg-transparent p-4 backdrop:bg-slate-950/45" onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }} onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
-      <section className="panel w-full max-w-md p-5 shadow-xl">
+      <section className="panel max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto p-5 shadow-xl">
         <h2 id={titleId} className="text-lg font-bold text-slate-950">{title}</h2>
         {description && <p id={descriptionId} className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">{description}</p>}
         {children}
@@ -55,12 +55,17 @@ export function ConfirmDialog({
 export function useConfirmDialog() {
   const [request, setRequest] = useState<{ title: string; description: string; confirmLabel?: string } | null>(null);
   const resolver = useRef<((accepted: boolean) => void) | null>(null);
+  useEffect(() => () => {
+    resolver.current?.(false);
+    resolver.current = null;
+  }, []);
   const close = useCallback((accepted: boolean) => {
     resolver.current?.(accepted);
     resolver.current = null;
     setRequest(null);
   }, []);
   const confirm = useCallback((title: string, description: string, confirmLabel?: string) => new Promise<boolean>((resolve) => {
+    resolver.current?.(false);
     resolver.current = resolve;
     setRequest({ title, description, confirmLabel });
   }), []);

@@ -3,19 +3,36 @@ import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { CopyButton } from "@/components/copy-button";
 import type { EquipmentFloorRow, EquipmentRequestInput, PreviousSchedule, ScheduleSubmitInput } from "@/lib/types";
-import { apiFetch } from "@/lib/api-client";
+import { apiJson } from "@/lib/api-client";
 type Equipment = Pick<ScheduleSubmitInput, "usesAerialWorkVehicle" | "aerialWorkVehicleNotes" | "aerialWorkVehicleRequests" | "usesFire" | "fireArea" | "usesTachiuma" | "tachiumaNotes" | "tachiumaRequests" | "workArea">;
 export function ScheduleEquipmentFields({ form, previous, onChange }: { form: Equipment; previous?: PreviousSchedule | null; onChange: (fields: Partial<ScheduleSubmitInput>) => void }) {
-  const [floors, setFloors] = useState<EquipmentFloorRow[]>([]); const [floorError, setFloorError] = useState("");
-  useEffect(() => { void apiFetch("/api/equipment-floors").then(async response => { const body = await response.json(); if (!response.ok) throw new Error(); setFloors(body.floors ?? []); }).catch(() => setFloorError("フロア一覧を取得できませんでした。")); }, []);
+  const [floors, setFloors] = useState<EquipmentFloorRow[] | null>(null);
+  const [floorError, setFloorError] = useState("");
+  const [floorRetry, setFloorRetry] = useState(0);
+  const needsFloors = form.usesAerialWorkVehicle || form.usesTachiuma;
+  useEffect(() => {
+    if (!needsFloors || floors !== null) return;
+    const controller = new AbortController();
+    setFloorError("");
+    void apiJson<{ floors: EquipmentFloorRow[] }>("/api/equipment-floors", { signal: controller.signal })
+      .then((body) => {
+        if (!controller.signal.aborted) setFloors(body.floors ?? []);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setFloorError(error instanceof Error ? error.message : "フロア一覧を取得できませんでした。");
+      });
+    return () => controller.abort();
+  }, [needsFloors, floors, floorRetry]);
   return <div className="space-y-2">
     <EquipmentRows label="高所作業車" enabled={form.usesAerialWorkVehicle} rows={form.aerialWorkVehicleRequests} floors={floors} previous={previous?.aerialWorkVehicleRequests} color="sky" onEnabled={(enabled) => onChange({ usesAerialWorkVehicle: enabled, aerialWorkVehicleNotes: "", aerialWorkVehicleRequests: enabled ? (form.aerialWorkVehicleRequests.length ? form.aerialWorkVehicleRequests : [{ floorId: "", count: null }]) : [] })} onChange={(rows) => onChange({ aerialWorkVehicleRequests: rows })}/>
     <EquipmentRows label="立ち馬" enabled={form.usesTachiuma} rows={form.tachiumaRequests} floors={floors} previous={previous?.tachiumaRequests} color="emerald" onEnabled={(enabled) => onChange({ usesTachiuma: enabled, tachiumaNotes: "", tachiumaRequests: enabled ? (form.tachiumaRequests.length ? form.tachiumaRequests : [{ floorId: "", count: null }]) : [] })} onChange={(rows) => onChange({ tachiumaRequests: rows })}/>
-    {floorError && <p className="notice-error text-sm">{floorError}</p>}
+    {needsFloors && floors === null && !floorError && <p role="status" className="text-sm text-slate-600">フロア一覧を読み込み中…</p>}
+    {needsFloors && floorError && <div className="notice-error text-sm"><p role="alert">{floorError}</p><button type="button" className="btn btn-secondary mt-2" onClick={() => { setFloorError(""); setFloorRetry(value => value + 1); }}>再読み込み</button></div>}
     <div className="rounded-md border border-rose-300 bg-rose-50/60 p-2"><label className="flex min-h-8 cursor-pointer items-center gap-2 font-bold"><input type="checkbox" className="h-5 w-5" checked={form.usesFire} onChange={(e) => onChange({ usesFire: e.target.checked, fireArea: e.target.checked ? form.fireArea : "" })}/>火気使用</label>{form.usesFire && <label className="field mt-2 border-t border-rose-200 pt-2"><span className="label">連絡事項（任意）</span><input className="input" maxLength={200} value={form.fireArea} onChange={(e) => onChange({ fireArea: e.target.value })}/></label>}</div>
   </div>;
 }
-function EquipmentRows({ label, enabled, rows, floors, previous, color, onEnabled, onChange }: { label: string; enabled: boolean; rows: EquipmentRequestInput[]; floors: EquipmentFloorRow[]; previous?: EquipmentRequestInput[]; color: "sky" | "emerald"; onEnabled: (value: boolean) => void; onChange: (rows: EquipmentRequestInput[]) => void }) {
+function EquipmentRows({ label, enabled, rows, floors: loadedFloors, previous, color, onEnabled, onChange }: { label: string; enabled: boolean; rows: EquipmentRequestInput[]; floors: EquipmentFloorRow[] | null; previous?: EquipmentRequestInput[]; color: "sky" | "emerald"; onEnabled: (value: boolean) => void; onChange: (rows: EquipmentRequestInput[]) => void }) {
+  const floors = loadedFloors ?? [];
   const visibleRows = rows.length ? rows : [{ floorId: "", count: null }];
   const available = floors.filter(floor => !rows.some(row => row.floorId === floor.id));
   const changeInFloorOrder = (next: EquipmentRequestInput[]) => {
@@ -23,7 +40,7 @@ function EquipmentRows({ label, enabled, rows, floors, previous, color, onEnable
     onChange([...next].sort((a, b) => (order.get(a.floorId) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.floorId) ?? Number.MAX_SAFE_INTEGER)));
   };
   return <div className={`rounded-md border p-2 ${color === "sky" ? "border-sky-300 bg-sky-50/60" : "border-emerald-300 bg-emerald-50/60"}`}><label className="flex min-h-8 cursor-pointer items-center gap-2 font-bold"><input type="checkbox" className="h-5 w-5" checked={enabled} onChange={(e) => onEnabled(e.target.checked)}/>{label}</label>{enabled && <div className="mt-2 grid gap-2 border-t border-slate-300 pt-2">
-    {visibleRows.map((row, index) => <div key={`${row.floorId}-${index}`} className="grid grid-cols-[minmax(0,1fr)_7rem_auto] items-end gap-2"><label className="field"><span className="label">フロア</span><select className="input" required value={row.floorId} onChange={(e) => { const floor = floors.find(item => item.id === e.target.value); changeInFloorOrder(visibleRows.map((item, i) => i === index ? { ...item, floorId: e.target.value, floorName: floor?.name } : item)); }}><option value="">選択</option>{floors.map(floor => <option key={floor.id} value={floor.id} disabled={rows.some((item, i) => i !== index && item.floorId === floor.id)}>{floor.name}</option>)}</select></label><label className="field"><span className="label">希望台数</span><input className="input" required type="number" min={1} max={999} inputMode="numeric" value={row.count ?? ""} onChange={(e) => changeInFloorOrder(visibleRows.map((item, i) => i === index ? { ...item, count: e.target.value === "" ? null : Number(e.target.value) } : item))}/></label><button type="button" className="btn btn-secondary h-10 w-10 p-0 text-red-700" disabled={visibleRows.length === 1} onClick={() => changeInFloorOrder(visibleRows.filter((_, i) => i !== index))} aria-label={`${label}の行を削除`}><Trash2 size={16}/></button></div>)}
-    <div className="flex flex-wrap gap-2"><button type="button" className="btn btn-secondary" disabled={!available.length || visibleRows.some(row => !row.floorId) || rows.length >= 20} onClick={() => changeInFloorOrder([...rows, { floorId: "", count: null }])}><Plus size={16}/>フロアを追加</button>{previous?.length ? <CopyButton label={`${label}を前回と同じにする`} onCopy={() => changeInFloorOrder(previous.map(row => ({ ...row })))}/> : null}</div>{!floors.length && <p className="text-sm text-amber-800">管理画面でフロアを登録してください。</p>}
+    {visibleRows.map((row, index) => <div key={`${row.floorId}-${index}`} className="grid grid-cols-[minmax(0,1fr)_7rem_auto] items-end gap-2"><label className="field"><span className="label">フロア</span><select className="input" required disabled={loadedFloors === null} value={row.floorId} onChange={(e) => { const floor = floors.find(item => item.id === e.target.value); changeInFloorOrder(visibleRows.map((item, i) => i === index ? { ...item, floorId: e.target.value, floorName: floor?.name } : item)); }}><option value="">選択</option>{floors.map(floor => <option key={floor.id} value={floor.id} disabled={rows.some((item, i) => i !== index && item.floorId === floor.id)}>{floor.name}</option>)}</select></label><label className="field"><span className="label">希望台数</span><input className="input" required type="number" min={1} max={999} inputMode="numeric" value={row.count ?? ""} onChange={(e) => changeInFloorOrder(visibleRows.map((item, i) => i === index ? { ...item, count: e.target.value === "" ? null : Number(e.target.value) } : item))}/></label><button type="button" className="btn btn-secondary h-10 w-10 p-0 text-red-700" disabled={visibleRows.length === 1} onClick={() => changeInFloorOrder(visibleRows.filter((_, i) => i !== index))} aria-label={`${label}の行を削除`}><Trash2 size={16}/></button></div>)}
+    <div className="flex flex-wrap gap-2"><button type="button" className="btn btn-secondary" disabled={!available.length || visibleRows.some(row => !row.floorId) || rows.length >= 20} onClick={() => changeInFloorOrder([...rows, { floorId: "", count: null }])}><Plus size={16}/>フロアを追加</button>{previous?.length ? <CopyButton label={`${label}を前回と同じにする`} onCopy={() => changeInFloorOrder(previous.map(row => ({ ...row })))}/> : null}</div>{loadedFloors !== null && !floors.length && <p className="text-sm text-amber-800">管理画面でフロアを登録してください。</p>}
   </div>}</div>;
 }

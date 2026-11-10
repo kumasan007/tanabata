@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { ADMIN_SESSION_SECONDS, adminCookieName, createAdminSessionToken, verifyAdminPassword } from "@/lib/admin-auth";
 import { clearLoginFailures, loginAllowed, recordLoginFailure } from "@/lib/login-rate-limit";
 
 export const runtime = "nodejs";
+
+const loginSchema = z.object({ password: z.string().default(""), remember: z.boolean().optional() });
 
 export async function POST(request: Request) {
   try {
@@ -13,7 +16,9 @@ export async function POST(request: Request) {
         { status: 429, headers: { "retry-after": "900" } },
       );
     }
-    const body = (await request.json()) as { password?: string; remember?: boolean };
+    const parsed = loginSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: "ログイン情報を確認してください。" }, { status: 400 });
+    const body = parsed.data;
 
     if (!verifyAdminPassword(body.password ?? "")) {
       await recordLoginFailure(limit.key);

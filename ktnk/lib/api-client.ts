@@ -72,16 +72,17 @@ export function apiFetch(input: string, options: ApiOptions = {}) {
   });
 }
 
-async function fetchWithTimeout(input: string, init: RequestInit, signal: AbortSignal | null | undefined, timeoutMs: number, readBody = false) {
+async function fetchWithTimeout(input: string, init: RequestInit, signal: AbortSignal | null | undefined, timeoutMs: number, isRead = false) {
   const controller = new AbortController();
   const abort = () => controller.abort(signal?.reason);
   signal?.addEventListener("abort", abort, { once: true });
   if (signal?.aborted) abort();
-  const timer = globalThis.setTimeout(() => controller.abort(new DOMException(readBody ? "通信に時間がかかっています。接続を確認して再読み込みしてください。" : "通信がタイムアウトしました。入力内容を確認して、もう一度送信してください。", "TimeoutError")), timeoutMs);
+  const timer = globalThis.setTimeout(() => controller.abort(new DOMException(isRead ? "通信に時間がかかっています。接続を確認して再読み込みしてください。" : "通信がタイムアウトしました。保存済みの可能性があります。再送信する前に最新の内容を確認してください。", "TimeoutError")), timeoutMs);
   try {
     const response = await fetch(input, { ...init, signal: controller.signal });
-    // Keep the deadline active until the JSON body has arrived, not only the headers.
-    if (readBody) await response.clone().arrayBuffer();
+    // Mutations can also stall after headers arrive. Keep the deadline active
+    // through the body without consuming the caller's response or retrying writes.
+    await response.clone().arrayBuffer();
     return response;
   } catch (error) {
     throw controller.signal.aborted ? controller.signal.reason : error;
@@ -93,8 +94,17 @@ async function fetchWithTimeout(input: string, init: RequestInit, signal: AbortS
 
 export async function apiJson<T>(input: string, options?: ApiOptions): Promise<T> {
   const response = await apiFetch(input, options);
-  const body = await response.json();
-  if (!response.ok) throw new Error(body?.error ?? "通信に失敗しました。時間をおいて再度お試しください。");
+  const fallback = "通信に失敗しました。時間をおいて再度お試しください。";
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error(response.ok ? "通信結果を確認できませんでした。最新の内容を確認してください。" : fallback);
+  }
+  if (!response.ok) {
+    const message = body && typeof body === "object" && "error" in body ? body.error : null;
+    throw new Error(typeof message === "string" && message.trim() ? message : fallback);
+  }
   return body as T;
 }
 

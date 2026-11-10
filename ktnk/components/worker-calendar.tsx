@@ -13,7 +13,6 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { IconButton } from "@/components/ui/icon-button";
-import { EquipmentBoard, prefetchEquipmentBoard } from "@/components/equipment-board";
 import type { CalendarSchedule, CalendarEntrant, CompanyMaster, NewEntrantRecord, ScheduleWithSubcompanies } from "@/lib/types";
 
 const loadCalendarDetails = () => import("@/components/calendar-details");
@@ -23,17 +22,23 @@ function importScheduleEditor() {
   return import("@/components/admin-schedule-editor");
 }
 function loadScheduleEditor() {
-  scheduleEditorImport ??= importScheduleEditor();
+  scheduleEditorImport ??= importScheduleEditor().catch((error) => {
+    scheduleEditorImport = undefined;
+    throw error;
+  });
   return scheduleEditorImport;
 }
 const AdminScheduleEditor = dynamic(() => loadScheduleEditor().then((module) => module.AdminScheduleEditor), {
   loading: () => <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4"><div className="panel w-full max-w-sm"><LoadingIndicator label="編集画面を準備しています…" /></div></div>,
 });
 const NewEntrantEditor = dynamic(() => import("@/components/new-entrant-editor").then((module) => module.NewEntrantEditor));
+const EquipmentBoard = dynamic(() => import("@/components/equipment-board").then((module) => module.EquipmentBoard), {
+  loading: () => <LoadingIndicator label="予定を読み込み中…" className="min-h-32" />,
+});
 const DETAILS_PREFERENCE_KEY = "calendar-supplement-expanded";
 
 function prefetchEquipment(date: string) {
-  void prefetchEquipmentBoard(date).catch(() => undefined);
+  void import("@/components/equipment-board").then((module) => module.prefetchEquipmentBoard(date)).catch(() => undefined);
 }
 
 type DayDetail = { date: string; schedules: ScheduleWithSubcompanies[]; entrants: NewEntrantRecord[]; completions: WorkCompletion[] };
@@ -63,13 +68,21 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary, ini
   const cacheVersion = useRef(0);
 
   useEffect(() => {
-    setDetailsExpanded(window.localStorage.getItem(DETAILS_PREFERENCE_KEY) !== "false");
+    try {
+      setDetailsExpanded(window.localStorage.getItem(DETAILS_PREFERENCE_KEY) !== "false");
+    } catch {
+      // The calendar remains usable when browser storage is unavailable.
+    }
   }, []);
 
   const toggleDetails = useCallback(() => {
     setDetailsExpanded((current) => {
       const next = !current;
-      window.localStorage.setItem(DETAILS_PREFERENCE_KEY, String(next));
+      try {
+        window.localStorage.setItem(DETAILS_PREFERENCE_KEY, String(next));
+      } catch {
+        // Keep the preference for this visit even if it cannot be persisted.
+      }
       return next;
     });
   }, []);
@@ -183,7 +196,7 @@ export function WorkerCalendar({ initialDate, initialMaster, initialSummary, ini
   }, [selectedDate, company, version, detailKey, loading, hasSelectedRecords]);
   useEffect(() => {
     if (detailLoading || detail.schedules.length === 0) return;
-    const timer = window.setTimeout(() => { void loadScheduleEditor(); }, 500);
+    const timer = window.setTimeout(() => { void loadScheduleEditor().catch(() => undefined); }, 500);
     return () => window.clearTimeout(timer);
   }, [detailLoading, detail.schedules.length]);
   useEffect(() => {

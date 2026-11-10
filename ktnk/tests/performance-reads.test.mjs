@@ -112,6 +112,40 @@ test("GET deadline includes a stalled response body after headers arrive", async
   await assert.rejects(api.apiFetch("/api/equipment-board", { timeoutMs: 20 }), { name: "TimeoutError" });
 });
 
+test("mutation deadline includes the response body and never retries a possibly saved write", async () => {
+  let requests = 0;
+  const api = load("lib/api-client.ts", { fetch: async (_url, init) => {
+    requests++;
+    const stream = new ReadableStream({ start(controller) {
+      controller.enqueue(new TextEncoder().encode('{"saved":'));
+      init.signal.addEventListener("abort", () => controller.error(init.signal.reason), { once: true });
+    } });
+    return new Response(stream);
+  } });
+  await assert.rejects(api.apiJson("/api/schedules", { method: "POST", timeoutMs: 20 }), error => {
+    assert.equal(error.name, "TimeoutError");
+    assert.match(error.message, /保存済みの可能性/);
+    return true;
+  });
+  assert.equal(requests, 1);
+});
+
+test("API JSON reports usable errors for HTML, malformed JSON and invalid error payloads", async () => {
+  const responses = [
+    new Response("<html>upstream error</html>", { status: 502 }),
+    new Response("{", { status: 200 }),
+    new Response(JSON.stringify({ error: { detail: "internal" } }), { status: 500 }),
+    new Response(JSON.stringify({ error: "会社一覧が変更されています。" }), { status: 409 }),
+    new Response(JSON.stringify({ saved: true })),
+  ];
+  const api = load("lib/api-client.ts", { fetch: async () => responses.shift() });
+  await assert.rejects(api.apiJson("/api/example"), /通信に失敗しました/);
+  await assert.rejects(api.apiJson("/api/example"), /通信結果を確認できませんでした/);
+  await assert.rejects(api.apiJson("/api/example"), /通信に失敗しました/);
+  await assert.rejects(api.apiJson("/api/example"), /会社一覧が変更されています/);
+  assert.deepEqual(await api.apiJson("/api/example", { method: "POST" }), { saved: true });
+});
+
 test("a slow GET that finishes within the deadline succeeds", async () => {
   const { apiFetch, requests } = transport();
   const pending = apiFetch("/api/calendar", { timeoutMs: 1000 });
@@ -199,13 +233,13 @@ test("entrant summary uses the DB aggregate and never hides database failures", 
   const api = load("lib/calendar-summary.ts", {}, {
     "next/cache": { unstable_cache: fn => fn },
     "@/lib/data-cache": { DATA_CACHE_TAGS: {} },
-    "@/lib/work-completions": {}, "@/lib/read-all-rows": {},
+    "@/lib/work-completions": {}, "@/lib/read-all-rows": load("lib/read-all-rows.ts"),
     "@/lib/supabase": { createServerClient: () => ({
-      rpc: async () => ({ data: error ? null : summary, error }),
+      rpc: () => ({ order() { return this; }, range: async () => ({ data: error ? null : summary, error }) }),
       from() { throw new Error("unnecessary individual read"); },
     }) },
   });
-  assert.equal(await api.getCalendarEntrants("2026-09-01", "2026-09-30", "A"), summary);
+  assert.equal(JSON.stringify(await api.getCalendarEntrants("2026-09-01", "2026-09-30", "A")), JSON.stringify(summary));
   error = { code: "42501", message: "permission denied" };
   await assert.rejects(api.getCalendarEntrants("2026-09-01", "2026-09-30", "A"), /permission denied/);
 });
