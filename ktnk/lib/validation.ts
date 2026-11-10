@@ -75,7 +75,7 @@ export const scheduleSubmitSchema = z
     const secondaryTotal = value.currentSubcompanies.reduce((sum, row) => sum + (row.secondaryCompany.trim() && !row.usePreviousWorkerCount ? row.workerCount : 0), 0);
     const hasPreviousSecondaryCount = value.currentSubcompanies.some((row) => row.secondaryCompany.trim() !== "" && row.usePreviousWorkerCount);
     if (!value.usePreviousPrimaryCount && value.primaryCount === 0 && secondaryTotal < 1 && !hasPreviousSecondaryCount) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["primaryCount"], message: "?????1???????????" });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["primaryCount"], message: "作業人数は合計1人以上を入力してください。" });
     }
     for (const [enabled, requests, path, label] of [
       [value.usesAerialWorkVehicle, value.aerialWorkVehicleRequests, "aerialWorkVehicleRequests", "高所作業車"],

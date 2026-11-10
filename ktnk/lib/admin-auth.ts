@@ -26,20 +26,16 @@ export function verifyAdminPassword(password: string) {
     throw new Error("ADMIN_PASSWORD is not set.");
   }
 
-  return safeEqual(password, expected);
+  return typeof password === "string" && safeEqual(password, expected);
 }
 
 export function verifyAdminSessionToken(token: string | undefined | null) {
   if (!token) return false;
 
-  const [body, signature] = token.split(".");
-  if (!body || !signature) return false;
-
-  if (!safeEqual(signature, sign(body))) {
-    return false;
-  }
-
   try {
+    const [body, signature, extra] = token.split(".");
+    if (!body || !signature || extra !== undefined) return false;
+    if (!safeEqual(signature, sign(body))) return false;
     const payload = JSON.parse(base64UrlDecode(body)) as AdminSession;
     return typeof payload.exp === "number" && payload.exp > Date.now();
   } catch {
@@ -51,7 +47,11 @@ export function getAdminCookieFromRequest(request: Request) {
   const cookie = request.headers.get("cookie") ?? "";
   const pairs = cookie.split(";").map((part) => part.trim());
   const pair = pairs.find((part) => part.startsWith(`${COOKIE_NAME}=`));
-  return pair ? decodeURIComponent(pair.slice(COOKIE_NAME.length + 1)) : null;
+  try {
+    return pair ? decodeURIComponent(pair.slice(COOKIE_NAME.length + 1)) : null;
+  } catch {
+    return null;
+  }
 }
 
 function sign(body: string) {

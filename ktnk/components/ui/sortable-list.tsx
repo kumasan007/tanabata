@@ -16,6 +16,7 @@ export function SortableList({ ids, children, onReorder, busy = false, disabled 
   const suppressAnimation = useRef(false);
   const order = preview ?? ids;
   const rows = Children.toArray(children);
+  const rowsById = new Map(ids.map((id, index) => [id, rows[index]]));
   useLayoutEffect(() => {
     const next = new Map<string, number>();
     root.current?.querySelectorAll<HTMLElement>(":scope > [data-sort-id]").forEach(row => {
@@ -98,7 +99,7 @@ export function SortableList({ ids, children, onReorder, busy = false, disabled 
           const targetId = next[to];
           next.splice(to, 0, next.splice(from, 1)[0]); onReorder(next, id, targetId);
         }}><GripVertical size={18}/></button>}
-        <div className="min-w-0 flex-1">{rows[ids.indexOf(id)]}</div>
+        <div className="min-w-0 flex-1">{rowsById.get(id)}</div>
         </div>
       </Fragment>)}
     </div>

@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertAdminFromRequest, createAdminServerClient } from "@/lib/supabase";
 import { getEquipmentBoardData } from "@/lib/equipment-board";
-import { todayInTokyoString } from "@/lib/utils";
+import { parseLocalDate, todayInTokyoString } from "@/lib/utils";
 
 export async function GET(request: Request) {
   const date = new URL(request.url).searchParams.get("date");
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) return NextResponse.json({ error: "日付が正しくありません。" }, { status: 400 });
+  if (!date || !parseLocalDate(date)) return NextResponse.json({ error: "日付が正しくありません。" }, { status: 400 });
   if (!process.env.SUPABASE_URL || !(process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY)) {
     return NextResponse.json({ error: "機材情報を取得するためのサーバー設定が不足しています。SUPABASE_URL と SUPABASE_SECRET_KEY（または SUPABASE_SERVICE_ROLE_KEY）を設定してください。" }, { status: 503 });
   }

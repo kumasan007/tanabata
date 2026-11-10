@@ -387,10 +387,11 @@ test("作業ありでは人数未入力・全社0人・会社名のない人数�
     { primaryCount: null },
     { primaryCount: 0 },
     { currentSubcompanies: [{ secondaryCompany: "", workerCount: 2 }] },
-    { currentSubcompanies: [{ secondaryCompany: "テスト二次会社", workerCount: null }] },
+    { primaryCount: 0, currentSubcompanies: [{ secondaryCompany: "テスト二次会社", workerCount: null }] },
   ]) {
     assert.equal(scheduleSubmitSchema.safeParse(submission(patch)).success, false);
   }
+  assert.equal(scheduleSubmitSchema.safeParse(submission({ currentSubcompanies: [{ secondaryCompany: "テスト二次会社", workerCount: null }] })).success, true);
 });
 
 test("前回の人数・エリア・内容・二次会社がない場合、既存データに書き込まない", async () => {
@@ -651,7 +652,7 @@ test("calendar summary combines database entrant totals and keeps schedules when
     "@/lib/data-cache": { DATA_CACHE_TAGS: { schedules: "s", entrants: "e" } },
     "@/lib/work-completions": { getWorkCompletions: async () => { throw new Error("reports unavailable"); } },
     "@/lib/supabase": { createServerClient: () => ({
-      rpc: async () => ({ data: entrants, error: null }),
+      rpc: () => ({ order() { return this; }, range: async () => ({ data: entrants, error: null }) }),
       from() {
         const query = {
           select() { return query; }, order() { return query; }, range() { return query; },
@@ -664,7 +665,7 @@ test("calendar summary combines database entrant totals and keeps schedules when
   });
   const result = await getCalendarSummary("2026-09-01", "2026-09-30");
   assert.equal(result.schedules[0].total_workers, 5);
-  assert.equal(result.entrants, entrants);
+  assert.deepEqual(Array.from(result.entrants), entrants);
   assert.equal(result.entrants.reduce((sum, row) => sum + row.person_count, 0), 5);
   assert.equal(result.warning, "reports unavailable");
   assert.equal(result.completions.length, 0);

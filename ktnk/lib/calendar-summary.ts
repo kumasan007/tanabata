@@ -26,12 +26,12 @@ export const getCalendarSchedules = unstable_cache(async (from: string, to: stri
 }, ["calendar-schedules-v2"], { tags: [DATA_CACHE_TAGS.schedules], revalidate: 300 });
 
 export const getCalendarEntrants = unstable_cache(async (from: string, to: string, company: string): Promise<CalendarEntrant[]> => {
-  const { data, error } = await createServerClient().rpc("get_calendar_entrant_summary", {
+  const { data, error } = await readAllRows(createServerClient().rpc("get_calendar_entrant_summary", {
     p_from: from, p_to: to, p_company: company,
-  });
+  }).order("entry_date").order("primary_company").order("secondary_company", { nullsFirst: true }));
   if (error) throw new Error(error.message);
-  return data ?? [];
-}, ["calendar-entrants-v4"], { tags: [DATA_CACHE_TAGS.entrants], revalidate: 300 });
+  return data as CalendarEntrant[];
+}, ["calendar-entrants-v5"], { tags: [DATA_CACHE_TAGS.entrants], revalidate: 300 });
 
 export type CalendarSummaryData = { schedules: CalendarSchedule[]; entrants: CalendarEntrant[]; completions: WorkCompletion[]; warning: string };
 

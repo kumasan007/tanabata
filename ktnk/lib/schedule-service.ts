@@ -63,7 +63,7 @@ export async function saveScheduleSubmission(input: ScheduleSubmitParsed, expect
     };
 
     if ((payload.primary_count ?? 0) + resolvedSubcompanies.reduce((sum, row) => sum + (row.workerCount ?? 0), 0) < 1) {
-      throw new Error("?????1???????????");
+      throw new Error("作業人数は合計1人以上を入力してください。");
     }
     return payload;
   });

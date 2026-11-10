@@ -482,7 +482,7 @@ export function ScheduleForm({
     if (totalCount < 1) {
       setStep("edit");
       setEditorPart("people");
-      setSubmitState({ status: "error", message: "?????1???????????" });
+      setSubmitState({ status: "error", message: "作業人数は合計1人以上を入力してください。" });
       return;
     }
     if (
